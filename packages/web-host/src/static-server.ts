@@ -31,6 +31,7 @@ export type StaticServerHandle = {
 };
 
 const DEFAULT_PORT = 25808;
+const OFFICE_PROXY_ROOT_RE = /^(\/api\/(?:office-watch-proxy|ppt-proxy)\/\d+)\/(\?.*)?$/;
 
 function getLanIP(): string | null {
   const nets = networkInterfaces();
@@ -43,10 +44,11 @@ function getLanIP(): string | null {
 }
 
 function forwardToBackend(req: IncomingMessage, res: ServerResponse, backendPort: number): void {
+  const requestPath = req.url ? normalizeBackendProxyPath(req.url) : req.url;
   const options: http.RequestOptions = {
     hostname: '127.0.0.1',
     port: backendPort,
-    path: req.url,
+    path: requestPath,
     method: req.method,
     headers: { ...req.headers, host: `127.0.0.1:${backendPort}` },
   };
@@ -63,6 +65,10 @@ function forwardToBackend(req: IncomingMessage, res: ServerResponse, backendPort
     }
   });
   req.pipe(proxy);
+}
+
+export function normalizeBackendProxyPath(url: string): string {
+  return url.replace(OFFICE_PROXY_ROOT_RE, '$1$2');
 }
 
 // Max bytes we peek before forcing a routing decision. An HTTP request-line

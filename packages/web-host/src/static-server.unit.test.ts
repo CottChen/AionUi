@@ -4,7 +4,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import type { AddressInfo } from 'node:net';
-import { startStaticServer, type StaticServerHandle } from './static-server.js';
+import { normalizeBackendProxyPath, startStaticServer, type StaticServerHandle } from './static-server.js';
 
 async function mkRendererFixture(): Promise<string> {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'ws-static-'));
@@ -86,6 +86,28 @@ describe('static-server', () => {
     expect(r.status).toBe(200);
     const json = (await r.json()) as { path: string };
     expect(json.path).toBe('/api/anything');
+  });
+
+  it('normalizes office proxy root trailing slashes before proxying to backend', async () => {
+    const backend = await startMockBackend((req, res) => {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ path: req.url }));
+    });
+    stopBackend = backend.close;
+    handle = await startStaticServer({ staticDir, backendPort: backend.port, port: 0 });
+
+    const r = await fetch(`${handle.localUrl}/api/office-watch-proxy/50753/`);
+    expect(r.status).toBe(200);
+    const json = (await r.json()) as { path: string };
+    expect(json.path).toBe('/api/office-watch-proxy/50753');
+  });
+
+  it('normalizes only office proxy root paths', () => {
+    expect(normalizeBackendProxyPath('/api/ppt-proxy/50918/')).toBe('/api/ppt-proxy/50918');
+    expect(normalizeBackendProxyPath('/api/office-watch-proxy/50753/?v=1')).toBe(
+      '/api/office-watch-proxy/50753?v=1'
+    );
+    expect(normalizeBackendProxyPath('/api/ppt-proxy/50918/index.html')).toBe('/api/ppt-proxy/50918/index.html');
   });
 
   it('/login reverse-proxies to backend (no local handler)', async () => {
