@@ -51,9 +51,8 @@ describe('OfficeWatchViewer module shape', () => {
   });
 
   it('keeps web proxy root URLs slashless so axum root routes match', async () => {
-    const { resolveOfficeWatchUrl } = await import(
-      '@/renderer/pages/conversation/Preview/components/viewers/OfficeWatchViewer'
-    );
+    const { resolveOfficeWatchUrl } =
+      await import('@/renderer/pages/conversation/Preview/components/viewers/OfficeWatchViewer');
 
     expect(resolveOfficeWatchUrl('/api/office-watch-proxy/50753', 'excel')).toBe('/api/office-watch-proxy/50753');
     expect(resolveOfficeWatchUrl('/api/office-watch-proxy/50753/', 'excel')).toBe('/api/office-watch-proxy/50753');
@@ -61,18 +60,16 @@ describe('OfficeWatchViewer module shape', () => {
   });
 
   it('preserves non-root proxy suffixes in web mode', async () => {
-    const { resolveOfficeWatchUrl } = await import(
-      '@/renderer/pages/conversation/Preview/components/viewers/OfficeWatchViewer'
-    );
+    const { resolveOfficeWatchUrl } =
+      await import('@/renderer/pages/conversation/Preview/components/viewers/OfficeWatchViewer');
 
     expect(resolveOfficeWatchUrl('/api/ppt-proxy/50918/index.html', 'ppt')).toBe('/api/ppt-proxy/50918/index.html');
   });
 
   it('still opens direct localhost root URLs in Electron mode', async () => {
     platformState.isElectron = true;
-    const { resolveOfficeWatchUrl } = await import(
-      '@/renderer/pages/conversation/Preview/components/viewers/OfficeWatchViewer'
-    );
+    const { resolveOfficeWatchUrl } =
+      await import('@/renderer/pages/conversation/Preview/components/viewers/OfficeWatchViewer');
 
     expect(resolveOfficeWatchUrl('/api/office-watch-proxy/50753', 'excel')).toBe('http://127.0.0.1:50753/');
   });

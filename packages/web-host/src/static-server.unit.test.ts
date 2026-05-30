@@ -104,9 +104,7 @@ describe('static-server', () => {
 
   it('normalizes only office proxy root paths', () => {
     expect(normalizeBackendProxyPath('/api/ppt-proxy/50918/')).toBe('/api/ppt-proxy/50918');
-    expect(normalizeBackendProxyPath('/api/office-watch-proxy/50753/?v=1')).toBe(
-      '/api/office-watch-proxy/50753?v=1'
-    );
+    expect(normalizeBackendProxyPath('/api/office-watch-proxy/50753/?v=1')).toBe('/api/office-watch-proxy/50753?v=1');
     expect(normalizeBackendProxyPath('/api/ppt-proxy/50918/index.html')).toBe('/api/ppt-proxy/50918/index.html');
   });
 
