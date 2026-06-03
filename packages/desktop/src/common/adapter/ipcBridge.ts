@@ -247,13 +247,13 @@ export const conversation = {
         };
     const rawRuntime = (r.runtime ?? {}) as Record<string, unknown>;
     const runtime: IConversationTurnCompletedEvent['runtime'] = {
+      state: (rawRuntime.state ?? 'idle') as IConversationTurnCompletedEvent['runtime']['state'],
+      can_send_message: (rawRuntime.can_send_message ?? rawRuntime.canSendMessage ?? true) as boolean,
       has_task: (rawRuntime.has_task ?? rawRuntime.hasTask ?? false) as boolean,
       task_status: (rawRuntime.task_status ??
         rawRuntime.taskStatus) as IConversationTurnCompletedEvent['runtime']['task_status'],
       is_processing: (rawRuntime.is_processing ?? rawRuntime.isProcessing ?? false) as boolean,
       pending_confirmations: (rawRuntime.pending_confirmations ?? rawRuntime.pendingConfirmations ?? 0) as number,
-      db_status: (rawRuntime.db_status ??
-        rawRuntime.dbStatus) as IConversationTurnCompletedEvent['runtime']['db_status'],
     };
     const rawModel = (r.model ?? {}) as Record<string, unknown>;
     const model: IConversationTurnCompletedEvent['model'] = {
@@ -356,6 +356,15 @@ export interface IGpuStatus {
   lastCrashAt: number | null;
 }
 
+export type IRendererLogLevel = 'info' | 'warn' | 'error';
+
+export interface IRendererLogEntry {
+  level: IRendererLogLevel;
+  tag: string;
+  message: string;
+  data?: unknown;
+}
+
 // ---------------------------------------------------------------------------
 // Application — stays IPC (Electron-native)
 // ---------------------------------------------------------------------------
@@ -392,6 +401,7 @@ export const application = {
   setGpuOverride: bridge.buildProvider<IBridgeResponse<IGpuStatus>, { override: IGpuOverride | null }>(
     'app.set-gpu-override'
   ),
+  writeRendererLog: bridge.buildProvider<void, IRendererLogEntry>('app.write-renderer-log'),
   logStream: bridge.buildEmitter<{ level: 'log' | 'warn' | 'error'; tag: string; message: string; data?: unknown }>(
     'app.log-stream'
   ),
@@ -526,7 +536,9 @@ export const fs = {
     }>,
     void
   >('/api/skills/detect-external'),
-  importSkillWithSymlink: httpPost<{ skill_name: string }, { skill_path: string }>('/api/skills/import-symlink'),
+  importSkillWithSymlink: httpPost<{ skill_name: string; skill_names?: string[] }, { skill_path: string }>(
+    '/api/skills/import-symlink'
+  ),
   deleteSkill: httpDelete<void, { skill_name: string }>((p) => `/api/skills/${p.skill_name}`),
   getSkillPaths: httpGet<{ user_skills_dir: string; builtin_skills_dir: string }, void>('/api/skills/paths'),
   getCustomExternalPaths: httpGet<Array<{ name: string; path: string }>, void>('/api/skills/external-paths'),
@@ -823,9 +835,14 @@ export const mcpService = {
         _meta?: Record<string, unknown>;
       }>;
       error?: string;
+      code?: string;
+      details?: unknown;
       needsAuth?: boolean;
+      needs_auth?: boolean;
       authMethod?: 'oauth' | 'basic';
+      auth_method?: 'oauth' | 'basic';
       wwwAuthenticate?: string;
+      www_authenticate?: string;
     },
     IMcpServer
   >('/api/mcp/test-connection'),
@@ -1035,12 +1052,12 @@ export const windowControls = {
 };
 
 // ---------------------------------------------------------------------------
-// System Settings — routed to /api/settings/*
+// System Settings — routed to /api/settings/* unless they need Electron-native side effects.
 // ---------------------------------------------------------------------------
 
 export const systemSettings = {
-  getCloseToTray: httpGet<boolean, void>('/api/settings/client?key=closeToTray'),
-  setCloseToTray: httpPut<void, { enabled: boolean }>('/api/settings/client', (p) => ({ closeToTray: p.enabled })),
+  getCloseToTray: bridge.buildProvider<boolean, void>('system-settings:get-close-to-tray'),
+  setCloseToTray: bridge.buildProvider<void, { enabled: boolean }>('system-settings:set-close-to-tray'),
   getNotificationEnabled: httpGet<boolean, void>('/api/settings/client?key=notificationEnabled'),
   setNotificationEnabled: httpPut<void, { enabled: boolean }>('/api/settings/client', (p) => ({
     notificationEnabled: p.enabled,
@@ -1437,11 +1454,12 @@ export interface IConversationTurnCompletedEvent {
   detail: string;
   can_send_message: boolean;
   runtime: {
+    state: 'idle' | 'starting' | 'running' | 'waiting_confirmation';
+    can_send_message: boolean;
     has_task: boolean;
     task_status?: 'pending' | 'running' | 'finished';
     is_processing: boolean;
     pending_confirmations: number;
-    db_status?: 'pending' | 'running' | 'finished';
   };
   workspace: string;
   model: {
