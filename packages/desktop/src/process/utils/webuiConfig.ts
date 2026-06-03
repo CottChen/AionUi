@@ -10,7 +10,7 @@ import * as path from 'path';
 import { networkInterfaces } from 'os';
 import { getSystemDir } from './initStorage';
 import { httpRequest } from '@/common/adapter/httpBridge';
-import { startWebHost, type WebHostHandle } from '@aionui/web-host';
+import { normalizeOfficeProxyFrameOptions, startWebHost, type WebHostHandle } from '@aionui/web-host';
 import { getDataPath } from './utils';
 
 const WEBUI_CONFIG_FILE = 'webui.config.json';
@@ -222,6 +222,7 @@ export async function startDesktopWebUI(opts: { port?: number; allowRemote?: boo
   }
 
   const allowRemote = opts.allowRemote === true;
+  const officeProxyFrameOptions = normalizeOfficeProxyFrameOptions(process.env.AIONUI_OFFICE_PROXY_FRAME_OPTIONS);
   const preferredPort = parsePortValue(opts.port) ?? DEFAULT_WEBUI_PORT;
   const sysDir = getSystemDir();
 
@@ -247,6 +248,7 @@ export async function startDesktopWebUI(opts: { port?: number; allowRemote?: boo
     staticDir: path.join(__dirname, '../renderer'),
     port: preferredPort,
     allowRemote,
+    officeProxyFrameOptions,
     // Must align with the desktop IPC path's backend dataDir (src/index.ts), otherwise
     // users see divergent SQLite state between desktop app and bundled WebUI.
     dataDir: getDataPath(),
