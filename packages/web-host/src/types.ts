@@ -30,11 +30,18 @@ export type BackendSystemDirs = {
 /**
  * Options for starting WebHost
  */
+export type WebHostOfficeProxyFrameOptions = 'preserve' | 'sameorigin' | 'deny' | 'remove';
+
 export type WebHostOptions = {
   app: AppMetadata;
   staticDir: string;
   port?: number;
   allowRemote?: boolean;
+  /**
+   * Controls X-Frame-Options only for Office/PPT preview proxy responses.
+   * Default 'preserve' keeps the backend-provided header unchanged.
+   */
+  officeProxyFrameOptions?: WebHostOfficeProxyFrameOptions;
   dataDir?: string;
   logDir?: string;
   dirs?: BackendSystemDirs;
