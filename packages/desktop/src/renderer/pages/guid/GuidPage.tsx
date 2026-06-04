@@ -14,7 +14,7 @@ import { CUSTOM_AVATAR_IMAGE_MAP } from './constants';
 import AgentPillBar from './components/AgentPillBar';
 import AssistantSelectionArea from './components/AssistantSelectionArea';
 import { AgentPillBarSkeleton } from './components/GuidSkeleton';
-import GuidActionRow from './components/GuidActionRow';
+import GuidActionRow, { type GuidMobileModelEntry } from './components/GuidActionRow';
 import GuidInputCard from './components/GuidInputCard';
 import GuidModelSelector from './components/GuidModelSelector';
 import MentionDropdown, { MentionSelectorBadge } from './components/MentionDropdown';
@@ -27,7 +27,8 @@ import { useGuidModelSelection } from './hooks/useGuidModelSelection';
 import { useGuidSend } from './hooks/useGuidSend';
 import { useTypewriterPlaceholder } from './hooks/useTypewriterPlaceholder';
 import { ensureBackendMcpCatalog } from '@/renderer/hooks/mcp/catalog';
-import { resolveAgentLogo } from '@/renderer/utils/model/agentLogo';
+import { getModelDisplayLabel, resolveAgentLogo } from '@/renderer/utils/model/agentLogo';
+import { getAvailableModels } from './utils/modelUtils';
 import { Button, ConfigProvider, Dropdown, Menu, Message } from '@arco-design/web-react';
 import { Down, Left, Robot, Write } from '@icon-park/react';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -551,6 +552,95 @@ const GuidPage: React.FC = () => {
     />
   );
 
+  const mobileModelEntry = useMemo<GuidMobileModelEntry | undefined>(() => {
+    const defaultModelLabel = t('common.defaultModel');
+
+    if (isGeminiMode) {
+      const enabledModelList = modelSelection.modelList.filter((provider) => provider.enabled !== false);
+      const options = enabledModelList.flatMap((provider) =>
+        getAvailableModels(provider).map((modelName) => ({
+          key: JSON.stringify({ providerId: provider.id, modelName }),
+          label: modelName,
+          description: provider.name,
+          active:
+            modelSelection.current_model?.id === provider.id && modelSelection.current_model?.use_model === modelName,
+        }))
+      );
+
+      if (options.length === 0) return undefined;
+
+      const currentLabel = getModelDisplayLabel({
+        selected_value: modelSelection.current_model?.use_model,
+        selectedLabel: modelSelection.current_model?.use_model ?? '',
+        defaultModelLabel,
+        fallbackLabel: defaultModelLabel,
+      });
+
+      return {
+        key: 'model',
+        label: t('common.model', { defaultValue: 'Model' }),
+        meta: currentLabel,
+        submenu: {
+          title: t('common.model', { defaultValue: 'Model' }),
+          options,
+          onSelect: (key) => {
+            try {
+              const parsed = JSON.parse(key) as { providerId?: string; modelName?: string };
+              const provider = enabledModelList.find((item) => item.id === parsed.providerId);
+              if (!provider || !parsed.modelName) return;
+              modelSelection.setCurrentModel({ ...provider, use_model: parsed.modelName }).catch((error) => {
+                console.error('Failed to set current model:', error);
+              });
+            } catch (error) {
+              console.error('Failed to parse selected model key:', error);
+            }
+          },
+        },
+      };
+    }
+
+    const acpModels = agentSelection.currentAcpCachedModelInfo?.available_models ?? [];
+    if (acpModels.length === 0) return undefined;
+
+    const acpSelectedLabel =
+      acpModels.find((model) => model.id === agentSelection.selectedAcpModel)?.label ||
+      agentSelection.currentAcpCachedModelInfo?.current_model_label ||
+      agentSelection.currentAcpCachedModelInfo?.current_model_id ||
+      '';
+    const currentLabel = getModelDisplayLabel({
+      selected_value: agentSelection.selectedAcpModel || agentSelection.currentAcpCachedModelInfo?.current_model_id,
+      selectedLabel: acpSelectedLabel,
+      defaultModelLabel,
+      fallbackLabel: defaultModelLabel,
+    });
+
+    return {
+      key: 'model',
+      label: t('common.model', { defaultValue: 'Model' }),
+      meta: currentLabel,
+      submenu: {
+        title: t('common.model', { defaultValue: 'Model' }),
+        options: acpModels.map((model) => ({
+          key: model.id,
+          label: model.label || model.id,
+          active:
+            (agentSelection.selectedAcpModel || agentSelection.currentAcpCachedModelInfo?.current_model_id) ===
+            model.id,
+        })),
+        onSelect: agentSelection.setSelectedAcpModel,
+      },
+    };
+  }, [
+    agentSelection.currentAcpCachedModelInfo,
+    agentSelection.selectedAcpModel,
+    agentSelection.setSelectedAcpModel,
+    isGeminiMode,
+    modelSelection.current_model,
+    modelSelection.modelList,
+    modelSelection.setCurrentModel,
+    t,
+  ]);
+
   // Build the model selector node
   const modelSelectorNode = (
     <GuidModelSelector
@@ -570,6 +660,7 @@ const GuidPage: React.FC = () => {
       files={guidInput.files}
       onFilesUploaded={guidInput.handleFilesUploaded}
       modelSelectorNode={modelSelectorNode}
+      mobileModelEntry={mobileModelEntry}
       selectedAgent={agentSelection.selectedAgent}
       effectiveModeAgent={agentSelection.currentEffectiveAgentInfo.agent_type}
       selectedMode={agentSelection.selectedMode}

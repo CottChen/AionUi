@@ -7,6 +7,12 @@
 import { ipcBridge } from '@/common';
 import type { IMcpServer } from '@/common/config/storage';
 import AgentModeSelector from '@/renderer/components/agent/AgentModeSelector';
+import MobileActionSheet, {
+  type MobileActionSheetEntry,
+  type MobileActionSheetOption,
+} from '@/renderer/components/chat/MobileActionSheet';
+import { useAgentModesForBackend } from '@/renderer/hooks/agent/useAgentModesForBackend';
+import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { supportsModeSwitch, type AgentModeOption } from '@/renderer/utils/model/agentModes';
 import { getCleanFileNames, FileService } from '@/renderer/services/FileService';
 import { iconColors } from '@/renderer/styles/colors';
@@ -15,10 +21,12 @@ import type { AvailableAgent } from '../types';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
 import PresetAgentTag, { type AgentSwitcherItem } from './PresetAgentTag';
 import { Button, Checkbox, Dropdown, Menu, Message, Tooltip } from '@arco-design/web-react';
-import { ArrowUp, Lightning, Plus, Shield, UploadOne } from '@icon-park/react';
-import React, { useCallback, useRef, useState } from 'react';
+import { ArrowUp, Brain, Lightning, Plus, Shield, UploadOne } from '@icon-park/react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import styles from '../index.module.css';
+
+export type GuidMobileModelEntry = Pick<MobileActionSheetEntry, 'key' | 'label' | 'meta' | 'submenu'>;
 
 type GuidActionRowProps = {
   // File handling
@@ -27,6 +35,7 @@ type GuidActionRowProps = {
 
   // Model selector node (rendered by parent)
   modelSelectorNode: React.ReactNode;
+  mobileModelEntry?: GuidMobileModelEntry;
 
   // Agent mode
   selectedAgent: string | 'custom';
@@ -69,6 +78,7 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
   files,
   onFilesUploaded,
   modelSelectorNode,
+  mobileModelEntry,
   selectedAgent,
   effectiveModeAgent,
   selectedMode,
@@ -95,10 +105,14 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
   onSend,
 }) => {
   const { t } = useTranslation();
+  const layout = useLayoutContext();
+  const isMobile = Boolean(layout?.isMobile);
   const [isPlusDropdownOpen, setIsPlusDropdownOpen] = useState(false);
+  const [isMobileSheetOpen, setIsMobileSheetOpen] = useState(false);
   const modeBackend = effectiveModeAgent || selectedAgent;
   const showModeSwitch = supportsModeSwitch(modeBackend);
   const configOptionCount = (modelSelectorNode ? 1 : 0) + (showModeSwitch ? 1 : 0);
+  const modeOptions = useAgentModesForBackend(modeBackend);
 
   // Browser file picker ref (WebUI only)
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -125,32 +139,41 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
     [onFilesUploaded, t]
   );
 
-  const getModeDisplayLabel = (mode: AgentModeOption): string =>
-    t(`agentMode.${mode.value}`, { defaultValue: mode.label });
+  const getModeDisplayLabel = useCallback(
+    (mode: AgentModeOption): string => t(`agentMode.${mode.value}`, { defaultValue: mode.label }),
+    [t]
+  );
 
   const isWebUI = !isElectronDesktop();
 
-  const isSkillChecked = (skill: { name: string; isAuto: boolean }) =>
-    skill.isAuto ? !disabledBuiltinSkills.includes(skill.name) : enabledSkills.includes(skill.name);
+  const isSkillChecked = useCallback(
+    (skill: { name: string; isAuto: boolean }) =>
+      skill.isAuto ? !disabledBuiltinSkills.includes(skill.name) : enabledSkills.includes(skill.name),
+    [disabledBuiltinSkills, enabledSkills]
+  );
 
-  const activeSkillCount = allSkills.filter(isSkillChecked).length;
+  const activeSkillCount = useMemo(() => allSkills.filter(isSkillChecked).length, [allSkills, isSkillChecked]);
   const activeMcpCount = selectedMcpServerIds.length;
+
+  const openHostFileSelector = useCallback(() => {
+    ipcBridge.dialog.showOpen
+      .invoke({ properties: ['openFile', 'multiSelections'] })
+      .then((uploadedFiles) => {
+        if (uploadedFiles && uploadedFiles.length > 0) {
+          onFilesUploaded(uploadedFiles);
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to open file dialog:', error);
+      });
+  }, [onFilesUploaded]);
 
   const menuContent = (
     <Menu
       className='min-w-200px'
       onClickMenuItem={(key) => {
         if (key === 'file') {
-          ipcBridge.dialog.showOpen
-            .invoke({ properties: ['openFile', 'multiSelections'] })
-            .then((uploadedFiles) => {
-              if (uploadedFiles && uploadedFiles.length > 0) {
-                onFilesUploaded(uploadedFiles);
-              }
-            })
-            .catch((error) => {
-              console.error('Failed to open file dialog:', error);
-            });
+          openHostFileSelector();
         } else if (key === 'device') {
           fileInputRef.current?.click();
         }
@@ -261,31 +284,180 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
     </Menu>
   );
 
+  const sheetEntries = useMemo<MobileActionSheetEntry[]>(() => {
+    if (!isMobile) return [];
+
+    const entries: MobileActionSheetEntry[] = [];
+    if (mobileModelEntry?.submenu) {
+      entries.push({
+        ...mobileModelEntry,
+        icon: <Brain theme='outline' size='16' />,
+      });
+    }
+
+    if (showModeSwitch && modeOptions.length > 0) {
+      const modeItems: MobileActionSheetOption[] = modeOptions.map((mode) => ({
+        key: mode.value,
+        label: getModeDisplayLabel(mode),
+        description: mode.description,
+        active: selectedMode === mode.value,
+      }));
+      const currentModeLabel =
+        modeItems.find((option) => option.active)?.label ??
+        getModeDisplayLabel(modeOptions[0] ?? { value: 'default', label: 'Default' });
+      entries.push({
+        key: 'permission',
+        icon: <Shield theme='outline' size='16' />,
+        label: t('agentMode.permission', { defaultValue: 'Permission' }),
+        meta: currentModeLabel,
+        submenu: {
+          title: t('agentMode.permission', { defaultValue: 'Permission' }),
+          options: modeItems,
+          onSelect: onModeSelect,
+        },
+      });
+    }
+
+    const dividerBeforeAttach = entries.length > 0;
+    entries.push({
+      key: 'attach-files',
+      icon: <UploadOne theme='outline' size='16' />,
+      label: t('common.fileAttach.addFiles'),
+      variant: 'muted',
+      dividerBefore: dividerBeforeAttach,
+      onClick: openHostFileSelector,
+    });
+    if (isWebUI) {
+      entries.push({
+        key: 'attach-device',
+        icon: <UploadOne theme='outline' size='16' />,
+        label: t('common.fileAttach.myDevice'),
+        variant: 'muted',
+        onClick: () => fileInputRef.current?.click(),
+      });
+    }
+
+    if (allSkills.length > 0) {
+      entries.push({
+        key: 'skills',
+        icon: <Lightning theme='filled' size='16' />,
+        label: t('settings.capabilitiesTab.skills'),
+        meta: `${activeSkillCount}/${allSkills.length}`,
+        variant: 'muted',
+        submenu: {
+          title: t('settings.capabilitiesTab.skills'),
+          options: allSkills.map((skill) => ({
+            key: skill.name,
+            label: skill.name,
+            description: skill.description,
+            active: isSkillChecked(skill),
+          })),
+          onSelect: (name) => {
+            const skill = allSkills.find((item) => item.name === name);
+            if (skill) onToggleSkill(skill.name, skill.isAuto);
+          },
+        },
+      });
+    }
+
+    if (mcpServers.length > 0) {
+      entries.push({
+        key: 'mcp',
+        icon: <Shield theme='outline' size='16' />,
+        label: t('mcp.label'),
+        meta: `${activeMcpCount}/${mcpServers.length}`,
+        variant: 'muted',
+        submenu: {
+          title: t('mcp.label'),
+          options: mcpServers.map((server) => ({
+            key: server.id,
+            label: server.name,
+            description: server.tools?.length ? `${server.tools.length} ${t('mcp.tools')}` : undefined,
+            active: selectedMcpServerIds.includes(server.id),
+          })),
+          onSelect: onToggleMcpServer,
+        },
+      });
+    }
+
+    return entries;
+  }, [
+    activeMcpCount,
+    activeSkillCount,
+    allSkills,
+    getModeDisplayLabel,
+    isMobile,
+    isSkillChecked,
+    isWebUI,
+    mcpServers,
+    mobileModelEntry,
+    modeOptions,
+    onModeSelect,
+    onToggleMcpServer,
+    onToggleSkill,
+    openHostFileSelector,
+    selectedMcpServerIds,
+    selectedMode,
+    showModeSwitch,
+    t,
+  ]);
+
+  const renderPlusControl = () => {
+    if (isMobile) {
+      return (
+        <span className='flex items-center gap-4px cursor-pointer lh-[1]'>
+          <Button
+            type='secondary'
+            shape='circle'
+            className={isMobileSheetOpen ? styles.plusButtonRotate : ''}
+            icon={<Plus theme='outline' size='14' strokeWidth={2} fill={iconColors.primary} />}
+            loading={uploading}
+            disabled={uploading}
+            onClick={() => setIsMobileSheetOpen(true)}
+            data-testid='file-upload-btn'
+          />
+          {files.length > 0 && (
+            <Tooltip
+              className={'!max-w-max'}
+              content={<span className='whitespace-break-spaces'>{getCleanFileNames(files).join('\n')}</span>}
+            >
+              <span className='text-t-primary'>File({files.length})</span>
+            </Tooltip>
+          )}
+        </span>
+      );
+    }
+
+    return (
+      <Dropdown trigger='hover' onVisibleChange={setIsPlusDropdownOpen} droplist={menuContent}>
+        <span className='flex items-center gap-4px cursor-pointer lh-[1]'>
+          <Button
+            type='secondary'
+            shape='circle'
+            className={isPlusDropdownOpen ? styles.plusButtonRotate : ''}
+            icon={<Plus theme='outline' size='14' strokeWidth={2} fill={iconColors.primary} />}
+            loading={uploading}
+            disabled={uploading}
+            data-testid='file-upload-btn'
+          />
+          {files.length > 0 && (
+            <Tooltip
+              className={'!max-w-max'}
+              content={<span className='whitespace-break-spaces'>{getCleanFileNames(files).join('\n')}</span>}
+            >
+              <span className='text-t-primary'>File({files.length})</span>
+            </Tooltip>
+          )}
+        </span>
+      </Dropdown>
+    );
+  };
+
   return (
     <div className={styles.actionRow}>
       <div className={styles.actionTools}>
         <div className={styles.actionEntry}>
-          <Dropdown trigger='hover' onVisibleChange={setIsPlusDropdownOpen} droplist={menuContent}>
-            <span className='flex items-center gap-4px cursor-pointer lh-[1]'>
-              <Button
-                type='secondary'
-                shape='circle'
-                className={isPlusDropdownOpen ? styles.plusButtonRotate : ''}
-                icon={<Plus theme='outline' size='14' strokeWidth={2} fill={iconColors.primary} />}
-                loading={uploading}
-                disabled={uploading}
-                data-testid='file-upload-btn'
-              />
-              {files.length > 0 && (
-                <Tooltip
-                  className={'!max-w-max'}
-                  content={<span className='whitespace-break-spaces'>{getCleanFileNames(files).join('\n')}</span>}
-                >
-                  <span className='text-t-primary'>File({files.length})</span>
-                </Tooltip>
-              )}
-            </span>
-          </Dropdown>
+          {renderPlusControl()}
           {isWebUI && (
             <input
               ref={fileInputRef}
@@ -296,7 +468,7 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
             />
           )}
         </div>
-        {configOptionCount > 0 && (
+        {!isMobile && configOptionCount > 0 && (
           <div className={styles.actionConfigGroup}>
             {modelSelectorNode}
 
@@ -344,6 +516,14 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
           data-testid='guid-send-btn'
         />
       </div>
+      {isMobile && (
+        <MobileActionSheet
+          open={isMobileSheetOpen}
+          onClose={() => setIsMobileSheetOpen(false)}
+          title={t('common.more', { defaultValue: 'More' })}
+          entries={sheetEntries}
+        />
+      )}
     </div>
   );
 };
