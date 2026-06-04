@@ -17,9 +17,20 @@
  * is recorded in N4c-final.md Deviations.
  */
 
-import { describe, it, expect } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const platformState = vi.hoisted(() => ({ isElectron: false }));
+
+vi.mock('@/renderer/utils/platform', () => ({
+  isElectronDesktop: () => platformState.isElectron,
+  openExternalUrl: vi.fn(),
+}));
 
 describe('OfficeWatchViewer module shape', () => {
+  beforeEach(() => {
+    platformState.isElectron = false;
+  });
+
   it('module loads and exposes a default export', async () => {
     const mod = await import('@/renderer/pages/conversation/Preview/components/viewers/OfficeWatchViewer');
     expect(mod).toBeDefined();
@@ -37,5 +48,29 @@ describe('OfficeWatchViewer module shape', () => {
     expect(mod.default).toBeDefined();
     // Component functions in React typically have at most one required argument (props).
     expect((mod.default as { length: number }).length).toBeLessThanOrEqual(2);
+  });
+
+  it('keeps web proxy root URLs slashless so axum root routes match', async () => {
+    const { resolveOfficeWatchUrl } =
+      await import('@/renderer/pages/conversation/Preview/components/viewers/OfficeWatchViewer');
+
+    expect(resolveOfficeWatchUrl('/api/office-watch-proxy/50753', 'excel')).toBe('/api/office-watch-proxy/50753');
+    expect(resolveOfficeWatchUrl('/api/office-watch-proxy/50753/', 'excel')).toBe('/api/office-watch-proxy/50753');
+    expect(resolveOfficeWatchUrl('/api/ppt-proxy/50918/', 'ppt')).toBe('/api/ppt-proxy/50918');
+  });
+
+  it('preserves non-root proxy suffixes in web mode', async () => {
+    const { resolveOfficeWatchUrl } =
+      await import('@/renderer/pages/conversation/Preview/components/viewers/OfficeWatchViewer');
+
+    expect(resolveOfficeWatchUrl('/api/ppt-proxy/50918/index.html', 'ppt')).toBe('/api/ppt-proxy/50918/index.html');
+  });
+
+  it('still opens direct localhost root URLs in Electron mode', async () => {
+    platformState.isElectron = true;
+    const { resolveOfficeWatchUrl } =
+      await import('@/renderer/pages/conversation/Preview/components/viewers/OfficeWatchViewer');
+
+    expect(resolveOfficeWatchUrl('/api/office-watch-proxy/50753', 'excel')).toBe('http://127.0.0.1:50753/');
   });
 });

@@ -8,6 +8,7 @@ import { ipcBridge } from '@/common';
 import { useTypingAnimation } from '@/renderer/hooks/chat/useTypingAnimation';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useScrollSyncTarget } from '../../hooks/useScrollSyncHelpers';
+import { injectHashAnchorNavigationGuard } from './htmlAnchorGuard';
 import { generateInspectScript } from './htmlInspectScript';
 
 /** 选中元素的数据结构 / Selected element data structure */
@@ -302,6 +303,11 @@ const HTMLRenderer: React.FC<HTMLRendererProps> = ({
     return displayedContent;
   }, [hasRelativeResources, file_path, inlinedHtmlContent, content, displayedContent]);
 
+  const guardedBrowserHtmlContent = useMemo(
+    () => injectHashAnchorNavigationGuard(browserHtmlContent),
+    [browserHtmlContent]
+  );
+
   // 计算 webview 的 src
   // Calculate webview src
   const webviewSrc = useMemo(() => {
@@ -313,7 +319,7 @@ const HTMLRenderer: React.FC<HTMLRendererProps> = ({
 
     // 否则使用 data URL（适用于动态生成的 HTML 或没有外部资源的情况）
     // Otherwise use data URL (for dynamically generated HTML or no external resources)
-    let html = htmlContent;
+    let html = injectHashAnchorNavigationGuard(htmlContent);
 
     // 注入 base 标签支持相对路径 / Inject base tag for relative paths
     if (file_path) {
@@ -613,7 +619,7 @@ const HTMLRenderer: React.FC<HTMLRendererProps> = ({
       ) : (
         <iframe
           ref={iframeRef}
-          srcDoc={browserHtmlContent}
+          srcDoc={guardedBrowserHtmlContent}
           className='w-full h-full border-0'
           style={{
             display: 'block',

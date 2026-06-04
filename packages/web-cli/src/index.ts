@@ -1,4 +1,4 @@
-import { startWebHost, startStaticServer } from '@aionui/web-host';
+import { normalizeOfficeProxyFrameOptions, startWebHost, startStaticServer } from '@aionui/web-host';
 import type { WebHostHandle, StaticServerHandle } from '@aionui/web-host';
 import { setTimeout as delay } from 'node:timers/promises';
 import fs from 'node:fs';
@@ -120,6 +120,13 @@ function resolveAllowRemote(flags: Map<string, string | true>): boolean {
   return ['1', 'true', 'yes', 'on'].includes(env.trim().toLowerCase());
 }
 
+function resolveOfficeProxyFrameOptions(flags: Map<string, string | true>) {
+  const cli = flags.get('office-proxy-frame-options');
+  return normalizeOfficeProxyFrameOptions(
+    (typeof cli === 'string' ? cli : undefined) ?? process.env.AIONUI_OFFICE_PROXY_FRAME_OPTIONS
+  );
+}
+
 function readPackageVersion(): string {
   try {
     const pkgPath = path.join(cliRoot, 'package.json');
@@ -140,6 +147,7 @@ async function runStart(flags: Map<string, string | true>): Promise<void> {
   const port = resolvePort(flags);
   const allowRemote = resolveAllowRemote(flags);
   const version = readPackageVersion();
+  const officeProxyFrameOptions = resolveOfficeProxyFrameOptions(flags);
   const autoOpenBrowser = shouldAutoOpenBrowser({
     allowRemote,
     env: process.env,
@@ -159,6 +167,9 @@ async function runStart(flags: Map<string, string | true>): Promise<void> {
   console.log(`[aionui-web] static dir : ${staticDir}`);
   console.log(`[aionui-web] backend bin: ${backendBin}`);
   console.log(`[aionui-web] launching  : port=${port} allowRemote=${allowRemote}`);
+  if (officeProxyFrameOptions !== 'preserve') {
+    console.log(`[aionui-web] office proxy X-Frame-Options: ${officeProxyFrameOptions}`);
+  }
 
   const backendAvailable = fs.existsSync(backendBin);
 
@@ -178,6 +189,7 @@ async function runStart(flags: Map<string, string | true>): Promise<void> {
       backendPort: 0, // invalid port → API proxy will fail cleanly
       port,
       allowRemote,
+      officeProxyFrameOptions,
     });
     currentHandle = handle;
 
@@ -206,6 +218,7 @@ async function runStart(flags: Map<string, string | true>): Promise<void> {
       staticDir,
       port,
       allowRemote,
+      officeProxyFrameOptions,
       dataDir,
       logDir,
       dirs: {

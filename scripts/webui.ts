@@ -17,6 +17,7 @@
  *   AIONUI_BACKEND_BIN    : absolute path to aioncore binary (else PATH lookup)
  *   AIONUI_BACKEND_BUNDLED_DIR : dir containing bundled-aioncore/<plat-arch>/binary
  *   AIONUI_OPEN_BROWSER   : "1"/"true" to force open, "0"/"false" to disable
+ *   AIONUI_OFFICE_PROXY_FRAME_OPTIONS : preserve|sameorigin|deny|remove (default preserve)
  */
 
 import { execSync } from 'child_process';
@@ -24,7 +25,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { startWebHost } from '@aionui/web-host';
+import { normalizeOfficeProxyFrameOptions, startWebHost } from '@aionui/web-host';
 import { openBrowserUrl, shouldAutoOpenBrowser } from '../packages/web-cli/src/browser.js';
 
 // Aligned with packages/desktop/src/common/config/constants.ts WEBUI_DEFAULT_PORT.
@@ -110,6 +111,12 @@ function resolveAllowRemote(): boolean {
   const host = process.env.AIONUI_HOST?.trim();
   if (host && ['0.0.0.0', '::', '::0'].includes(host)) return true;
   return parseBoolean(process.env.AIONUI_ALLOW_REMOTE ?? process.env.AIONUI_REMOTE);
+}
+
+function resolveOfficeProxyFrameOptions() {
+  return normalizeOfficeProxyFrameOptions(
+    getFlag('--office-proxy-frame-options') ?? process.env.AIONUI_OFFICE_PROXY_FRAME_OPTIONS
+  );
 }
 
 function resolveStaticDir(): string {
@@ -204,6 +211,7 @@ async function main(): Promise<void> {
   runPackageIfNeeded();
   const port = resolvePort();
   const allowRemote = resolveAllowRemote();
+  const officeProxyFrameOptions = resolveOfficeProxyFrameOptions();
   const autoOpenBrowser = shouldAutoOpenBrowser({
     allowRemote,
     env: process.env,
@@ -222,6 +230,9 @@ async function main(): Promise<void> {
   console.log('[webui] static dir :', staticDir);
   console.log('[webui] backend bin:', backendBin);
   console.log(`[webui] launching  : port=${port} allowRemote=${allowRemote}`);
+  if (officeProxyFrameOptions !== 'preserve') {
+    console.log(`[webui] office proxy X-Frame-Options: ${officeProxyFrameOptions}`);
+  }
 
   const handle = await startWebHost({
     app: {
@@ -233,6 +244,7 @@ async function main(): Promise<void> {
     staticDir,
     port,
     allowRemote,
+    officeProxyFrameOptions,
     dataDir: workDir,
     logDir,
     // Surface the same work dir on /api/system/info so the browser UI shows

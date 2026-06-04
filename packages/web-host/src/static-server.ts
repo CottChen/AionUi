@@ -9,16 +9,23 @@
  * Design: Node native http + serve-handler. No Express. No business routes.
  */
 
-import http, { type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import http, { type IncomingMessage, type OutgoingHttpHeaders, type Server, type ServerResponse } from 'node:http';
 import { networkInterfaces } from 'node:os';
 import net, { type Socket } from 'node:net';
 import serveHandler from 'serve-handler';
+
+export type OfficeProxyFrameOptions = 'preserve' | 'sameorigin' | 'deny' | 'remove';
 
 export type StaticServerOptions = {
   staticDir: string;
   backendPort: number;
   port?: number;
   allowRemote?: boolean;
+  /**
+   * Controls X-Frame-Options only for Office/PPT preview proxy responses.
+   * Default 'preserve' keeps the backend-provided header unchanged.
+   */
+  officeProxyFrameOptions?: OfficeProxyFrameOptions;
 };
 
 export type StaticServerHandle = {
@@ -31,6 +38,8 @@ export type StaticServerHandle = {
 };
 
 const DEFAULT_PORT = 25808;
+const OFFICE_PROXY_ROOT_RE = /^(\/api\/(?:office-watch-proxy|ppt-proxy)\/\d+)\/(\?.*)?$/;
+const OFFICE_PROXY_PATH_RE = /^\/api\/(?:office-watch-proxy|ppt-proxy)\/\d+(?:[/?]|$)/;
 
 function getLanIP(): string | null {
   const nets = networkInterfaces();
@@ -42,16 +51,23 @@ function getLanIP(): string | null {
   return null;
 }
 
-function forwardToBackend(req: IncomingMessage, res: ServerResponse, backendPort: number): void {
+function forwardToBackend(
+  req: IncomingMessage,
+  res: ServerResponse,
+  backendPort: number,
+  officeProxyFrameOptions: OfficeProxyFrameOptions
+): void {
+  const requestPath = req.url ? normalizeBackendProxyPath(req.url) : req.url;
   const options: http.RequestOptions = {
     hostname: '127.0.0.1',
     port: backendPort,
-    path: req.url,
+    path: requestPath,
     method: req.method,
     headers: { ...req.headers, host: `127.0.0.1:${backendPort}` },
   };
   const proxy = http.request(options, (proxyRes) => {
-    res.writeHead(proxyRes.statusCode ?? 502, proxyRes.headers);
+    const headers = applyOfficeProxyFrameOptions(proxyRes.headers, requestPath, officeProxyFrameOptions);
+    res.writeHead(proxyRes.statusCode ?? 502, headers);
     proxyRes.pipe(res);
   });
   proxy.on('error', () => {
@@ -63,6 +79,47 @@ function forwardToBackend(req: IncomingMessage, res: ServerResponse, backendPort
     }
   });
   req.pipe(proxy);
+}
+
+export function normalizeBackendProxyPath(url: string): string {
+  return url.replace(OFFICE_PROXY_ROOT_RE, '$1$2');
+}
+
+export function normalizeOfficeProxyFrameOptions(value?: string | null): OfficeProxyFrameOptions {
+  const normalized = value?.trim().toLowerCase();
+  switch (normalized) {
+    case 'sameorigin':
+    case 'same-origin':
+      return 'sameorigin';
+    case 'deny':
+      return 'deny';
+    case 'remove':
+    case 'none':
+      return 'remove';
+    default:
+      return 'preserve';
+  }
+}
+
+export function applyOfficeProxyFrameOptions(
+  headers: OutgoingHttpHeaders,
+  requestPath: string | undefined,
+  mode: OfficeProxyFrameOptions
+): OutgoingHttpHeaders {
+  if (!requestPath || mode === 'preserve' || !OFFICE_PROXY_PATH_RE.test(requestPath)) {
+    return headers;
+  }
+
+  const next: OutgoingHttpHeaders = { ...headers };
+  delete next['x-frame-options'];
+  delete next['X-Frame-Options'];
+
+  if (mode === 'remove') {
+    return next;
+  }
+
+  next['x-frame-options'] = mode === 'sameorigin' ? 'SAMEORIGIN' : 'DENY';
+  return next;
 }
 
 // Max bytes we peek before forcing a routing decision. An HTTP request-line
@@ -120,6 +177,7 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
   const port = opts.port ?? DEFAULT_PORT;
   const allowRemote = opts.allowRemote === true;
   const host = allowRemote ? '0.0.0.0' : '127.0.0.1';
+  const officeProxyFrameOptions = opts.officeProxyFrameOptions ?? 'preserve';
 
   // The HTTP server listens only on loopback — user traffic hits the outer
   // net.Server first. We route to this server for everything except WS
@@ -141,7 +199,7 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
       // /login and /logout are aionui-auth's top-level auth endpoints: proxy them too
       // so WebUI browser clients reach the backend without a path-rewrite.
       if (req.url.startsWith('/api/') || req.url.startsWith('/api?') || req.url === '/login' || req.url === '/logout') {
-        forwardToBackend(req, res, opts.backendPort);
+        forwardToBackend(req, res, opts.backendPort, officeProxyFrameOptions);
         return;
       }
 

@@ -4,7 +4,13 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import type { AddressInfo } from 'node:net';
-import { startStaticServer, type StaticServerHandle } from './static-server.js';
+import {
+  applyOfficeProxyFrameOptions,
+  normalizeBackendProxyPath,
+  normalizeOfficeProxyFrameOptions,
+  startStaticServer,
+  type StaticServerHandle,
+} from './static-server.js';
 
 async function mkRendererFixture(): Promise<string> {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'ws-static-'));
@@ -86,6 +92,71 @@ describe('static-server', () => {
     expect(r.status).toBe(200);
     const json = (await r.json()) as { path: string };
     expect(json.path).toBe('/api/anything');
+  });
+
+  it('normalizes office proxy root trailing slashes before proxying to backend', async () => {
+    const backend = await startMockBackend((req, res) => {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ path: req.url }));
+    });
+    stopBackend = backend.close;
+    handle = await startStaticServer({ staticDir, backendPort: backend.port, port: 0 });
+
+    const r = await fetch(`${handle.localUrl}/api/office-watch-proxy/50753/`);
+    expect(r.status).toBe(200);
+    const json = (await r.json()) as { path: string };
+    expect(json.path).toBe('/api/office-watch-proxy/50753');
+  });
+
+  it('normalizes only office proxy root paths', () => {
+    expect(normalizeBackendProxyPath('/api/ppt-proxy/50918/')).toBe('/api/ppt-proxy/50918');
+    expect(normalizeBackendProxyPath('/api/office-watch-proxy/50753/?v=1')).toBe('/api/office-watch-proxy/50753?v=1');
+    expect(normalizeBackendProxyPath('/api/ppt-proxy/50918/index.html')).toBe('/api/ppt-proxy/50918/index.html');
+  });
+
+  it('preserves backend X-Frame-Options by default', async () => {
+    const backend = await startMockBackend((_req, res) => {
+      res.writeHead(200, { 'x-frame-options': 'DENY' });
+      res.end('ok');
+    });
+    stopBackend = backend.close;
+    handle = await startStaticServer({ staticDir, backendPort: backend.port, port: 0 });
+
+    const r = await fetch(`${handle.localUrl}/api/office-watch-proxy/50753/index.html`);
+    expect(r.status).toBe(200);
+    expect(r.headers.get('x-frame-options')).toBe('DENY');
+  });
+
+  it('can override office proxy X-Frame-Options to SAMEORIGIN', async () => {
+    const backend = await startMockBackend((_req, res) => {
+      res.writeHead(200, { 'x-frame-options': 'DENY' });
+      res.end('ok');
+    });
+    stopBackend = backend.close;
+    handle = await startStaticServer({
+      staticDir,
+      backendPort: backend.port,
+      port: 0,
+      officeProxyFrameOptions: 'sameorigin',
+    });
+
+    const r = await fetch(`${handle.localUrl}/api/office-watch-proxy/50753/index.html`);
+    expect(r.status).toBe(200);
+    expect(r.headers.get('x-frame-options')).toBe('SAMEORIGIN');
+  });
+
+  it('does not override non-office proxy X-Frame-Options', () => {
+    const headers = applyOfficeProxyFrameOptions({ 'x-frame-options': 'DENY' }, '/api/auth/user', 'sameorigin');
+
+    expect(headers['x-frame-options']).toBe('DENY');
+  });
+
+  it('normalizes office proxy frame option config values', () => {
+    expect(normalizeOfficeProxyFrameOptions(undefined)).toBe('preserve');
+    expect(normalizeOfficeProxyFrameOptions('SAMEORIGIN')).toBe('sameorigin');
+    expect(normalizeOfficeProxyFrameOptions('same-origin')).toBe('sameorigin');
+    expect(normalizeOfficeProxyFrameOptions('remove')).toBe('remove');
+    expect(normalizeOfficeProxyFrameOptions('unknown')).toBe('preserve');
   });
 
   it('/login reverse-proxies to backend (no local handler)', async () => {
