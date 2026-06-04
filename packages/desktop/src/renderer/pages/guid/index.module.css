@@ -383,7 +383,12 @@
   flex: 0 1 auto;
 }
 
-/* 首页输入框右下「模型 / 模式」按钮：与对话框 .sendbox-tools/.sendbox-actions 同款 */
+/* 首页输入框「模型 / 模式」按钮：与对话框 .sendbox-tools/.sendbox-actions 同款 */
+.actionTools :global(.sendbox-model-btn),
+.actionTools :global(.sendbox-model-btn:hover),
+.actionTools :global(.sendbox-model-btn:active),
+.actionTools :global(.sendbox-model-btn:focus),
+.actionTools :global(.sendbox-model-btn:focus-visible),
 .actionSubmit :global(.sendbox-model-btn),
 .actionSubmit :global(.sendbox-model-btn:hover),
 .actionSubmit :global(.sendbox-model-btn:active),
@@ -395,6 +400,10 @@
   color: var(--text-secondary) !important;
 }
 
+.actionTools :global(.sendbox-model-btn:hover),
+.actionTools :global(.sendbox-model-btn:active),
+.actionTools :global(.sendbox-model-btn:focus),
+.actionTools :global(.sendbox-model-btn:focus-visible),
 .actionSubmit :global(.sendbox-model-btn:hover),
 .actionSubmit :global(.sendbox-model-btn:active),
 .actionSubmit :global(.sendbox-model-btn:focus),
@@ -668,6 +677,7 @@
     white-space: nowrap;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
+    touch-action: pan-x;
   }
 
   .actionTools::-webkit-scrollbar {

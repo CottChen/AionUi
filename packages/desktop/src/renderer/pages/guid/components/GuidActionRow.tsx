@@ -8,7 +8,6 @@ import { ipcBridge } from '@/common';
 import type { IMcpServer } from '@/common/config/storage';
 import AgentModeSelector from '@/renderer/components/agent/AgentModeSelector';
 import { supportsModeSwitch, type AgentModeOption } from '@/renderer/utils/model/agentModes';
-import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { getCleanFileNames, FileService } from '@/renderer/services/FileService';
 import { iconColors } from '@/renderer/styles/colors';
 import { isElectronDesktop } from '@/renderer/utils/platform';
@@ -96,8 +95,6 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
   onSend,
 }) => {
   const { t } = useTranslation();
-  const layout = useLayoutContext();
-  const isMobile = layout?.isMobile ?? false;
   const [isPlusDropdownOpen, setIsPlusDropdownOpen] = useState(false);
   const modeBackend = effectiveModeAgent || selectedAgent;
   const showModeSwitch = supportsModeSwitch(modeBackend);
@@ -299,10 +296,8 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
             />
           )}
         </div>
-      </div>
-      <div className={styles.actionSubmit}>
         {configOptionCount > 0 && (
-          <div className={styles.actionConfigGroup} data-mobile={isMobile ? 'true' : undefined}>
+          <div className={styles.actionConfigGroup}>
             {modelSelectorNode}
 
             {showModeSwitch && (
@@ -331,7 +326,8 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
             />
           </div>
         )}
-
+      </div>
+      <div className={styles.actionSubmit}>
         {speechInputNode}
         <Button
           shape='circle'
