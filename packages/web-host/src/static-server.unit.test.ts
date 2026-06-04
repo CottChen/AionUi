@@ -93,7 +93,6 @@ describe('static-server', () => {
     expect(json.path).toBe('/api/anything');
   });
 
-
   it('preserves backend X-Frame-Options by default', async () => {
     const backend = await startMockBackend((_req, res) => {
       res.writeHead(200, { 'x-frame-options': 'DENY' });

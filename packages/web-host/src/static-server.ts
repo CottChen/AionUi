@@ -80,7 +80,6 @@ function forwardToBackend(
   req.pipe(proxy);
 }
 
-
 export function normalizeOfficeProxyFrameOptions(value?: string | null): OfficeProxyFrameOptions {
   const normalized = value?.trim().toLowerCase();
   switch (normalized) {
