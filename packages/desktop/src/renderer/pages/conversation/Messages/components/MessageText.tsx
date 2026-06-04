@@ -7,9 +7,8 @@
 import type { IMessageText } from '@/common/chat/chatLib';
 import { AIONUI_FILES_MARKER } from '@/common/config/constants';
 import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
-import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { iconColors } from '@/renderer/styles/colors';
-import { Alert, Message, Tooltip } from '@arco-design/web-react';
+import { Alert, Button, Message, Tooltip } from '@arco-design/web-react';
 import { Copy } from '@icon-park/react';
 import classNames from 'classnames';
 import React, { useMemo, useState } from 'react';
@@ -120,8 +119,6 @@ const MessageText: React.FC<{ message: IMessageText }> = ({ message }) => {
   const isTeammateMessage = message.position === 'left' && message.content.teammateMessage === true;
   const shouldRenderPlainText = isUserMessage;
   const conversationContext = useConversationContextSafe();
-  const layout = useLayoutContext();
-  const isMobile = layout?.isMobile ?? false;
   const resolvedFiles = useMemo(
     () => files.map((file_path) => resolveMessageFilePath(file_path, conversationContext?.workspace)),
     [conversationContext?.workspace, files]
@@ -148,13 +145,15 @@ const MessageText: React.FC<{ message: IMessageText }> = ({ message }) => {
 
   const copyButton = (
     <Tooltip content={t('common.copy', { defaultValue: 'Copy' })}>
-      <div
-        className='p-4px rd-4px cursor-pointer hover:bg-3 transition-colors opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto'
+      <Button
+        aria-label={t('common.copy', { defaultValue: 'Copy' })}
+        className='message-meta-copy-button rd-4px transition-colors opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto'
+        icon={<Copy theme='outline' size='16' fill={iconColors.secondary} />}
         onClick={handleCopy}
+        size='mini'
         style={{ lineHeight: 0 }}
-      >
-        <Copy theme='outline' size='16' fill={iconColors.secondary} />
-      </div>
+        type='text'
+      />
     </Tooltip>
   );
 
@@ -226,22 +225,19 @@ const MessageText: React.FC<{ message: IMessageText }> = ({ message }) => {
             </div>
           )}
         </div>
-        {/* Hover-revealed copy + timestamp row. Mobile has no hover affordance,
-            so we drop the row entirely — system-level long-press still copies. */}
-        {!isMobile && (
-          <div
-            className={classNames('h-32px flex items-center mt-4px gap-8px', {
-              'flex-row-reverse': isUserMessage,
-            })}
-          >
-            {copyButton}
-            {message.created_at && (
-              <span className='text-12px text-t-secondary opacity-0 group-hover:opacity-100 transition-opacity select-none'>
-                {formatMessageTime(message.created_at)}
-              </span>
-            )}
-          </div>
-        )}
+        {/* Desktop keeps hover-revealed metadata; touch/no-hover devices show it via CSS media queries. */}
+        <div
+          className={classNames('h-32px flex items-center mt-4px gap-8px', {
+            'flex-row-reverse': isUserMessage,
+          })}
+        >
+          {copyButton}
+          {message.created_at && (
+            <span className='message-meta-time text-12px text-t-secondary opacity-0 group-hover:opacity-100 transition-opacity select-none'>
+              {formatMessageTime(message.created_at)}
+            </span>
+          )}
+        </div>
       </div>
       {showCopyAlert && (
         <Alert
