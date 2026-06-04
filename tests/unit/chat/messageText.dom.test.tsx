@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { IMessageText } from '@/common/chat/chatLib';
 import { ConversationProvider } from '@/renderer/hooks/context/ConversationContext';
@@ -53,6 +53,16 @@ vi.mock('@/renderer/utils/ui/clipboard', () => ({
 
 vi.mock('@arco-design/web-react', () => ({
   Alert: () => null,
+  Button: ({
+    children,
+    icon,
+    ...props
+  }: React.ButtonHTMLAttributes<HTMLButtonElement> & { icon?: React.ReactNode }) => (
+    <button type='button' {...props}>
+      {icon}
+      {children}
+    </button>
+  ),
   Message: {
     error: vi.fn(),
   },
@@ -112,5 +122,32 @@ describe('MessageText attachment paths', () => {
     );
 
     expect(screen.getByTestId('file-preview')).toHaveTextContent('/Users/demo/Desktop/photo.png');
+  });
+
+  it('renders message metadata and copy action for touch-device fallback styles', () => {
+    const message: IMessageText = {
+      id: 'msg-3',
+      msg_id: 'msg-3',
+      conversation_id: 'conv-1',
+      type: 'text',
+      position: 'right',
+      created_at: new Date('2026-06-04T10:20:00').getTime(),
+      createdAt: Date.now(),
+      content: {
+        content: 'copyable message',
+      },
+    };
+
+    render(
+      <ConversationProvider value={{ conversationId: 'conv-1', workspace: '/workspace/demo', type: 'acp' }}>
+        <MessageText message={message} />
+      </ConversationProvider>
+    );
+
+    const copyButton = screen.getByRole('button', { name: 'Copy' });
+    expect(copyButton).toHaveClass('message-meta-copy-button');
+    expect(screen.getByText('10:20')).toHaveClass('message-meta-time');
+
+    fireEvent.click(copyButton);
   });
 });
