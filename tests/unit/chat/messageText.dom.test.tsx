@@ -125,13 +125,15 @@ describe('MessageText attachment paths', () => {
   });
 
   it('renders message metadata and copy action for touch-device fallback styles', () => {
+    const todayAtTenTwenty = new Date();
+    todayAtTenTwenty.setHours(10, 20, 0, 0);
     const message: IMessageText = {
       id: 'msg-3',
       msg_id: 'msg-3',
       conversation_id: 'conv-1',
       type: 'text',
       position: 'right',
-      created_at: new Date('2026-06-04T10:20:00').getTime(),
+      created_at: todayAtTenTwenty.getTime(),
       createdAt: Date.now(),
       content: {
         content: 'copyable message',
