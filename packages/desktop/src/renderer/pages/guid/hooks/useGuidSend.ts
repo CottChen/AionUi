@@ -9,7 +9,6 @@ import type { IMcpServer, TProviderWithModel } from '@/common/config/storage';
 import { buildAgentConversationParams } from '@/common/utils/buildAgentConversationParams';
 import { toSessionMcpServer } from '@/renderer/hooks/mcp/catalog';
 import { emitter } from '@/renderer/utils/emitter';
-import { buildDisplayMessage } from '@/renderer/utils/file/messageFiles';
 import { updateWorkspaceTime } from '@/renderer/utils/workspace/workspaceHistory';
 import { Message } from '@arco-design/web-react';
 import { useCallback, useRef } from 'react';
@@ -78,7 +77,7 @@ export type GuidSendResult = {
 };
 
 /**
- * Hook that manages the send logic for all conversation types (openclaw/nanobot/acp).
+ * Hook that manages the send logic for ACP and Aion CLI conversations.
  */
 export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
   const {
@@ -107,7 +106,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
     guidEnabledSkills,
     availableMcpServers,
     selectedMcpServerIds,
-    currentEffectiveAgentInfo,
+    currentEffectiveAgentInfo: _currentEffectiveAgentInfo,
     isGoogleAuth,
     setMentionOpen,
     setMentionQuery,
@@ -154,109 +153,6 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
       .map((server) => toSessionMcpServer(server));
 
     const finalEffectiveAgentType = effectiveAgentType;
-
-    // OpenClaw Gateway path
-    if (selectedAgent === 'openclaw-gateway') {
-      const openclawAgentInfo = agentInfo || findAgentByKey(selectedAgentKey);
-      const openclawConversationParams = buildAgentConversationParams({
-        backend: openclawAgentInfo?.backend || 'openclaw-gateway',
-        name: input,
-        agent_name: openclawAgentInfo?.name,
-        preset_assistant_id,
-        workspace: finalWorkspace,
-        model: current_model!,
-        cli_path: openclawAgentInfo?.cli_path,
-        custom_agent_id: openclawAgentInfo?.custom_agent_id,
-        custom_workspace: isCustomWorkspace,
-        extra: {
-          default_files: files,
-          runtime_validation: {
-            expected_workspace: finalWorkspace,
-            expected_backend: openclawAgentInfo?.backend,
-            expected_agent_name: openclawAgentInfo?.name,
-            expected_cli_path: openclawAgentInfo?.cli_path,
-            expected_model: current_model?.use_model,
-            switched_at: Date.now(),
-          },
-          preset_enabled_skills: enabled_skills_to_send,
-          exclude_auto_inject_skills: excludeBuiltinSkills,
-        },
-      });
-
-      try {
-        const conversation = await ipcBridge.conversation.create.invoke(openclawConversationParams);
-
-        if (!conversation || !conversation.id) {
-          Message.error(t('conversation.createFailed'));
-          return;
-        }
-
-        if (isCustomWorkspace) {
-          updateWorkspaceTime(finalWorkspace);
-        }
-
-        emitter.emit('chat.history.refresh');
-
-        const initialMessage = {
-          input,
-          files: files.length > 0 ? files : undefined,
-        };
-        sessionStorage.setItem(`openclaw_initial_message_${conversation.id}`, JSON.stringify(initialMessage));
-
-        await navigate(`/conversation/${conversation.id}`);
-      } catch (error: unknown) {
-        console.error('Failed to create OpenClaw conversation:', error);
-        throw error;
-      }
-      return;
-    }
-
-    // Nanobot path
-    if (selectedAgent === 'nanobot') {
-      const nanobotAgentInfo = agentInfo || findAgentByKey(selectedAgentKey);
-      const nanobotConversationParams = buildAgentConversationParams({
-        backend: nanobotAgentInfo?.backend || 'nanobot',
-        name: input,
-        agent_name: nanobotAgentInfo?.name,
-        preset_assistant_id,
-        workspace: finalWorkspace,
-        model: current_model!,
-        custom_agent_id: nanobotAgentInfo?.custom_agent_id,
-        custom_workspace: isCustomWorkspace,
-        extra: {
-          default_files: files,
-          preset_enabled_skills: enabled_skills_to_send,
-          exclude_auto_inject_skills: excludeBuiltinSkills,
-        },
-      });
-
-      try {
-        const conversation = await ipcBridge.conversation.create.invoke(nanobotConversationParams);
-
-        if (!conversation || !conversation.id) {
-          Message.error(t('conversation.createFailed'));
-          return;
-        }
-
-        if (isCustomWorkspace) {
-          updateWorkspaceTime(finalWorkspace);
-        }
-
-        emitter.emit('chat.history.refresh');
-
-        const initialMessage = {
-          input,
-          files: files.length > 0 ? files : undefined,
-        };
-        sessionStorage.setItem(`nanobot_initial_message_${conversation.id}`, JSON.stringify(initialMessage));
-
-        await navigate(`/conversation/${conversation.id}`);
-      } catch (error: unknown) {
-        console.error('Failed to create Nanobot conversation:', error);
-        throw error;
-      }
-      return;
-    }
 
     // Aionrs path (direct selection or preset assistant with aionrs as main agent)
     if (selectedAgent === 'aionrs' || (is_preset && finalEffectiveAgentType === 'aionrs')) {

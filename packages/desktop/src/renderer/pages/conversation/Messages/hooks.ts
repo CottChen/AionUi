@@ -425,13 +425,16 @@ const parseJsonRecord = (value: unknown): Record<string, unknown> | undefined =>
 };
 
 const normalizeTipType = (value: unknown, fallback: IMessageTips['content']['type']) =>
-  value === 'success' || value === 'warning' || value === 'error' ? value : fallback;
+  value === 'success' || value === 'warning' || value === 'error' || value === 'info' ? value : fallback;
 
 const normalizePersistedWorkspaceRuntimeError = (
   parsed: Record<string, unknown>,
   message: string
 ): AgentStreamErrorInfo | undefined => {
-  if (parsed.code !== 'WORKSPACE_PATH_CONTAINS_WHITESPACE_RUNTIME_UNSUPPORTED') {
+  if (
+    parsed.code !== 'WORKSPACE_PATH_RUNTIME_UNAVAILABLE' &&
+    parsed.code !== 'WORKSPACE_PATH_CONTAINS_WHITESPACE_RUNTIME_UNSUPPORTED'
+  ) {
     return undefined;
   }
 
@@ -446,7 +449,7 @@ const normalizePersistedWorkspaceRuntimeError = (
 
   return {
     message,
-    code: 'WORKSPACE_PATH_CONTAINS_WHITESPACE_RUNTIME_UNSUPPORTED',
+    code: 'WORKSPACE_PATH_RUNTIME_UNAVAILABLE',
     ownership: 'aionui',
     detail,
     workspacePath,
@@ -534,10 +537,24 @@ const normalizeDbTipsMessage = (msg: TMessage): TMessage => {
 
   const existingContent = isRecord(msg.content) ? msg.content : undefined;
   const fallbackType =
-    existingContent?.type === 'success' || existingContent?.type === 'warning' || existingContent?.type === 'error'
+    existingContent?.type === 'success' ||
+    existingContent?.type === 'warning' ||
+    existingContent?.type === 'error' ||
+    existingContent?.type === 'info'
       ? existingContent.type
       : 'error';
   const tipType = normalizeTipType(parsed.type, fallbackType);
+  const code =
+    typeof parsed.code === 'string'
+      ? parsed.code
+      : typeof existingContent?.code === 'string'
+        ? existingContent.code
+        : undefined;
+  const params = isRecord(parsed.params)
+    ? parsed.params
+    : isRecord(existingContent?.params)
+      ? existingContent.params
+      : undefined;
   const structuredError =
     tipType === 'error'
       ? (normalizePersistedWorkspaceRuntimeError(parsed, parsed.content) ??
@@ -551,6 +568,8 @@ const normalizeDbTipsMessage = (msg: TMessage): TMessage => {
     content: {
       content: parsed.content,
       type: tipType,
+      ...(tipType !== 'error' && code ? { code } : {}),
+      ...(tipType !== 'error' && params ? { params } : {}),
       ...(structuredError ? { error: structuredError } : {}),
     },
   } as IMessageTips;
@@ -646,6 +665,39 @@ export const useMessageLstCache = (key: string) => {
       cancelled = true;
     };
   }, [key, loadMessages, setLoading]);
+
+  useEffect(() => {
+    if (!key) {
+      return;
+    }
+
+    return ipcBridge.conversation.userCreated.on((payload) => {
+      if (payload.conversation_id !== key) {
+        return;
+      }
+
+      update((list) => {
+        const index = getOrBuildIndex(list);
+        return composeMessageWithIndex(
+          {
+            id: payload.msg_id,
+            msg_id: payload.msg_id,
+            conversation_id: payload.conversation_id,
+            type: 'text',
+            position: payload.position,
+            status: payload.status,
+            hidden: payload.hidden,
+            created_at: payload.created_at,
+            content: {
+              content: payload.content,
+            },
+          },
+          list,
+          index
+        );
+      });
+    });
+  }, [key, update]);
 };
 
 export const beforeUpdateMessageList = (fn: (list: TMessage[]) => TMessage[]) => {
