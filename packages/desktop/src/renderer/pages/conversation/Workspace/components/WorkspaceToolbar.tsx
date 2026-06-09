@@ -6,7 +6,8 @@
 
 import { iconColors } from '@/renderer/styles/colors';
 import { isElectronDesktop } from '@/renderer/utils/platform';
-import { Dropdown, Input, Menu, Tooltip } from '@arco-design/web-react';
+import { getLastDirectoryName } from '@/renderer/utils/workspace/workspace';
+import { Button, Dropdown, Input, Menu, Popover, Tooltip } from '@arco-design/web-react';
 import { Down, Plus, Refresh, Search } from '@icon-park/react';
 import React from 'react';
 import UploadProgressBar from '@/renderer/components/media/UploadProgressBar';
@@ -17,6 +18,8 @@ type WorkspaceToolbarProps = {
   t: TFunction;
   isWorkspaceCollapsed: boolean;
   setIsWorkspaceCollapsed: (v: boolean) => void;
+  isTemporaryWorkspace: boolean;
+  workspacePath: string;
   workspaceDisplayName: string;
   // Search
   showSearch: boolean;
@@ -38,6 +41,8 @@ const WorkspaceToolbar: React.FC<WorkspaceToolbarProps> = ({
   t,
   isWorkspaceCollapsed,
   setIsWorkspaceCollapsed,
+  isTemporaryWorkspace,
+  workspacePath,
   workspaceDisplayName,
   showSearch,
   searchText,
@@ -50,6 +55,19 @@ const WorkspaceToolbar: React.FC<WorkspaceToolbarProps> = ({
   handleUploadDeviceFiles,
   setShowHostFileSelector,
 }) => {
+  const temporaryWorkspaceDetails = isTemporaryWorkspace ? (
+    <div className='max-w-360px p-4px text-12px'>
+      <div className='mb-10px'>
+        <div className='text-t-tertiary mb-3px'>{t('conversation.workspace.temporaryDirectoryName')}</div>
+        <div className='font-mono text-t-primary break-all'>{getLastDirectoryName(workspacePath)}</div>
+      </div>
+      <div>
+        <div className='text-t-tertiary mb-3px'>{t('conversation.workspace.temporaryDirectoryPath')}</div>
+        <div className='font-mono text-t-primary break-all'>{workspacePath}</div>
+      </div>
+    </div>
+  ) : null;
+
   const workspaceUploadMenu = (
     <Menu
       onClickMenuItem={(key) => {
@@ -104,9 +122,29 @@ const WorkspaceToolbar: React.FC<WorkspaceToolbarProps> = ({
             fill={iconColors.primary}
             className={`line-height-0 transition-transform duration-200 flex-shrink-0 ${isWorkspaceCollapsed ? '-rotate-90' : 'rotate-0'}`}
           />
-          <span className='workspace-title-label font-bold text-14px text-t-primary overflow-hidden text-ellipsis whitespace-nowrap'>
-            {workspaceDisplayName}
-          </span>
+          {temporaryWorkspaceDetails ? (
+            <Popover
+              content={temporaryWorkspaceDetails}
+              trigger='click'
+              position='bottom'
+              title={t('conversation.workspace.temporaryDirectory')}
+            >
+              <Button
+                type='text'
+                size='mini'
+                className='workspace-title-label min-w-0 max-w-full !p-0 !h-auto !bg-transparent !text-t-primary font-bold text-14px overflow-hidden text-ellipsis whitespace-nowrap hover:!text-[rgb(var(--primary-6))] [&_.arco-btn-content]:min-w-0 [&_.arco-btn-content]:overflow-hidden [&_.arco-btn-content]:text-ellipsis [&_.arco-btn-content]:whitespace-nowrap'
+                onClick={(event) => {
+                  event.stopPropagation();
+                }}
+              >
+                {workspaceDisplayName}
+              </Button>
+            </Popover>
+          ) : (
+            <span className='workspace-title-label font-bold text-14px text-t-primary overflow-hidden text-ellipsis whitespace-nowrap'>
+              {workspaceDisplayName}
+            </span>
+          )}
         </div>
         <div className='workspace-toolbar-actions flex items-center gap-8px flex-shrink-0'>
           {!isElectronDesktop() && (
