@@ -165,6 +165,11 @@ export interface IConfigStorageRefer {
    * still-on-disk legacy field.
    */
   'migration.assistantsMigrated_v1'?: boolean;
+  /**
+   * One-shot completion flag for legacy `acp.customAgents` → backend custom
+   * agent migration. Keeps old local data intact for downgrade safety.
+   */
+  'migration.customAgentsMigrated_v1'?: boolean;
   // Desktop Pet: whether the desktop pet feature is enabled
   'pet.enabled'?: boolean;
   // Desktop Pet: size in pixels (200, 280, or 360)

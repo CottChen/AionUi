@@ -49,6 +49,10 @@ vi.mock('@/process/utils/migrateAssistants', () => ({
   migrateAssistantsToBackend: vi.fn().mockResolvedValue(true),
 }));
 
+vi.mock('@/process/utils/migrateCustomAgents', () => ({
+  migrateCustomAgentsToBackend: vi.fn().mockResolvedValue(true),
+}));
+
 const provider: IProvider = {
   id: 'provider-1',
   platform: 'gemini',

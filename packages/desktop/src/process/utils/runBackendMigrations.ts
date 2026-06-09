@@ -17,6 +17,7 @@ import {
 import { BUILTIN_IMAGE_GEN_NAME, type IMcpServer, type IProvider } from '@/common/config/storage';
 import { getBuiltinMcpScriptPath, type ProcessConfig as ProcessConfigType } from './initStorage';
 import { migrateAssistantsToBackend } from './migrateAssistants';
+import { migrateCustomAgentsToBackend } from './migrateCustomAgents';
 
 type ConfigFile = typeof ProcessConfigType;
 type MigrationStepResult = boolean;
@@ -145,8 +146,8 @@ function areStringArraysEqual(left?: string[], right?: string[]): boolean {
 function areStringRecordsEqual(left?: Record<string, string>, right?: Record<string, string>): boolean {
   const leftValue = left || {};
   const rightValue = right || {};
-  const leftKeys = Object.keys(leftValue).sort();
-  const rightKeys = Object.keys(rightValue).sort();
+  const leftKeys = Object.keys(leftValue).toSorted();
+  const rightKeys = Object.keys(rightValue).toSorted();
   return areStringArraysEqual(leftKeys, rightKeys) && leftKeys.every((key) => leftValue[key] === rightValue[key]);
 }
 
@@ -380,6 +381,7 @@ const MIGRATION_STEPS: Array<{
     run: async (configFile) => (await ensureBootstrapMcpServersInDb(configFile), true),
   },
   { name: 'migrateAssistantsToBackend', run: async (configFile) => migrateAssistantsToBackend(configFile) },
+  { name: 'migrateCustomAgentsToBackend', run: async (configFile) => migrateCustomAgentsToBackend(configFile) },
 ];
 
 async function syncBuiltinMcpConfig(configFile: ConfigFile): Promise<void> {
