@@ -54,6 +54,30 @@
   color: var(--color-text-1);
 }
 
+/* Mobile workspace overlay uses the visual viewport so the file tree can scroll
+   fully above browser chrome and device safe areas. */
+.mobile-workspace-overlay {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.mobile-workspace-overlay__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+@media (max-width: 767px) {
+  .mobile-workspace-overlay {
+    height: 100dvh;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
 /* Header model pill — only cap width on mobile, where the titlebar slot has
    limited horizontal room. Desktop lets the pill grow to fit the full name. */
 @media (max-width: 767px) {
