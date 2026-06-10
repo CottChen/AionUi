@@ -73,4 +73,9 @@ describe('OfficeWatchViewer module shape', () => {
 
     expect(resolveOfficeWatchUrl('/api/office-watch-proxy/50753', 'excel')).toBe('http://127.0.0.1:50753/');
   });
+
+  it('uses official iOfficeAI OfficeCLI releases page', async () => {
+    const mod = await import('@/renderer/pages/conversation/Preview/components/viewers/OfficeWatchViewer');
+    expect(mod.OFFICECLI_INSTALL_URL).toBe('https://github.com/iOfficeAI/OfficeCli/releases');
+  });
 });
