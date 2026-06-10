@@ -8,6 +8,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'node:events';
 import type { ChildProcess } from 'node:child_process';
 import type { Socket } from 'node:net';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 // ---- Module-level mocks ----
 vi.mock('node:child_process', () => ({
@@ -26,7 +29,14 @@ vi.mock('./agent-process-registry.js', () => ({
 import { spawn } from 'node:child_process';
 import { connect, createServer } from 'node:net';
 import { cleanupRegisteredAgentProcesses } from './agent-process-registry.js';
-import { buildSpawnArgs, buildSpawnEnv, findAvailablePort, BackendLifecycleManager } from './backend-launcher.js';
+import {
+  buildSpawnArgs,
+  buildSpawnEnv,
+  findAvailablePort,
+  BackendLifecycleManager,
+  readBundledAioncoreVersion,
+  supportsParentPidArg,
+} from './backend-launcher.js';
 import type { AppMetadata } from './types.js';
 
 const APP_META: AppMetadata = {
@@ -164,6 +174,43 @@ describe('buildSpawnArgs', () => {
     } finally {
       if (prev === undefined) delete process.env.AIONUI_LOG_LEVEL;
       else process.env.AIONUI_LOG_LEVEL = prev;
+    }
+  });
+
+  it('gates parent-pid on backend compatibility', () => {
+    const base = {
+      port: 1,
+      dbPath: '/d',
+      local: false,
+      appVersion: 'x',
+      isPackaged: true,
+      parentPid: 4242,
+    };
+
+    expect(buildSpawnArgs({ ...base, parentPidSupported: false })).not.toContain('--parent-pid');
+    expect(buildSpawnArgs({ ...base, parentPidSupported: true })).toEqual(
+      expect.arrayContaining(['--parent-pid', '4242'])
+    );
+  });
+});
+
+describe('aioncore parent-pid compatibility', () => {
+  it('detects supported aioncore versions', () => {
+    expect(supportsParentPidArg(undefined)).toBe(false);
+    expect(supportsParentPidArg('v0.1.24')).toBe(false);
+    expect(supportsParentPidArg('v0.1.26')).toBe(true);
+    expect(supportsParentPidArg('0.2.0')).toBe(true);
+  });
+
+  it('reads bundled aioncore version from manifest next to the binary', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'aioncore-manifest-'));
+    try {
+      writeFileSync(join(dir, 'manifest.json'), JSON.stringify({ version: 'v0.1.26' }), 'utf-8');
+      expect(readBundledAioncoreVersion(join(dir, process.platform === 'win32' ? 'aioncore.exe' : 'aioncore'))).toBe(
+        'v0.1.26'
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 });

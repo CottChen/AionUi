@@ -9,7 +9,9 @@
  */
 
 import { type ChildProcess, spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { connect, createServer, type Socket } from 'node:net';
+import { dirname, join } from 'node:path';
 import { cleanupRegisteredAgentProcesses } from './agent-process-registry.js';
 import type { AppMetadata, BackendBinaryResolver } from './types.js';
 
@@ -69,6 +71,7 @@ type SpawnConfig = {
   workDir?: string;
   appVersion: string;
   isPackaged: boolean;
+  parentPidSupported?: boolean;
 };
 
 export type BackendDirConfig = {
@@ -179,6 +182,37 @@ export class BackendStartupCancelledError extends Error {
   }
 }
 
+const MIN_PARENT_PID_AIONCORE_VERSION = [0, 1, 26] as const;
+
+function parseVersionParts(rawVersion: string | undefined): [number, number, number] | null {
+  if (!rawVersion) return null;
+  const match = rawVersion.trim().match(/^v?(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/);
+  if (!match) return null;
+  return [Number(match[1]), Number(match[2]), Number(match[3])];
+}
+
+export function supportsParentPidArg(rawVersion: string | undefined): boolean {
+  const version = parseVersionParts(rawVersion);
+  if (!version) return false;
+  for (let i = 0; i < MIN_PARENT_PID_AIONCORE_VERSION.length; i++) {
+    if (version[i] > MIN_PARENT_PID_AIONCORE_VERSION[i]) return true;
+    if (version[i] < MIN_PARENT_PID_AIONCORE_VERSION[i]) return false;
+  }
+  return true;
+}
+
+export function readBundledAioncoreVersion(binaryPath: string): string | undefined {
+  try {
+    const raw = readFileSync(join(dirname(binaryPath), 'manifest.json'), 'utf-8');
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return undefined;
+    const version = (parsed as { version?: unknown }).version;
+    return typeof version === 'string' ? version : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function buildSpawnArgs(config: SpawnConfig): string[] {
   const logLevel = process.env.AIONUI_LOG_LEVEL || (config.isPackaged ? 'info' : 'debug');
   const args = [
@@ -186,7 +220,9 @@ export function buildSpawnArgs(config: SpawnConfig): string[] {
     String(config.port),
     '--data-dir',
     config.dbPath,
-    ...(typeof config.parentPid === 'number' ? ['--parent-pid', String(config.parentPid)] : []),
+    ...(typeof config.parentPid === 'number' && config.parentPidSupported === true
+      ? ['--parent-pid', String(config.parentPid)]
+      : []),
     '--log-level',
     logLevel,
     '--app-version',
@@ -539,6 +575,7 @@ export class BackendLifecycleManager {
       dbPath,
       local: true,
       parentPid: process.pid,
+      parentPidSupported: supportsParentPidArg(readBundledAioncoreVersion(binaryPath)),
       logDir,
       workDir: dirs?.workDir,
       appVersion,
