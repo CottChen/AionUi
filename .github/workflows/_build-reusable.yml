@@ -27,6 +27,10 @@ on:
         description: 'Optional AionCore Manual Build workflow run id to bundle instead of the pinned release'
         type: string
         default: ''
+      aioncore_repo:
+        description: 'AionCore repository owner/name for aioncore_run_id artifacts'
+        type: string
+        default: 'iOfficeAI/AionCore'
 
 env:
   BUN_INSTALL_REGISTRY: 'https://registry.npmjs.org/'
@@ -315,6 +319,7 @@ jobs:
           # Version is pinned in repo-root package.json (aioncoreVersion).
           # Set AIONUI_BACKEND_VERSION here only to override for ad-hoc builds.
           AIONUI_BACKEND_RUN_ID: ${{ inputs.aioncore_run_id }}
+          AIONUI_BACKEND_REPO: ${{ inputs.aioncore_repo }}
           AIONUI_BACKEND_ARCH: ${{ matrix.arch }}
           GH_TOKEN: ${{ secrets.GH_TOKEN || secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
