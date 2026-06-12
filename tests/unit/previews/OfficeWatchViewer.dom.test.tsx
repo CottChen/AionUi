@@ -17,7 +17,7 @@
  * is recorded in N4c-final.md Deviations.
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const platformState = vi.hoisted(() => ({ isElectron: false }));
 
@@ -77,5 +77,59 @@ describe('OfficeWatchViewer module shape', () => {
   it('uses official iOfficeAI OfficeCLI releases page', async () => {
     const mod = await import('@/renderer/pages/conversation/Preview/components/viewers/OfficeWatchViewer');
     expect(mod.OFFICECLI_INSTALL_URL).toBe('https://github.com/iOfficeAI/OfficeCli/releases');
+  });
+});
+
+/**
+ * Issue #3212: in web (browser) mode the preview iframe URL must match the
+ * backend proxy routes exactly. The backend registers /api/ppt-proxy/{port}
+ * and /api/ppt-proxy/{port}/{*path} — a bare trailing slash matches neither
+ * and returns 404, which breaks every Office preview in webui mode.
+ */
+const load = async () => {
+  const mod = await import('@/renderer/pages/conversation/Preview/components/viewers/OfficeWatchViewer');
+  return mod.resolveOfficeWatchUrl;
+};
+
+describe('resolveOfficeWatchUrl (web mode, no window.electronAPI)', () => {
+  // The dom setup stubs window.electronAPI globally; web mode is its absence.
+  let electronApiStub: unknown;
+  beforeEach(() => {
+    const w = window as Window & { electronAPI?: unknown };
+    electronApiStub = w.electronAPI;
+    delete w.electronAPI;
+  });
+  afterEach(() => {
+    (window as Window & { electronAPI?: unknown }).electronAPI = electronApiStub;
+  });
+
+  it('returns the backend proxy url without appending a trailing slash', async () => {
+    const resolveOfficeWatchUrl = await load();
+    expect(resolveOfficeWatchUrl('/api/ppt-proxy/59324', 'ppt')).toBe('/api/ppt-proxy/59324');
+  });
+
+  it('drops a bare trailing slash from the proxy url', async () => {
+    const resolveOfficeWatchUrl = await load();
+    expect(resolveOfficeWatchUrl('/api/office-watch-proxy/59324/', 'word')).toBe('/api/office-watch-proxy/59324');
+  });
+
+  it('keeps a real sub-path on the proxy url', async () => {
+    const resolveOfficeWatchUrl = await load();
+    expect(resolveOfficeWatchUrl('/api/office-watch-proxy/59324/index.html', 'excel')).toBe(
+      '/api/office-watch-proxy/59324/index.html'
+    );
+  });
+
+  it('maps an absolute localhost watch url to the proxy path without trailing slash', async () => {
+    const resolveOfficeWatchUrl = await load();
+    expect(resolveOfficeWatchUrl('http://127.0.0.1:59324', 'ppt')).toBe('/api/ppt-proxy/59324');
+  });
+});
+
+describe('resolveOfficeWatchUrl (Electron mode)', () => {
+  it('still resolves to the direct loopback url', async () => {
+    platformState.isElectron = true;
+    const mod = await import('@/renderer/pages/conversation/Preview/components/viewers/OfficeWatchViewer');
+    expect(mod.resolveOfficeWatchUrl('/api/ppt-proxy/59324', 'ppt')).toBe('http://127.0.0.1:59324/');
   });
 });
