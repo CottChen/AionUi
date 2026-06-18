@@ -23,6 +23,7 @@ interface HTMLRendererProps {
   content: string;
   file_path?: string;
   workspace?: string;
+  isDirty?: boolean;
   containerRef?: React.RefObject<HTMLDivElement>;
   onScroll?: (scrollTop: number, scrollHeight: number, clientHeight: number) => void;
   inspectMode?: boolean; // 是否开启检查模式 / Whether inspect mode is enabled
@@ -35,6 +36,40 @@ interface HTMLRendererProps {
 interface ElectronWebView extends HTMLElement {
   src: string;
   executeJavaScript: (code: string) => Promise<void>;
+}
+
+type HtmlPreviewSourceKind = 'file' | 'data';
+type HtmlPreviewLogLevel = 'info' | 'warn' | 'error';
+
+function logHtmlPreview(level: HtmlPreviewLogLevel, message: string, data?: unknown): void {
+  const rendererLogger = ipcBridge.application?.writeRendererLog;
+  if (!rendererLogger) return;
+
+  void rendererLogger
+    .invoke({
+      level,
+      tag: 'HTMLRenderer',
+      message,
+      data,
+    })
+    .catch((error: unknown) => {
+      console.warn('[HTMLRenderer] Failed to write renderer log:', error);
+    });
+}
+
+function getFileNameFromPath(filePath?: string): string | undefined {
+  return filePath?.split(/[\\/]/).pop() || undefined;
+}
+
+function summarizePreviewUrl(url?: string): string | undefined {
+  if (!url) return undefined;
+  if (url.startsWith('data:')) {
+    return `data:text/html (${url.length} chars)`;
+  }
+  if (url.startsWith('file://')) {
+    return `file://${getFileNameFromPath(url) ?? ''}`;
+  }
+  return url;
 }
 
 /**
@@ -186,6 +221,7 @@ const HTMLRenderer: React.FC<HTMLRendererProps> = ({
   content,
   file_path,
   workspace,
+  isDirty = false,
   containerRef,
   onScroll,
   inspectMode = false,
@@ -196,6 +232,7 @@ const HTMLRenderer: React.FC<HTMLRendererProps> = ({
   const webviewRef = useRef<ElectronWebView | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const webviewLoadedRef = useRef(false); // 跟踪 webview 是否已加载 / Track if webview is loaded
+  const lastLoggedSourceRef = useRef<string | null>(null);
   const isSyncingScrollRef = useRef(false); // 防止滚动同步循环 / Prevent scroll sync loops
   const [webviewContentHeight, setWebviewContentHeight] = useState(0); // webview 内容高度 / webview content height
   const [inlinedHtmlContent, setInlinedHtmlContent] = useState<string>(''); // 内联化后的 HTML（用于 browser iframe）/ Inlined HTML (for browser iframe)
@@ -222,17 +259,11 @@ const HTMLRenderer: React.FC<HTMLRendererProps> = ({
     return () => observer.disconnect();
   }, []);
 
-  // 判断是否应该直接从文件加载（支持相对资源）- 仅 Electron 环境
-  // Determine if should load directly from file (supports relative resources) - Electron only
+  // 判断是否应该直接从文件加载（保留正常 file:// origin 和 Web Storage）- 仅 Electron 环境
+  // Determine if should load directly from file (keeps normal file:// origin and Web Storage) - Electron only
   const shouldLoadFromFile = useMemo(() => {
-    if (!isElectron || !file_path) return false;
-    // 检查 HTML 是否引用了相对资源 / Check if HTML references relative resources
-    const hasRelativeResources =
-      /<link[^>]+href=["'](?!https?:\/\/|data:|\/\/)[^"']+["']/i.test(content) ||
-      /<script[^>]+src=["'](?!https?:\/\/|data:|\/\/)[^"']+["']/i.test(content) ||
-      /<img[^>]+src=["'](?!https?:\/\/|data:|\/\/)[^"']+["']/i.test(content);
-    return hasRelativeResources;
-  }, [content, file_path, isElectron]);
+    return isElectron && Boolean(file_path) && !isDirty;
+  }, [file_path, isDirty, isElectron]);
 
   // 检查是否有相对资源（用于 browser inline 处理）
   // Check if has relative resources (for browser inline processing)
@@ -311,8 +342,8 @@ const HTMLRenderer: React.FC<HTMLRendererProps> = ({
   // 计算 webview 的 src
   // Calculate webview src
   const webviewSrc = useMemo(() => {
-    // 如果有相对资源引用且有文件路径，直接用 file:// URL 加载
-    // If has relative resource references and has file path, load directly via file:// URL
+    // 如果有文件路径且内容未被编辑，直接用 file:// URL 加载，避免 data: URL 的 opaque origin 限制
+    // If file path exists and content is clean, load via file:// to avoid data: URL opaque origin limits
     if (shouldLoadFromFile && file_path) {
       return `file://${file_path}`;
     }
@@ -342,6 +373,34 @@ const HTMLRenderer: React.FC<HTMLRendererProps> = ({
     return `data:text/html;charset=utf-8,${encoded}`;
   }, [htmlContent, file_path, shouldLoadFromFile]);
 
+  const webviewSourceKind: HtmlPreviewSourceKind = shouldLoadFromFile ? 'file' : 'data';
+  const webviewSourceReason = useMemo(() => {
+    if (shouldLoadFromFile) {
+      return 'clean-local-file';
+    }
+    if (!file_path) return 'inline-content';
+    if (isDirty) return 'dirty-content';
+    return 'memory-preview';
+  }, [file_path, isDirty, shouldLoadFromFile]);
+
+  useEffect(() => {
+    if (!isElectron) return;
+
+    const sourceLogKey = `${webviewSourceKind}:${webviewSourceReason}:${file_path ?? ''}:${String(isDirty)}`;
+    if (lastLoggedSourceRef.current === sourceLogKey) return;
+    lastLoggedSourceRef.current = sourceLogKey;
+
+    logHtmlPreview('info', 'html_preview_source_selected', {
+      source: webviewSourceKind,
+      reason: webviewSourceReason,
+      fileName: getFileNameFromPath(file_path),
+      hasFilePath: Boolean(file_path),
+      isDirty: Boolean(isDirty),
+      contentLength: content.length,
+      src: summarizePreviewUrl(webviewSrc),
+    });
+  }, [content.length, file_path, isDirty, isElectron, webviewSourceKind, webviewSourceReason, webviewSrc]);
+
   // 当 webviewSrc 改变时重置加载状态 / Reset loading state when webviewSrc changes
   useEffect(() => {
     webviewLoadedRef.current = false;
@@ -358,8 +417,20 @@ const HTMLRenderer: React.FC<HTMLRendererProps> = ({
       webviewLoadedRef.current = true; // 标记为已加载 / Mark as loaded
     };
 
-    const handleDidFailLoad = (_event: Event) => {
-      // Handle webview load failure
+    const handleDidFailLoad = (event: Event) => {
+      const loadEvent = event as Event & {
+        errorCode?: number;
+        errorDescription?: string;
+        validatedURL?: string;
+        isMainFrame?: boolean;
+      };
+
+      logHtmlPreview('error', 'html_preview_webview_failed_load', {
+        errorCode: loadEvent.errorCode,
+        errorDescription: loadEvent.errorDescription,
+        isMainFrame: loadEvent.isMainFrame,
+        url: summarizePreviewUrl(loadEvent.validatedURL || webviewSrc),
+      });
     };
 
     webview.addEventListener('did-finish-load', handleDidFinishLoad);
@@ -425,7 +496,12 @@ const HTMLRenderer: React.FC<HTMLRendererProps> = ({
     if (!webview) return;
 
     const handleConsoleMessage = (event: Event) => {
-      const consoleEvent = event as Event & { message?: string };
+      const consoleEvent = event as Event & {
+        level?: number;
+        line?: number;
+        message?: string;
+        sourceId?: string;
+      };
       const message = consoleEvent.message;
 
       if (typeof message === 'string') {
@@ -460,6 +536,18 @@ const HTMLRenderer: React.FC<HTMLRendererProps> = ({
           } catch (e) {
             console.warn('[HTMLRenderer] Failed to parse content height message:', e);
           }
+        } else if ((consoleEvent.level ?? 0) >= 2) {
+          const isError = (consoleEvent.level ?? 0) >= 3;
+          logHtmlPreview(
+            isError ? 'error' : 'warn',
+            isError ? 'html_preview_console_error' : 'html_preview_console_warning',
+            {
+              level: consoleEvent.level,
+              line: consoleEvent.line,
+              message,
+              source: summarizePreviewUrl(consoleEvent.sourceId),
+            }
+          );
         }
       }
     };

@@ -11,7 +11,25 @@ import type { IMessageText } from '@/common/chat/chatLib';
 import { ConversationProvider } from '@/renderer/hooks/context/ConversationContext';
 import MessageText from '@/renderer/pages/conversation/Messages/components/MessageText';
 
+const previewMocks = vi.hoisted(() => ({
+  openPreview: vi.fn(),
+}));
 const mockFilePreview = vi.fn(({ path }: { path: string }) => <div data-testid='file-preview'>{path}</div>);
+
+vi.mock('@/common', () => ({
+  ipcBridge: {
+    fs: {
+      getImageBase64: { invoke: vi.fn() },
+      readFile: { invoke: vi.fn() },
+    },
+  },
+}));
+
+vi.mock('@/renderer/pages/conversation/Preview', () => ({
+  usePreviewContext: () => ({
+    openPreview: previewMocks.openPreview,
+  }),
+}));
 
 vi.mock('@/renderer/components/chat/CollapsibleContent', () => ({
   __esModule: true,

@@ -1,0 +1,31 @@
+/**
+ * @license
+ * Copyright 2025 AionUi (aionui.com)
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import { describe, expect, it } from 'vitest';
+import { resolveLocalFileLinkPath } from '@/renderer/components/Markdown/markdownUtils';
+
+describe('resolveLocalFileLinkPath', () => {
+  it('recognizes Windows absolute paths emitted as root-relative markdown links', () => {
+    expect(resolveLocalFileLinkPath('/C:/Users/Administrator/AppData/Roaming/AionUi/report.xlsx')).toBe(
+      'C:/Users/Administrator/AppData/Roaming/AionUi/report.xlsx'
+    );
+  });
+
+  it('recognizes encoded file URLs', () => {
+    expect(resolveLocalFileLinkPath('file:///C:/Users/Administrator/%E7%9C%8B%E6%9D%BF.xlsx')).toBe(
+      'C:/Users/Administrator/看板.xlsx'
+    );
+  });
+
+  it('recognizes common POSIX absolute paths', () => {
+    expect(resolveLocalFileLinkPath('/Users/demo/outputs/report.xlsx')).toBe('/Users/demo/outputs/report.xlsx');
+  });
+
+  it('does not treat normal web links or app routes as local files', () => {
+    expect(resolveLocalFileLinkPath('https://aionui.com/docs')).toBeNull();
+    expect(resolveLocalFileLinkPath('/settings')).toBeNull();
+  });
+});

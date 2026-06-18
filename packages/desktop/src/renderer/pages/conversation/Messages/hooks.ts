@@ -11,7 +11,9 @@ import {
   mergeAcpToolCallContent,
   mergeTextMessageContent,
   normalizeAgentStreamError,
+  normalizeTextMessageContent,
   preferTextMessageVersion,
+  sanitizeAcpToolCallContent,
 } from '@/common/chat/chatLib';
 import { useCallback, useEffect, useRef } from 'react';
 import { createContext } from '@renderer/utils/ui/createContext';
@@ -93,6 +95,11 @@ function getOrBuildIndex(list: TMessage[]): MessageIndex {
   return cached;
 }
 
+const sanitizeMessageForList = (message: TMessage): TMessage =>
+  message.type === 'acp_tool_call'
+    ? ({ ...message, content: sanitizeAcpToolCallContent(message.content) } as TMessage)
+    : message;
+
 // 使用索引优化的消息合并函数
 // Index-optimized message compose function
 function composeMessageWithIndex(message: TMessage | undefined, list: TMessage[], index: MessageIndex): TMessage[] {
@@ -103,12 +110,13 @@ function composeMessageWithIndex(message: TMessage | undefined, list: TMessage[]
   }
 
   if (!list?.length) {
+    const firstMessage = sanitizeMessageForList(message);
     // Update index when adding first message
-    const msgIndexKey = getMessageIndexKey(message);
+    const msgIndexKey = getMessageIndexKey(firstMessage);
     if (msgIndexKey) {
       index.msgIdIndex.set(msgIndexKey, 0);
     }
-    return [message];
+    return [firstMessage];
   }
 
   const last = list[list.length - 1];
@@ -168,7 +176,7 @@ function composeMessageWithIndex(message: TMessage | undefined, list: TMessage[]
     index.tool_call_idIndex.set(message.content.update.tool_call_id, newIdx);
     const msgIndexKey = getMessageIndexKey(message);
     if (msgIndexKey) index.msgIdIndex.set(msgIndexKey, newIdx);
-    return list.concat(message);
+    return list.concat(sanitizeMessageForList(message));
   }
 
   // permission: use call_id for recovery/live stream dedupe.
@@ -347,7 +355,7 @@ export const useAddOrUpdateMessage = () => {
         if (item.add) {
           // 新增消息，更新索引
           // New message, update index
-          const msg = item.message;
+          const msg = sanitizeMessageForList(item.message);
           const newIdx = newList.length;
           const msgIndexKey = getMessageIndexKey(msg);
           if (msgIndexKey) index.msgIdIndex.set(msgIndexKey, newIdx);
@@ -576,30 +584,16 @@ const normalizeDbTipsMessage = (msg: TMessage): TMessage => {
 };
 
 /**
- * Normalize a message loaded from backend DB: if `content` is a JSON string,
- * parse it and map stored fields to renderer message content.
+ * Normalize a message loaded from backend DB into renderer runtime shape.
  */
 export function normalizeDbMessage(msg: TMessage): TMessage {
   if (msg.type === 'tips') return normalizeDbTipsMessage(msg);
   if (msg.type !== 'text') return msg;
-  const raw = msg.content as unknown;
-  if (typeof raw !== 'string') return msg;
-  try {
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    if (typeof parsed.content !== 'string') return msg;
-    return {
-      ...msg,
-      content: {
-        content: parsed.content as string,
-        ...(parsed.teammate_message ? { teammateMessage: true } : {}),
-        ...(parsed.sender_name ? { senderName: parsed.sender_name as string } : {}),
-        ...(parsed.sender_backend ? { senderAgentType: parsed.sender_backend as string } : {}),
-        ...(parsed.sender_conversation_id ? { senderConversationId: parsed.sender_conversation_id as string } : {}),
-      },
-    };
-  } catch {
-    return msg;
-  }
+
+  return {
+    ...msg,
+    content: normalizeTextMessageContent((msg as IMessageText).content),
+  };
 }
 
 export const useMessageLstCache = (key: string) => {

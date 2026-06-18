@@ -1,5 +1,158 @@
 # Changelog
 
+## [2.1.21](https://github.com/iOfficeAI/AionUi/compare/v2.1.20...v2.1.21) (2026-06-18)
+
+### Desktop
+
+#### Features
+
+- **i18n:** add German (de-DE) locale (#3370)
+
+#### Bug Fixes
+
+- **preview:** restore local html and selected file reopen (#3369)
+- **preview:** build valid file:// URL for PDF preview on Windows (#3366)
+- **i18n:** wire pt-BR into language pickers and main-process loader (#3361)
+
+### Core ([v0.1.32](https://github.com/iOfficeAI/AionCore/releases/tag/v0.1.32))
+
+#### Features
+
+- **team:** centralize team MCP prompt governance ([#490](https://github.com/iOfficeAI/AionCore/issues/490))
+
+#### Bug Fixes
+
+- **acp:** recover dead ACP connections ([#487](https://github.com/iOfficeAI/AionCore/issues/487))
+- **conversation:** upsert streaming tool calls (AIO-30) ([#484](https://github.com/iOfficeAI/AionCore/issues/484))
+
+#### Documentation
+
+- **skills:** add cross-platform notes so Windows users translate shell examples ([#489](https://github.com/iOfficeAI/AionCore/issues/489))
+
+---
+
+## [2.1.20](https://github.com/iOfficeAI/AionUi/compare/v2.1.19...v2.1.20) (2026-06-17)
+
+### Desktop
+
+#### Features
+
+- **agent:** combine header model thinking selector (#3358)
+- **update:** add singleton update notification (#3351)
+- **team:** handle queued team runtime metadata (#3349)
+
+#### Bug Fixes
+
+- **team:** wait for solo turn before handoff queue drain (#3353)
+- **assistant:** remove leftover gap above assistant list (#3344)
+
+### Core ([v0.1.31](https://github.com/iOfficeAI/AionCore/releases/tag/v0.1.31))
+
+#### Features
+
+- **assistant:** add built-in AionUi self-management assistant ([#474](https://github.com/iOfficeAI/AionCore/issues/474))
+- **assistant:** expand AionUi assistant into a butler with remote-access ([#481](https://github.com/iOfficeAI/AionCore/issues/481))
+- enforce TeamRun ownership for agent turns ([#483](https://github.com/iOfficeAI/AionCore/issues/483))
+- **team:** support queued team_send_message semantics ([#479](https://github.com/iOfficeAI/AionCore/issues/479))
+
+#### Bug Fixes
+
+- **acp:** persist runtime model and mode into assistant preferences ([#482](https://github.com/iOfficeAI/AionCore/issues/482))
+- harden ACP image path handling ([#477](https://github.com/iOfficeAI/AionCore/issues/477))
+- **team:** retry handoff turns after runtime release ([#480](https://github.com/iOfficeAI/AionCore/issues/480))
+
+---
+
+## [2.1.19](https://github.com/iOfficeAI/AionUi/compare/v2.1.18...v2.1.19) (2026-06-15)
+
+### Desktop
+
+#### Features
+
+- **team:** support slot-scoped stop controls (#3334)
+- **desktop:** report installation integrity diagnostics (#3333)
+- **update:** use CDN metadata for stable auto updates (#3244)
+- **acp:** add observed config option selectors (#3324)
+- **layout:** make sider wordmark a back-to-chat control in settings (#3320)
+- **preview:** actionable server-side install guidance for officecli errors in web mode (#3310)
+
+#### Bug Fixes
+
+- align team workspace display fallback (#3340)
+- **team:** prefer assistant avatars in team chats (#3338)
+- repair assistant cron and guid metadata flows (#3336)
+- **assistant:** remove star office ui remnants (#3329)
+- **startup:** hydrate windows path for cli detection (#3308)
+- **docker:** install libicu so officecli preview works on Linux server deployments (#3323)
+- **agents:** keep disabled custom agents visible in settings (#3319)
+- **stt:** keep recording when streaming fails before it establishes (#3317)
+
+### Core ([v0.1.30](https://github.com/iOfficeAI/AionCore/releases/tag/v0.1.30))
+
+#### Features
+
+- **acp:** use observed config options for preferences ([#468](https://github.com/iOfficeAI/AionCore/issues/468))
+- align team shared workspace resolution ([#475](https://github.com/iOfficeAI/AionCore/issues/475))
+- **team:** support slot-scoped team pause and wake flow ([#472](https://github.com/iOfficeAI/AionCore/issues/472))
+
+#### Bug Fixes
+
+- **agent:** send non-empty clientInfo in ACP initialize handshake ([#471](https://github.com/iOfficeAI/AionCore/issues/471))
+- **agent:** wait for task shutdown during clear ([#446](https://github.com/iOfficeAI/AionCore/issues/446))
+- **assistant:** remove star office helper remnants ([#470](https://github.com/iOfficeAI/AionCore/issues/470))
+- **office:** fetch officecli installer from official mirror before GitHub ([#463](https://github.com/iOfficeAI/AionCore/issues/463))
+- preserve assistant snapshot and skill wiring for cron ([#473](https://github.com/iOfficeAI/AionCore/issues/473))
+- **shell:** reveal file via FileManager1 D-Bus on Linux ([#466](https://github.com/iOfficeAI/AionCore/issues/466))
+
+---
+
+## [2.1.18](https://github.com/iOfficeAI/AionUi/compare/v2.1.17...v2.1.18) (2026-06-12)
+
+### Desktop
+
+#### Features
+
+- **stt:** streaming voice input with live transcript (#3291)
+- **assistant:** deliver phase-1 governance settings (#3277)
+- stabilize team mode conversation runtime (#3309)
+
+#### Bug Fixes
+
+- **updater:** wait for backend shutdown before install (#3270)
+- **windows-installer:** recover from long-path uninstall failures (#3296)
+- **macos:** add audio-input entitlement so microphone works (#3294)
+- **preview:** drop bare trailing slash from office watch proxy url (#3287)
+- **workspace:** float directory picker above team/cron create modals
+- **workspace:** enable clickable folder picker in webui
+
+#### Styling
+
+- **titlebar:** nudge feedback icon up to align with neighbors
+- **markdown:** tighten desktop paragraph spacing
+- **markdown:** tighten desktop chat body line-height
+- **conversation:** show AI copy/timestamp row only at turn end
+- **display:** tighten factory default font sizes and zoom
+
+### Core ([v0.1.29](https://github.com/iOfficeAI/AionCore/releases/tag/v0.1.29))
+
+#### Features
+
+- converge team mode runtime architecture ([#464](https://github.com/iOfficeAI/AionCore/issues/464))
+- **stt:** streaming transcription proxy over websocket ([#455](https://github.com/iOfficeAI/AionCore/issues/455))
+
+#### Bug Fixes
+
+- **agent:** validate managed ACP platform binaries ([#462](https://github.com/iOfficeAI/AionCore/issues/462))
+- **cron:** retry busy jobs from runtime state ([#459](https://github.com/iOfficeAI/AionCore/issues/459))
+- isolate ACP cancel turn completion ([#461](https://github.com/iOfficeAI/AionCore/issues/461))
+- **office:** probe star-office preferred_url host as given ([#456](https://github.com/iOfficeAI/AionCore/issues/456))
+
+#### Refactoring
+
+- **assistant:** finalize unified governance storage ([#449](https://github.com/iOfficeAI/AionCore/issues/449))
+
+---
+
 ## [2.1.17](https://github.com/iOfficeAI/AionUi/compare/v2.1.16...v2.1.17) (2026-06-11)
 
 ### Desktop

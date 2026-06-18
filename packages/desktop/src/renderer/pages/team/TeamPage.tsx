@@ -8,6 +8,7 @@ import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { ipcBridge } from '@/common';
 import type { TeamAgent, TTeam } from '@/common/types/team/teamTypes';
 import type { IProvider, TChatConversation, TProviderWithModel } from '@/common/config/storage';
+import { classifyConfigSetError, useAcpConfigOptions } from '@/renderer/hooks/agent/useAcpConfigOptions';
 import ChatLayout from '@/renderer/pages/conversation/components/ChatLayout';
 import ChatSlider from '@renderer/pages/conversation/components/ChatSlider.tsx';
 import { useTeamPendingPermissions } from './hooks/useTeamPendingPermissions';
@@ -19,9 +20,12 @@ import TeamTabs from './components/TeamTabs';
 import TeamChatView from './components/TeamChatView';
 import TeamAgentIdentity from './components/TeamAgentIdentity';
 import { TeamTabsProvider, useTeamTabs } from './hooks/TeamTabsContext';
-import { TeamPermissionProvider } from './hooks/TeamPermissionContext';
+import { TeamPermissionProvider, useTeamPermission } from './hooks/TeamPermissionContext';
 import { useTeamSession } from './hooks/useTeamSession';
+import { useTeamRunView, type TeamRunViewState } from './hooks/useTeamRunView';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
+import { warmupConversation } from '@/renderer/pages/conversation/utils/warmupConversation';
+import { resolveTeamWorkspaceView } from './utils/teamWorkspaceView';
 
 type Props = {
   team: TTeam;
@@ -32,11 +36,21 @@ type TeamPageContentProps = {
   onRenameTeam: (new_name: string) => Promise<boolean>;
 };
 
+const configErrorMessageKey = (error: unknown) => {
+  const errorKind = classifyConfigSetError(error);
+  if (errorKind === 'command_ack') return 'agent.config.commandAck';
+  if (errorKind === 'confirmation_timeout') return 'agent.config.timeout';
+  if (errorKind === 'config_update_in_progress') return 'agent.config.busy';
+  return 'agent.config.failed';
+};
+
 /** Compact aionrs model selector for the agent header */
 const AionrsHeaderModelSelector: React.FC<{ conversation_id: string; initialModel?: TProviderWithModel }> = ({
   conversation_id,
   initialModel,
 }) => {
+  const { t } = useTranslation();
+  const teamPermission = useTeamPermission();
   const onSelectModel = useCallback(
     async (_provider: IProvider, modelName: string) => {
       const selected = { ..._provider, use_model: modelName } as TProviderWithModel;
@@ -47,7 +61,36 @@ const AionrsHeaderModelSelector: React.FC<{ conversation_id: string; initialMode
     [conversation_id]
   );
   const modelSelection = useAionrsModelSelection({ initialModel, onSelectModel });
-  return <AionrsModelSelector selection={modelSelection} />;
+  const prepareRuntimeConfig = useCallback(async () => {
+    await teamPermission?.warmupSession();
+    await warmupConversation(conversation_id);
+  }, [conversation_id, teamPermission]);
+  const runtimeConfig = useAcpConfigOptions({
+    conversation_id,
+    prepareRuntime: prepareRuntimeConfig,
+    enabled: Boolean(conversation_id),
+  });
+  const handleThoughtLevelSetOption = useCallback(
+    async (optionId: string, value: string) => {
+      try {
+        const result = await runtimeConfig.setConfigOption(optionId, value);
+        Message.success(t('agent.thoughtLevel.switchSuccess'));
+        return result;
+      } catch (error) {
+        Message.error(t(configErrorMessageKey(error)));
+        throw error;
+      }
+    },
+    [runtimeConfig, t]
+  );
+  return (
+    <AionrsModelSelector
+      selection={modelSelection}
+      thoughtLevel={runtimeConfig.thoughtLevel}
+      setStatus={runtimeConfig.setStatus}
+      onSetThoughtLevel={handleThoughtLevelSetOption}
+    />
+  );
 };
 
 /** Fetches conversation for a single agent and renders TeamChatView */
@@ -58,7 +101,9 @@ const AgentChatSlot: React.FC<{
   isFullscreen?: boolean;
   onToggleFullscreen?: () => void;
   onRemove?: () => void;
-}> = ({ agent, team_id, isLeader, isFullscreen = false, onToggleFullscreen, onRemove }) => {
+  teamRunView: TeamRunViewState;
+  onTeamRunAck: ReturnType<typeof useTeamRunView>['applyAck'];
+}> = ({ agent, team_id, isLeader, isFullscreen = false, onToggleFullscreen, onRemove, teamRunView, onTeamRunAck }) => {
   const layout = useLayoutContext();
   const isMobile = layout?.isMobile ?? false;
   const { data: conversation } = useSWR(
@@ -141,9 +186,12 @@ const AgentChatSlot: React.FC<{
           <TeamChatView
             conversation={conversation as TChatConversation}
             team_id={team_id}
+            slot_id={agent.slot_id}
             agent_name={agent.agent_name}
             agent_icon={agent.icon}
             isLeader={isLeader}
+            teamRunView={teamRunView}
+            onTeamRunAck={onTeamRunAck}
           />
         ) : (
           <div className='flex flex-1 items-center justify-center'>
@@ -169,6 +217,7 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({ team, onRenameTeam })
 
   const activeAgent = agents.find((a) => a.slot_id === activeSlotId);
   const leadAgent = agents.find((a) => a.role === 'leader');
+  const teamRun = useTeamRunView(team.id);
 
   const doRemoveAgent = useCallback(
     async (slot_id: string) => {
@@ -212,12 +261,16 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({ team, onRenameTeam })
   );
 
   // Use team workspace if specified, otherwise fall back to leader agent's conversation workspace (temp workspace)
-  const effectiveWorkspace = team.workspace || (dispatchConversation?.extra as { workspace?: string })?.workspace || '';
-  const workspaceEnabled = Boolean(effectiveWorkspace);
+  const teamWorkspaceView = resolveTeamWorkspaceView(
+    team.workspace,
+    (dispatchConversation?.extra as { workspace?: string } | undefined)?.workspace
+  );
+  const effectiveWorkspace = teamWorkspaceView.workspacePath;
+  const workspaceEnabled = teamWorkspaceView.workspaceEnabled;
   // Team is "user-picked" only when team.workspace was explicitly set at team
   // creation. Falling back to a leader agent's auto-temp workspace counts as
   // temporary, mirroring single-chat behavior.
-  const isTeamWorkspaceTemporary = !team.workspace;
+  const isTeamWorkspaceTemporary = teamWorkspaceView.isTemporaryWorkspace;
 
   const siderTitle = useMemo(
     () => (
@@ -379,6 +432,8 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({ team, onRenameTeam })
                     isFullscreen
                     onToggleFullscreen={() => setFullscreenSlotId(null)}
                     onRemove={() => handleRemoveAgent(agent.slot_id)}
+                    teamRunView={teamRun.state}
+                    onTeamRunAck={teamRun.applyAck}
                   />
                 </div>
               );
@@ -433,6 +488,8 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({ team, onRenameTeam })
                         isLeader={isLeaderSlot}
                         onToggleFullscreen={() => setFullscreenSlotId(agent.slot_id)}
                         onRemove={() => handleRemoveAgent(agent.slot_id)}
+                        teamRunView={teamRun.state}
+                        onTeamRunAck={teamRun.applyAck}
                       />
                     </div>
                   );

@@ -59,6 +59,7 @@
   "historyBack": "Geri",
   "more": "Daha Fazla",
   "refresh": "Yenile",
+  "readOnly": "Salt okunur",
   "tray.showWindow": "AionUi'yi Göster",
   "tray.newChat": "Yeni Sohbet",
   "tray.closeToTray": "Tepsiye Gizle",
@@ -81,7 +82,10 @@
       "description": "Bu kurulumda gerekli yerel kaynaklar eksik, bu yüzden AionCore başlatılamıyor. Lütfen en son AionUi sürümünü indirip yeniden kurun. Yeniden kurulumdan sonra sorun tekrarlarsa güvenlik veya antivirüs yazılımının AionCore'u karantinaya alıp almadığını kontrol edin.",
       "downloadLatest": "Son sürümü indir",
       "sendDiagnostics": "Tanı raporu gönder",
-      "runtimeComponentDescription": "This installation is missing required bundled runtime components, so {{resource}} cannot start. Reinstall the latest AionUi package. If it still happens after reinstalling, check whether security or antivirus software quarantined AionUi components."
+      "diagnosticsSent": "Tanı raporu gönderildi",
+      "diagnosticsReportSuccess": "Tanı raporu gönderildi",
+      "diagnosticsReportFailed": "Tanı raporu gönderilemedi",
+      "runtimeComponentDescription": "Bu kurulumda gerekli yerleşik çalışma zamanı bileşenleri eksik olduğu için {{resource}} başlatılamıyor. En son AionUi paketini yeniden yükleyin. Yeniden yükledikten sonra da devam ederse güvenlik veya antivirüs yazılımının AionUi bileşenlerini karantinaya alıp almadığını kontrol edin."
     },
     "packageArchitectureMismatch": {
       "title": "AionUi package architecture mismatch",
@@ -103,5 +107,9 @@
   "import": "İçe Aktar",
   "processing": "İşleniyor...",
   "optional": "(isteğe bağlı)",
-  "clear": "Temizle"
+  "clear": "Temizle",
+  "unit": {
+    "minute_short": "dk",
+    "second_short": "sn"
+  }
 }

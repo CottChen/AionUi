@@ -7,7 +7,7 @@
 import { ipcBridge } from '@/common';
 import type { FileChangeInfo, SnapshotInfo } from '@/common/types/platform/fileSnapshot';
 import Diff2Html from '@/renderer/components/media/Diff2Html';
-import { isTextFile } from '@/renderer/services/FileService';
+import { isTextFile } from '@/renderer/pages/conversation/Preview/fileUtils';
 import { Button, Empty, Spin, Tooltip } from '@arco-design/web-react';
 import { Down, Minus, Plus, PreviewOpen, Redo, Refresh, Right } from '@icon-park/react';
 import { createTwoFilesPatch } from 'diff';

@@ -59,6 +59,7 @@
   "historyBack": "后退",
   "more": "更多",
   "refresh": "刷新",
+  "readOnly": "只读",
   "tray.showWindow": "显示 AionUi",
   "tray.newChat": "新建对话",
   "tray.closeToTray": "隐藏到托盘",
@@ -81,6 +82,9 @@
       "description": "当前安装缺少必要的本地资源，AionCore 无法启动。请下载并重新安装最新版 AionUi；如果重新安装后仍然出现，请检查系统安全软件或杀毒软件是否隔离了 AionCore。",
       "downloadLatest": "下载最新版",
       "sendDiagnostics": "发送诊断报告",
+      "diagnosticsSent": "诊断报告已发送",
+      "diagnosticsReportSuccess": "诊断报告已发送",
+      "diagnosticsReportFailed": "诊断报告发送失败",
       "runtimeComponentDescription": "当前安装缺少必要的内置运行组件，{{resource}} 无法启动。请重新安装最新版 AionUi；如果重新安装后仍然出现，请检查系统安全软件或杀毒软件是否隔离了 AionUi 组件。"
     },
     "packageArchitectureMismatch": {
@@ -103,5 +107,9 @@
   "import": "导入",
   "processing": "处理中...",
   "optional": "（可选）",
-  "clear": "清除"
+  "clear": "清除",
+  "unit": {
+    "minute_short": "分",
+    "second_short": "秒"
+  }
 }

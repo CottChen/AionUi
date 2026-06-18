@@ -7,6 +7,7 @@
 import type { IConversationArtifact } from '@/common/adapter/ipcBridge';
 import type { IMessageAcpToolCall, IMessageToolCall, IMessageToolGroup, TMessage } from '@/common/chat/chatLib';
 import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
+import { useConversationRuntimeView } from '@/renderer/pages/conversation/runtime/useConversationRuntimeView';
 import { iconColors } from '@/renderer/styles/colors';
 import { CHAT_MESSAGE_JUMP_EVENT, type ChatMessageJumpDetail } from '@/renderer/utils/chat/chatMinimapEvents';
 import { Image } from '@arco-design/web-react';
@@ -170,7 +171,7 @@ const MessageListSkeleton: React.FC = () => {
   );
 };
 
-const MessageItem: React.FC<{ message: TMessage; highlighted?: boolean }> = React.memo(
+const MessageItem: React.FC<{ message: TMessage; highlighted?: boolean; showCopyRow?: boolean }> = React.memo(
   HOC((props) => {
     const { message, highlighted } = props as { message: TMessage; highlighted?: boolean };
     return (
@@ -193,11 +194,11 @@ const MessageItem: React.FC<{ message: TMessage; highlighted?: boolean }> = Reac
         {props.children}
       </div>
     );
-  })(({ message }) => {
+  })(({ message, showCopyRow }: { message: TMessage; highlighted?: boolean; showCopyRow?: boolean }) => {
     const { t } = useTranslation();
     switch (message.type) {
       case 'text':
-        return <MessageText message={message}></MessageText>;
+        return <MessageText message={message} showCopyRow={showCopyRow}></MessageText>;
       case 'tips':
         return <MessageTips message={message}></MessageTips>;
       case 'tool_call':
@@ -227,7 +228,8 @@ const MessageItem: React.FC<{ message: TMessage; highlighted?: boolean }> = Reac
     prev.message.content === next.message.content &&
     prev.message.position === next.message.position &&
     prev.message.type === next.message.type &&
-    prev.highlighted === next.highlighted
+    prev.highlighted === next.highlighted &&
+    prev.showCopyRow === next.showCopyRow
 );
 
 const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }> = ({ emptySlot }) => {
@@ -236,6 +238,10 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
   const artifacts = useConversationArtifacts();
   const conversationContext = useConversationContextSafe();
   useAutoPreviewOfficeFiles(conversationContext);
+  // While the agent is still streaming, the in-progress turn's last text keeps
+  // moving down, so we defer its copy/timestamp row until the turn finishes to
+  // avoid the row flashing in and the layout reflowing mid-stream.
+  const { isProcessing } = useConversationRuntimeView(conversationContext?.conversation_id ?? '');
   const { t } = useTranslation();
   const location = useLocation();
   const locationState = (location.state || {}) as ConversationLocationState;
@@ -343,6 +349,46 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
       (a, b) => getProcessedItemCreatedAt(a) - getProcessedItemCreatedAt(b)
     );
   }, [artifacts, list]);
+
+  // An AI reply can be split into several messages (thinking / multiple text /
+  // tool blocks). The hover copy + timestamp row should appear once per turn,
+  // after the turn's last text — not under every intermediate text block.
+  // Collect the id of the last AI text in each turn; a turn runs until the next
+  // user (right) message. Tool/file/artifact items don't end a turn and, per the
+  // fallback strategy, the row stays on the turn's last text even when followed
+  // by tool blocks. While the conversation is still streaming, the final turn's
+  // row is withheld (it would otherwise appear then shift down as more text
+  // streams in); earlier, already-finished turns always keep their row.
+  const aiCopyRowTextIds = useMemo(() => {
+    const ids = new Set<string>();
+    let pendingTextId: string | undefined;
+    let lastTurnTextId: string | undefined;
+    const flush = () => {
+      if (pendingTextId) ids.add(pendingTextId);
+      pendingTextId = undefined;
+    };
+    for (const item of processedList) {
+      if (
+        'type' in item &&
+        (item.type === 'file_summary' || item.type === 'tool_summary' || item.type === 'artifact')
+      ) {
+        continue;
+      }
+      const message = item as TMessage;
+      if (message.position === 'right') {
+        flush();
+        continue;
+      }
+      if (message.type === 'text') {
+        pendingTextId = message.id;
+      }
+    }
+    lastTurnTextId = pendingTextId;
+    flush();
+    // The final turn is the one that may still be streaming; hide its row until done.
+    if (isProcessing && lastTurnTextId) ids.delete(lastTurnTextId);
+    return ids;
+  }, [processedList, isProcessing]);
 
   // Use auto-scroll hook
   const {
@@ -473,7 +519,12 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
         </div>
       );
     }
-    return <MessageItem message={item as TMessage} key={(item as TMessage).id} highlighted={highlighted}></MessageItem>;
+    const message = item as TMessage;
+    // User messages keep their own copy row; AI text only shows it at the turn end.
+    const showCopyRow = message.position !== 'left' || message.type !== 'text' || aiCopyRowTextIds.has(message.id);
+    return (
+      <MessageItem message={message} key={message.id} highlighted={highlighted} showCopyRow={showCopyRow}></MessageItem>
+    );
   };
 
   if (processedList.length === 0 && isMessageListLoading) {

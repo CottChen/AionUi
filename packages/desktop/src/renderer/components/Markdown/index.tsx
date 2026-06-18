@@ -23,6 +23,7 @@ import { convertLatexDelimiters } from '@renderer/utils/chat/latexDelimiters';
 import LocalImageView from '@renderer/components/media/LocalImageView';
 import CodeBlock from './CodeBlock';
 import ShadowView from './ShadowView';
+import { resolveLocalFileLinkPath } from './markdownUtils';
 
 const REMARK_PLUGINS = [remarkGfm, remarkMath, remarkBreaks];
 
@@ -38,12 +39,13 @@ type MarkdownViewProps = {
   codeStyle?: React.CSSProperties;
   className?: string;
   onRef?: (el?: HTMLDivElement | null) => void;
+  onLocalFileLink?: (path: string) => void | Promise<void>;
   /** Enable raw HTML rendering in markdown content. Use with caution — only for trusted sources. */
   allowHtml?: boolean;
 };
 
 const MarkdownView: React.FC<MarkdownViewProps> = React.memo(
-  ({ hiddenCodeCopyButton, codeStyle, className, onRef, allowHtml, children: childrenProp }) => {
+  ({ hiddenCodeCopyButton, codeStyle, className, onRef, onLocalFileLink, allowHtml, children: childrenProp }) => {
     const { t } = useTranslation();
 
     const normalizedChildren = useMemo(() => {
@@ -59,13 +61,19 @@ const MarkdownView: React.FC<MarkdownViewProps> = React.memo(
       (e: React.MouseEvent<HTMLAnchorElement>) => {
         e.preventDefault();
         e.stopPropagation();
-        const href = (e.currentTarget as HTMLAnchorElement).href;
+        const target = e.currentTarget as HTMLAnchorElement;
+        const href = target.href;
         if (!href) return;
+        const localFilePath = resolveLocalFileLinkPath(target.getAttribute('href') || '', href);
+        if (localFilePath && onLocalFileLink) {
+          void onLocalFileLink(localFilePath);
+          return;
+        }
         openExternalUrl(href).catch((error: unknown) => {
           console.error(t('messages.openLinkFailed'), error);
         });
       },
-      [t]
+      [onLocalFileLink, t]
     );
 
     // Memoize components so React preserves component identity across re-renders.

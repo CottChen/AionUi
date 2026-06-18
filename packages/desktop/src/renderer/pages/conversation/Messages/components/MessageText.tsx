@@ -6,13 +6,23 @@
 
 import type { IMessageText } from '@/common/chat/chatLib';
 import { AIONUI_FILES_MARKER } from '@/common/config/constants';
+import { ipcBridge } from '@/common';
+import type { PreviewContentType } from '@/common/types/office/preview';
 import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
+import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
+import {
+  LARGE_TEXT_PREVIEW_MAX_LENGTH,
+  LARGE_TEXT_PREVIEW_THRESHOLD,
+} from '@/renderer/pages/conversation/Preview/constants';
+import { getContentTypeByExtension } from '@/renderer/pages/conversation/Preview/fileUtils';
+import { usePreviewContext } from '@/renderer/pages/conversation/Preview';
 import { iconColors } from '@/renderer/styles/colors';
 import { Alert, Button, Message, Tooltip } from '@arco-design/web-react';
 import { Copy } from '@icon-park/react';
 import classNames from 'classnames';
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { classifyPreviewError, previewErrorToI18nKey } from '@/renderer/utils/previewError';
 import { copyText } from '@/renderer/utils/ui/clipboard';
 import CollapsibleContent from '@renderer/components/chat/CollapsibleContent';
 import FilePreview from '@renderer/components/media/FilePreview';
@@ -78,6 +88,19 @@ export const resolveMessageFilePath = (file_path: string, workspace?: string): s
   return `${normalizedWorkspace}/${normalizedFilePath}`.replace(/\/+/g, '/');
 };
 
+const getFileNameFromPath = (file_path: string): string => {
+  const normalized = file_path.replace(/\\/g, '/');
+  return normalized.split('/').pop() || file_path;
+};
+
+const getPreviewLanguage = (file_name: string): string => {
+  const dotIndex = file_name.lastIndexOf('.');
+  return dotIndex >= 0 ? file_name.slice(dotIndex + 1).toLowerCase() : '';
+};
+
+const shouldReadPreviewContent = (contentType: PreviewContentType): boolean =>
+  !['pdf', 'word', 'excel', 'ppt'].includes(contentType);
+
 const useFormatContent = (content: string) => {
   return useMemo(() => {
     try {
@@ -93,7 +116,7 @@ const useFormatContent = (content: string) => {
   }, [content]);
 };
 
-const MessageText: React.FC<{ message: IMessageText }> = ({ message }) => {
+const MessageText: React.FC<{ message: IMessageText; showCopyRow?: boolean }> = ({ message, showCopyRow = true }) => {
   // Filter think tags from content before rendering
   // 在渲染前过滤 think 标签
   const contentToRender = useMemo(() => {
@@ -119,9 +142,58 @@ const MessageText: React.FC<{ message: IMessageText }> = ({ message }) => {
   const isTeammateMessage = message.position === 'left' && message.content.teammateMessage === true;
   const shouldRenderPlainText = isUserMessage;
   const conversationContext = useConversationContextSafe();
+  const layout = useLayoutContext();
+  const isMobile = layout?.isMobile ?? false;
+  const { openPreview } = usePreviewContext();
   const resolvedFiles = useMemo(
     () => files.map((file_path) => resolveMessageFilePath(file_path, conversationContext?.workspace)),
     [conversationContext?.workspace, files]
+  );
+
+  const handleLocalFileLink = useCallback(
+    async (file_path: string) => {
+      const fileName = getFileNameFromPath(file_path);
+      const contentType = getContentTypeByExtension(fileName);
+      const workspace = conversationContext?.workspace;
+      let content = '';
+      let isLargeTextTruncated = false;
+
+      try {
+        if (contentType === 'image') {
+          const imageContent = await ipcBridge.fs.getImageBase64.invoke({ path: file_path, workspace });
+          if (imageContent == null) throw null;
+          content = imageContent;
+        } else if (shouldReadPreviewContent(contentType)) {
+          const textContent = await ipcBridge.fs.readFile.invoke({ path: file_path, workspace });
+          if (textContent == null) throw null;
+          content = textContent;
+
+          if (contentType === 'code' && content.length > LARGE_TEXT_PREVIEW_THRESHOLD) {
+            content = content.slice(0, LARGE_TEXT_PREVIEW_MAX_LENGTH);
+            isLargeTextTruncated = true;
+          }
+        }
+
+        openPreview(
+          content,
+          contentType,
+          {
+            title: fileName,
+            file_name: fileName,
+            file_path,
+            workspace,
+            language: getPreviewLanguage(fileName),
+            truncated: isLargeTextTruncated,
+            editable: contentType === 'markdown' || contentType === 'image' || isLargeTextTruncated ? false : undefined,
+          },
+          { replace: true }
+        );
+      } catch (error) {
+        const kind = classifyPreviewError(error);
+        Message.error(t(previewErrorToI18nKey(kind)));
+      }
+    },
+    [conversationContext?.workspace, openPreview, t]
   );
 
   // 过滤空内容，避免渲染空DOM
@@ -216,28 +288,36 @@ const MessageText: React.FC<{ message: IMessageText }> = ({ message }) => {
               <div data-testid='message-text-content'>
                 <MarkdownView
                   codeStyle={CODE_STYLE}
+                  onLocalFileLink={handleLocalFileLink}
                 >{`\`\`\`json\n${JSON.stringify(data, null, 2)}\n\`\`\``}</MarkdownView>
               </div>
             </CollapsibleContent>
           ) : (
             <div data-testid='message-text-content'>
-              <MarkdownView codeStyle={CODE_STYLE}>{data}</MarkdownView>
+              <MarkdownView codeStyle={CODE_STYLE} onLocalFileLink={handleLocalFileLink}>
+                {data}
+              </MarkdownView>
             </div>
           )}
         </div>
-        {/* Desktop keeps hover-revealed metadata; touch/no-hover devices show it via CSS media queries. */}
-        <div
-          className={classNames('h-32px flex items-center mt-4px gap-8px', {
-            'flex-row-reverse': isUserMessage,
-          })}
-        >
-          {copyButton}
-          {message.created_at && (
-            <span className='message-meta-time text-12px text-t-secondary opacity-0 group-hover:opacity-100 transition-opacity select-none'>
-              {formatMessageTime(message.created_at)}
-            </span>
-          )}
-        </div>
+        {/* Hover-revealed copy + timestamp row. Mobile has no hover affordance,
+            so we drop the row entirely — system-level long-press still copies.
+            For AI replies split across several text messages, only the last text
+            of the turn shows this row (showCopyRow); user messages always do. */}
+        {!isMobile && showCopyRow && (
+          <div
+            className={classNames('h-32px flex items-center mt-4px gap-8px', {
+              'flex-row-reverse': isUserMessage,
+            })}
+          >
+            {copyButton}
+            {message.created_at && (
+              <span className='message-meta-time text-12px text-t-secondary opacity-0 group-hover:opacity-100 transition-opacity select-none'>
+                {formatMessageTime(message.created_at)}
+              </span>
+            )}
+          </div>
+        )}
       </div>
       {showCopyAlert && (
         <Alert

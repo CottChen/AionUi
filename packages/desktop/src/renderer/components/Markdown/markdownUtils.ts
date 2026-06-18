@@ -35,6 +35,47 @@ export const logicRender = <T, F>(condition: boolean, trueComponent: T, falseCom
   return condition ? trueComponent : (falseComponent as F);
 };
 
+const safeDecodeURIComponent = (value: string): string => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
+
+export const resolveLocalFileLinkPath = (rawHref: string, resolvedHref?: string): string | null => {
+  const href = safeDecodeURIComponent((rawHref || resolvedHref || '').trim());
+  if (!href) return null;
+
+  if (/^file:/i.test(href)) {
+    try {
+      const url = new URL(href);
+      const path = safeDecodeURIComponent(url.pathname);
+      return /^\/[A-Za-z]:[\\/]/.test(path) ? path.slice(1) : path;
+    } catch {
+      const path = href.replace(/^file:\/+/i, '');
+      return /^\/[A-Za-z]:[\\/]/.test(path) ? path.slice(1) : path;
+    }
+  }
+
+  if (/^[A-Za-z]:[\\/]/.test(href)) return href;
+  if (/^\/[A-Za-z]:[\\/]/.test(href)) return href.slice(1);
+
+  if (/^https?:\/\//i.test(href)) {
+    try {
+      const url = new URL(href);
+      const path = safeDecodeURIComponent(url.pathname);
+      return /^\/[A-Za-z]:[\\/]/.test(path) ? path.slice(1) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  if (/^\/(Users|home|tmp|private|var|mnt|Volumes)\//.test(href)) return href;
+
+  return null;
+};
+
 /**
  * Get line background style for diff rendering.
  * Highlights additions (green), deletions (red), and hunk headers (blue).
