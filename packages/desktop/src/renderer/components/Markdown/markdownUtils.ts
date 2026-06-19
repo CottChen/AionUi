@@ -43,10 +43,14 @@ const safeDecodeURIComponent = (value: string): string => {
   }
 };
 
-export const resolveLocalFileLinkPath = (rawHref: string, resolvedHref?: string): string | null => {
-  const href = safeDecodeURIComponent((rawHref || resolvedHref || '').trim());
-  if (!href) return null;
+export type LocalFileLinkReference = {
+  filePath: string;
+  rawReference: string;
+  line?: number;
+  column?: number;
+};
 
+const normalizeLocalFileHrefToPath = (href: string): string | null => {
   if (/^file:/i.test(href)) {
     try {
       const url = new URL(href);
@@ -74,6 +78,41 @@ export const resolveLocalFileLinkPath = (rawHref: string, resolvedHref?: string)
   if (/^\/(Users|home|tmp|private|var|mnt|Volumes)\//.test(href)) return href;
 
   return null;
+};
+
+const splitLocationSuffix = (filePath: string): Omit<LocalFileLinkReference, 'rawReference'> => {
+  const match = /^(.*):(\d+)(?::(\d+))?$/.exec(filePath);
+  if (!match) return { filePath };
+
+  const [, pathWithoutLocation, lineText, columnText] = match;
+  if (!normalizeLocalFileHrefToPath(pathWithoutLocation)) return { filePath };
+
+  return {
+    filePath: pathWithoutLocation,
+    line: Number(lineText),
+    column: columnText ? Number(columnText) : undefined,
+  };
+};
+
+export const resolveLocalFileLinkReference = (rawHref: string, resolvedHref?: string): LocalFileLinkReference | null => {
+  const href = safeDecodeURIComponent((rawHref || resolvedHref || '').trim());
+  if (!href) return null;
+
+  const filePath = normalizeLocalFileHrefToPath(href);
+  if (!filePath) return null;
+
+  const reference = splitLocationSuffix(filePath);
+  return {
+    ...reference,
+    rawReference:
+      reference.line == null
+        ? reference.filePath
+        : `${reference.filePath}:${reference.line}${reference.column == null ? '' : `:${reference.column}`}`,
+  };
+};
+
+export const resolveLocalFileLinkPath = (rawHref: string, resolvedHref?: string): string | null => {
+  return resolveLocalFileLinkReference(rawHref, resolvedHref)?.filePath ?? null;
 };
 
 export const toLocalFileHref = (filePath: string): string => {

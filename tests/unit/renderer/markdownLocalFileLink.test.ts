@@ -5,7 +5,11 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { resolveLocalFileLinkPath, toLocalFileHref } from '@/renderer/components/Markdown/markdownUtils';
+import {
+  resolveLocalFileLinkPath,
+  resolveLocalFileLinkReference,
+  toLocalFileHref,
+} from '@/renderer/components/Markdown/markdownUtils';
 
 describe('resolveLocalFileLinkPath', () => {
   it('recognizes Windows absolute paths emitted as root-relative markdown links', () => {
@@ -22,6 +26,19 @@ describe('resolveLocalFileLinkPath', () => {
 
   it('recognizes common POSIX absolute paths', () => {
     expect(resolveLocalFileLinkPath('/Users/demo/outputs/report.xlsx')).toBe('/Users/demo/outputs/report.xlsx');
+  });
+
+  it('recognizes line suffixes without confusing Windows drive letters', () => {
+    const reference = resolveLocalFileLinkReference('C:/Users/Administrator/AppData/Roaming/AionUi/logs/app.log:1421');
+
+    expect(reference).toEqual({
+      filePath: 'C:/Users/Administrator/AppData/Roaming/AionUi/logs/app.log',
+      rawReference: 'C:/Users/Administrator/AppData/Roaming/AionUi/logs/app.log:1421',
+      line: 1421,
+    });
+    expect(resolveLocalFileLinkPath('C:/Users/Administrator/AppData/Roaming/AionUi/logs/app.log:1421')).toBe(
+      'C:/Users/Administrator/AppData/Roaming/AionUi/logs/app.log'
+    );
   });
 
   it('does not treat normal web links or app routes as local files', () => {

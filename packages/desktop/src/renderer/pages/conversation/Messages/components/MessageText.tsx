@@ -27,6 +27,7 @@ import CollapsibleContent from '@renderer/components/chat/CollapsibleContent';
 import FilePreview from '@renderer/components/media/FilePreview';
 import HorizontalFileList from '@renderer/components/media/HorizontalFileList';
 import MarkdownView from '@renderer/components/Markdown';
+import type { LocalFileLinkReference } from '@renderer/components/Markdown/markdownUtils';
 import { stripThinkTags, hasThinkTags } from '@renderer/utils/chat/thinkTagFilter';
 import { stripSkillSuggest, hasSkillSuggest } from '@renderer/utils/chat/skillSuggestParser';
 
@@ -148,7 +149,7 @@ const MessageText: React.FC<{ message: IMessageText; showCopyRow?: boolean }> = 
   );
 
   const handleLocalFileLink = useCallback(
-    async (file_path: string) => {
+    async (file_path: string, reference?: LocalFileLinkReference) => {
       const fileName = getFileNameFromPath(file_path);
       const contentType = getContentTypeByExtension(fileName);
       const workspace = conversationContext?.workspace;
@@ -181,6 +182,8 @@ const MessageText: React.FC<{ message: IMessageText; showCopyRow?: boolean }> = 
             workspace,
             language: getPreviewLanguage(fileName),
             truncated: isLargeTextTruncated,
+            targetLine: reference?.line,
+            targetColumn: reference?.column,
             editable: contentType === 'markdown' || contentType === 'image' || isLargeTextTruncated ? false : undefined,
           },
           { replace: true }
