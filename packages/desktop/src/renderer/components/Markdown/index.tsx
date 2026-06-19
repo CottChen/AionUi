@@ -23,7 +23,7 @@ import { convertLatexDelimiters } from '@renderer/utils/chat/latexDelimiters';
 import LocalImageView from '@renderer/components/media/LocalImageView';
 import CodeBlock from './CodeBlock';
 import ShadowView from './ShadowView';
-import { resolveLocalFileLinkPath } from './markdownUtils';
+import { resolveLocalFileLinkPath, toLocalFileHref } from './markdownUtils';
 
 const REMARK_PLUGINS = [remarkGfm, remarkMath, remarkBreaks];
 
@@ -50,7 +50,7 @@ const MarkdownView: React.FC<MarkdownViewProps> = React.memo(
 
     const normalizedChildren = useMemo(() => {
       if (typeof childrenProp === 'string') {
-        let text = childrenProp.replace(/file:\/\//g, '');
+        let text = childrenProp;
         text = convertLatexDelimiters(text);
         return text;
       }
@@ -64,7 +64,8 @@ const MarkdownView: React.FC<MarkdownViewProps> = React.memo(
         const target = e.currentTarget as HTMLAnchorElement;
         const href = target.href;
         if (!href) return;
-        const localFilePath = resolveLocalFileLinkPath(target.getAttribute('href') || '', href);
+        const localFilePath =
+          target.dataset.localFilePath || resolveLocalFileLinkPath(target.getAttribute('href') || '', href);
         if (localFilePath && onLocalFileLink) {
           void onLocalFileLink(localFilePath);
           return;
@@ -93,14 +94,22 @@ const MarkdownView: React.FC<MarkdownViewProps> = React.memo(
             hiddenCodeCopyButton={hiddenCodeCopyButton}
           />
         ),
-        a: ({ node: _node, ...rest }: Record<string, unknown>) => (
-          <a
-            {...(rest as React.AnchorHTMLAttributes<HTMLAnchorElement>)}
-            target='_blank'
-            rel='noreferrer'
-            onClick={handleLinkClick}
-          />
-        ),
+        a: ({ node: _node, ...rest }: Record<string, unknown>) => {
+          const anchorProps = rest as React.AnchorHTMLAttributes<HTMLAnchorElement>;
+          const rawHref = typeof anchorProps.href === 'string' ? anchorProps.href : '';
+          const localFilePath = resolveLocalFileLinkPath(rawHref);
+          return (
+            <a
+              {...anchorProps}
+              href={localFilePath ? toLocalFileHref(localFilePath) : anchorProps.href}
+              data-local-file-path={localFilePath || undefined}
+              title={localFilePath || anchorProps.title}
+              target={localFilePath ? undefined : '_blank'}
+              rel={localFilePath ? undefined : 'noreferrer'}
+              onClick={handleLinkClick}
+            />
+          );
+        },
         table: ({ node: _node, ...rest }: Record<string, unknown>) => (
           <div style={{ overflowX: 'auto', maxWidth: '100%' }}>
             <table
@@ -128,7 +137,7 @@ const MarkdownView: React.FC<MarkdownViewProps> = React.memo(
         img: ({ node: _node, ...rest }: Record<string, unknown>) => {
           const imgProps = rest as React.ImgHTMLAttributes<HTMLImageElement>;
           if (isLocalFilePath(imgProps.src || '')) {
-            const src = decodeURIComponent(imgProps.src || '');
+            const src = resolveLocalFileLinkPath(imgProps.src || '') || decodeURIComponent(imgProps.src || '');
             return <LocalImageView src={src} alt={imgProps.alt || ''} className={imgProps.className} />;
           }
           return <img {...imgProps} />;

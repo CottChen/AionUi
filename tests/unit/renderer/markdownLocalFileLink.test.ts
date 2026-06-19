@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { resolveLocalFileLinkPath } from '@/renderer/components/Markdown/markdownUtils';
+import { resolveLocalFileLinkPath, toLocalFileHref } from '@/renderer/components/Markdown/markdownUtils';
 
 describe('resolveLocalFileLinkPath', () => {
   it('recognizes Windows absolute paths emitted as root-relative markdown links', () => {
@@ -27,5 +27,12 @@ describe('resolveLocalFileLinkPath', () => {
   it('does not treat normal web links or app routes as local files', () => {
     expect(resolveLocalFileLinkPath('https://aionui.com/docs')).toBeNull();
     expect(resolveLocalFileLinkPath('/settings')).toBeNull();
+  });
+
+  it('formats local file paths as file URLs for browser link copying', () => {
+    expect(toLocalFileHref('C:/Users/Administrator/AppData/Roaming/AionUi/report.xlsx')).toBe(
+      'file:///C:/Users/Administrator/AppData/Roaming/AionUi/report.xlsx'
+    );
+    expect(toLocalFileHref('/var/folders/demo/report.xlsx')).toBe('file:///var/folders/demo/report.xlsx');
   });
 });

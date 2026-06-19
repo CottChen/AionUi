@@ -90,6 +90,36 @@ const readCurrentFileContent = async (
   return null;
 };
 
+const readBaselineContent = async (
+  primaryPath: string,
+  fallbackPath: string,
+  workspace: string
+): Promise<string | null> => {
+  const paths = primaryPath === fallbackPath ? [primaryPath] : [primaryPath, fallbackPath];
+  let lastError: unknown;
+
+  for (const path of paths) {
+    try {
+      const baseline = await ipcBridge.fileSnapshot.getBaselineContent.invoke({
+        workspace,
+        file_path: path,
+      });
+      if (typeof baseline === 'string') {
+        return baseline;
+      }
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  console.error('[FileChangeList] Failed to read baseline file content:', {
+    primaryPath,
+    fallbackPath,
+    error: lastError,
+  });
+  return null;
+};
+
 const FileChangeItem: React.FC<{
   change: FileChangeInfo;
   diffState?: DiffState;
@@ -219,11 +249,9 @@ const FileChangeList: React.FC<FileChangeListProps> = ({
         const readPath = resolveWorkspaceChangeReadPath(workspace, change.file_path, change.relativePath);
 
         if (change.operation === 'modify' || change.operation === 'delete') {
-          const baseline = await ipcBridge.fileSnapshot.getBaselineContent.invoke({
-            workspace,
-            file_path: change.relativePath,
-          });
-          before = baseline ?? '';
+          const baseline = await readBaselineContent(change.relativePath, change.file_path, workspace);
+          if (baseline == null) return null;
+          before = baseline;
         }
 
         if (change.operation === 'modify' || change.operation === 'create') {
@@ -232,7 +260,9 @@ const FileChangeList: React.FC<FileChangeListProps> = ({
           after = current;
         }
 
-        const diffContent = createTwoFilesPatch(file_name, file_name, before, after);
+        const oldFileName = change.operation === 'create' ? '/dev/null' : file_name;
+        const newFileName = change.operation === 'delete' ? '/dev/null' : file_name;
+        const diffContent = createTwoFilesPatch(oldFileName, newFileName, before, after);
         const stats = createDiffStats(diffContent);
         return {
           diff: diffContent,

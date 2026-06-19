@@ -76,6 +76,12 @@ export const resolveLocalFileLinkPath = (rawHref: string, resolvedHref?: string)
   return null;
 };
 
+export const toLocalFileHref = (filePath: string): string => {
+  const normalized = filePath.replace(/\\/g, '/');
+  const withScheme = /^[A-Za-z]:\//.test(normalized) ? `file:///${normalized}` : `file://${normalized}`;
+  return encodeURI(withScheme);
+};
+
 /**
  * Get line background style for diff rendering.
  * Highlights additions (green), deletions (red), and hunk headers (blue).

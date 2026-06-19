@@ -9,7 +9,6 @@ import { AIONUI_FILES_MARKER } from '@/common/config/constants';
 import { ipcBridge } from '@/common';
 import type { PreviewContentType } from '@/common/types/office/preview';
 import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
-import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import {
   LARGE_TEXT_PREVIEW_MAX_LENGTH,
   LARGE_TEXT_PREVIEW_THRESHOLD,
@@ -142,8 +141,6 @@ const MessageText: React.FC<{ message: IMessageText; showCopyRow?: boolean }> = 
   const isTeammateMessage = message.position === 'left' && message.content.teammateMessage === true;
   const shouldRenderPlainText = isUserMessage;
   const conversationContext = useConversationContextSafe();
-  const layout = useLayoutContext();
-  const isMobile = layout?.isMobile ?? false;
   const { openPreview } = usePreviewContext();
   const resolvedFiles = useMemo(
     () => files.map((file_path) => resolveMessageFilePath(file_path, conversationContext?.workspace)),
@@ -300,11 +297,10 @@ const MessageText: React.FC<{ message: IMessageText; showCopyRow?: boolean }> = 
             </div>
           )}
         </div>
-        {/* Hover-revealed copy + timestamp row. Mobile has no hover affordance,
-            so we drop the row entirely — system-level long-press still copies.
+        {/* Desktop keeps hover-revealed metadata; touch/no-hover devices show it via CSS.
             For AI replies split across several text messages, only the last text
             of the turn shows this row (showCopyRow); user messages always do. */}
-        {!isMobile && showCopyRow && (
+        {showCopyRow && (
           <div
             className={classNames('h-32px flex items-center mt-4px gap-8px', {
               'flex-row-reverse': isUserMessage,

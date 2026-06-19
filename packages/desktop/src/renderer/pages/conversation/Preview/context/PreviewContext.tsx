@@ -607,6 +607,7 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const checkFileUpdate = useCallback(
     (tab: PreviewTab) => {
       const file_path = tab.metadata?.file_path;
+      if (tab.content_type === 'diff' || tab.metadata?.editable === false) return;
       if (!file_path || tab.isDirty || savingFilesRef.current.has(file_path)) return;
 
       void ipcBridge.fs.getFileMetadata

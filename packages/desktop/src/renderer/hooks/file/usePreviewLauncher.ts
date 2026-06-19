@@ -18,6 +18,9 @@ import { useCallback, useState } from 'react';
 
 const LARGE_TEXT_PREVIEW_TYPES = new Set<PreviewContentType>(['code', 'markdown', 'html', 'diff']);
 
+const isAbsolutePath = (filePath?: string): boolean =>
+  Boolean(filePath && (filePath.startsWith('/') || /^[A-Za-z]:[\\/]/.test(filePath)));
+
 const normalizeLargeTextPreview = (
   content: string,
   contentType: PreviewContentType
@@ -94,7 +97,13 @@ export const usePreviewLauncher = () => {
 
       // 路径解析 / Path resolution
       // 优先使用工作区 + 相对路径拼接绝对路径 / Prefer workspace + relative path to build absolute path
-      const absolutePath = workspace && relativePath ? joinPath(workspace, relativePath) : undefined;
+      const relativePathIsAbsolute = isAbsolutePath(relativePath);
+      const absolutePath =
+        relativePath && relativePathIsAbsolute
+          ? relativePath
+          : workspace && relativePath
+            ? joinPath(workspace, relativePath)
+            : undefined;
       const resolvedPath = absolutePath || originalPath || relativePath || undefined;
 
       // 文件名和标题计算 / Compute file name and title
