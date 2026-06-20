@@ -1013,6 +1013,8 @@ export type I18nKey =
   | 'preview.loadHistoryFailed'
   | 'preview.loading'
   | 'preview.mermaidTitle'
+  | 'preview.missingFile.openInNewTab'
+  | 'preview.missingFile.title'
   | 'preview.noHistory'
   | 'preview.noTabs'
   | 'preview.office.errors.installFailed'

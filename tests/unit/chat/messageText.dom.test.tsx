@@ -5,9 +5,10 @@
  */
 
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { IMessageText } from '@/common/chat/chatLib';
+import { ipcBridge } from '@/common';
 import { ConversationProvider } from '@/renderer/hooks/context/ConversationContext';
 import MessageText from '@/renderer/pages/conversation/Messages/components/MessageText';
 
@@ -19,6 +20,7 @@ const mockFilePreview = vi.fn(({ path }: { path: string }) => <div data-testid='
 vi.mock('@/common', () => ({
   ipcBridge: {
     fs: {
+      getFileMetadata: { invoke: vi.fn() },
       getImageBase64: { invoke: vi.fn() },
       readFile: { invoke: vi.fn() },
     },
@@ -48,7 +50,22 @@ vi.mock('@/renderer/components/media/HorizontalFileList', () => ({
 
 vi.mock('@/renderer/components/Markdown', () => ({
   __esModule: true,
-  default: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
+  default: ({
+    children,
+    onLocalFileLink,
+  }: {
+    children?: React.ReactNode;
+    onLocalFileLink?: (path: string) => void | Promise<void>;
+  }) => (
+    <div>
+      {children}
+      {onLocalFileLink && (
+        <button type='button' onClick={() => void onLocalFileLink('/missing/report.xlsx')}>
+          open local file
+        </button>
+      )}
+    </div>
+  ),
 }));
 
 vi.mock('@/renderer/utils/chat/skillSuggestParser', () => ({
@@ -98,6 +115,13 @@ vi.mock('react-i18next', () => ({
 }));
 
 describe('MessageText attachment paths', () => {
+  beforeEach(() => {
+    previewMocks.openPreview.mockClear();
+    vi.mocked(ipcBridge.fs.getFileMetadata.invoke).mockReset();
+    vi.mocked(ipcBridge.fs.getImageBase64.invoke).mockReset();
+    vi.mocked(ipcBridge.fs.readFile.invoke).mockReset();
+  });
+
   it('resolves relative attachment paths against the current workspace before previewing', () => {
     const message: IMessageText = {
       id: 'msg-1',
@@ -169,5 +193,43 @@ describe('MessageText attachment paths', () => {
     expect(screen.getByText('10:20')).toHaveClass('message-meta-time');
 
     fireEvent.click(copyButton);
+  });
+
+  it('opens a missing-file preview when a local markdown link no longer exists', async () => {
+    vi.mocked(ipcBridge.fs.getFileMetadata.invoke).mockResolvedValue(null);
+
+    const message: IMessageText = {
+      id: 'msg-4',
+      msg_id: 'msg-4',
+      conversation_id: 'conv-1',
+      type: 'text',
+      position: 'left',
+      createdAt: Date.now(),
+      content: {
+        content: '[report](/missing/report.xlsx)',
+      },
+    };
+
+    render(
+      <ConversationProvider value={{ conversationId: 'conv-1', workspace: '/workspace/demo', type: 'acp' }}>
+        <MessageText message={message} />
+      </ConversationProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'open local file' }));
+
+    await waitFor(() => {
+      expect(previewMocks.openPreview).toHaveBeenCalledWith(
+        '',
+        'excel',
+        expect.objectContaining({
+          file_name: 'report.xlsx',
+          file_path: '/missing/report.xlsx',
+          missingFile: true,
+          editable: false,
+        }),
+        { replace: true }
+      );
+    });
   });
 });
