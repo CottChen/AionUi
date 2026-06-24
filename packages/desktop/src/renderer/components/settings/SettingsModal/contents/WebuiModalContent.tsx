@@ -93,7 +93,7 @@ const WebuiModalContent: React.FC = () => {
   // 检测是否在 Electron 桌面环境 / Check if running in Electron desktop environment
   const isDesktop = isElectronDesktop();
   const { user: authUser } = useAuth();
-  const canManageUsers = authUser?.isAdmin === true;
+  const canManageUsers = isDesktop || authUser?.isAdmin === true;
 
   const [status, setStatus] = useState<IWebUIStatus | null>(null);
   const [loading, setLoading] = useState(false);
