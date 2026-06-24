@@ -553,7 +553,7 @@ const TeamPage: React.FC<Props> = ({ team }) => {
       try {
         await ipcBridge.team.renameTeam.invoke({ id: team.id, name: new_name });
         await mutateTeam();
-        await globalMutate(`teams/${user?.id ?? 'system_default_user'}`);
+        await globalMutate(`teams/${user?.id ?? 'local'}`);
         return true;
       } catch (error) {
         console.error('Failed to rename team:', error);

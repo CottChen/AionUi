@@ -191,6 +191,7 @@ export async function httpRequest<T>(
   const response = await fetch(url, {
     method,
     headers,
+    credentials: 'include',
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 

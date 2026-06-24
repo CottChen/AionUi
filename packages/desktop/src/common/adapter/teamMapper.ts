@@ -16,7 +16,6 @@ import type {
 // ── Parameter types for team API calls ─────────────────────────────────
 
 export type ICreateTeamParams = {
-  user_id: string;
   name: string;
   workspace: string;
   workspace_mode: WorkspaceMode;

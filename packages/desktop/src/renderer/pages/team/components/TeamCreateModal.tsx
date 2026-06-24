@@ -1,11 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Button, Form, Input, Message, Tooltip } from '@arco-design/web-react';
+import { Button, Form, Input, Message } from '@arco-design/web-react';
 import type { RefInputType } from '@arco-design/web-react/es/Input/interface';
-import { Close, Search, CloseSmall } from '@icon-park/react';
+import { Close, Search } from '@icon-park/react';
 import { useTranslation } from 'react-i18next';
 import { ipcBridge } from '@/common';
 import type { TTeam, TeamAgent } from '@/common/types/team/teamTypes';
-import { useAuth } from '@renderer/hooks/context/AuthContext';
 import { useConversationAgents } from '@renderer/pages/conversation/hooks/useConversationAgents';
 import AionModal from '@renderer/components/base/AionModal';
 import { WorkspaceFolderSelect } from '@renderer/components/workspace';
@@ -62,7 +61,6 @@ const AgentRadioRow: React.FC<{
 
 const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
   const { t } = useTranslation();
-  const { user } = useAuth();
   const { cliAgents, presetAssistants } = useConversationAgents();
   const [name, setName] = useState('');
   const [dispatchAgentKey, setDispatchAgentKey] = useState<string | undefined>(undefined);
@@ -72,16 +70,6 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
   const [searchExpanded, setSearchExpanded] = useState(false);
   const nameInputRef = useRef<RefInputType | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
-
-  const handleToggleSearch = () => {
-    if (searchExpanded) {
-      setSearch('');
-      setSearchExpanded(false);
-    } else {
-      setSearchExpanded(true);
-      setTimeout(() => searchInputRef.current?.focus(), 50);
-    }
-  };
 
   const cliAgentOptions = useMemo(() => cliAgents.map(cliAgentToOption), [cliAgents]);
   const teamCapableKeys = useMemo(
@@ -149,7 +137,6 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
       Message.warning(t('team.create.leaderRequired', { defaultValue: 'Please select a team leader' }));
       return;
     }
-    const user_id = user?.id ?? 'system_default_user';
     setLoading(true);
     try {
       const agents: TeamAgent[] = [];
@@ -174,7 +161,6 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
       });
 
       const team = await ipcBridge.team.create.invoke({
-        user_id,
         name,
         workspace,
         workspace_mode: 'shared',

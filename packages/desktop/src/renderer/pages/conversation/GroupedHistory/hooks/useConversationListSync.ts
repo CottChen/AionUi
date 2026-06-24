@@ -110,6 +110,7 @@ let completionUnreadConversationIdsState = new Set<string>();
 let completedConversationIdsState = new Set<string>();
 let conversation_idsState = new Set<string>();
 let activeConversationIdState: string | null = null;
+let refreshGenerationState = 0;
 let snapshotState: ConversationListSyncSnapshot = {
   conversations: conversationsState,
   generatingConversationIds: generatingConversationIdsState,
@@ -135,9 +136,13 @@ const subscribeConversationListSync = (listener: () => void) => {
 const getConversationListSyncSnapshot = (): ConversationListSyncSnapshot => snapshotState;
 
 const refreshConversations = () => {
+  const generation = ++refreshGenerationState;
   void ipcBridge.database.getUserConversations
     .invoke({ limit: 10000 })
     .then((result) => {
+      if (generation !== refreshGenerationState) {
+        return;
+      }
       const items = result?.items;
       if (items && Array.isArray(items)) {
         const filteredData = items.filter((conv) => {
@@ -160,6 +165,9 @@ const refreshConversations = () => {
       emitStoreChange();
     })
     .catch((error) => {
+      if (generation !== refreshGenerationState) {
+        return;
+      }
       console.error('[WorkspaceGroupedHistory] Failed to load conversations:', error);
       conversationsState = [];
       conversation_idsState = new Set();
@@ -239,6 +247,17 @@ const setActiveConversationState = (conversation_id: string | null) => {
   activeConversationIdState = conversation_id;
 };
 
+const resetConversationListSyncStore = () => {
+  refreshGenerationState += 1;
+  conversationsState = [];
+  generatingConversationIdsState = new Set<string>();
+  completionUnreadConversationIdsState = new Set<string>();
+  completedConversationIdsState = new Set<string>();
+  conversation_idsState = new Set<string>();
+  activeConversationIdState = null;
+  emitStoreChange();
+};
+
 const initializeConversationListSyncStore = () => {
   if (isStoreInitialized) {
     return;
@@ -248,6 +267,10 @@ const initializeConversationListSyncStore = () => {
   refreshConversations();
 
   addEventListener('chat.history.refresh', refreshConversations);
+  addEventListener('auth.user.changed', () => {
+    resetConversationListSyncStore();
+    refreshConversations();
+  });
   ipcBridge.conversation.listChanged.on((event) => {
     if (event.action === 'deleted') {
       clearGenerating(event.conversation_id);

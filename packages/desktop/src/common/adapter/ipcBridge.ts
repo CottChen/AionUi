@@ -221,6 +221,10 @@ export const conversation = {
       };
     }
   ),
+  transferOwner: httpPost<void, { id: string; targetUserId: string }>(
+    (p) => `/api/conversations/${p.id}/owner`,
+    (p) => ({ target_user_id: p.targetUserId })
+  ),
   reset: httpPost<void, IResetConversationParams>((p) => `/api/conversations/${p.id}/reset`),
   warmup: httpPost<void, { conversation_id: string }>((p) => `/api/conversations/${p.conversation_id}/warmup`),
   stop: httpPost<{ runtime: TConversationRuntimeSummary }, { conversation_id: string; turn_id: string }>(
@@ -1217,6 +1221,24 @@ export interface IWebUIStartResult {
   initialPassword?: string;
 }
 
+export interface IWebUIUser {
+  id: string;
+  username: string;
+  isAdmin: boolean;
+  createdAt: number;
+  updatedAt: number;
+  lastLogin?: number | null;
+}
+
+const toWebUIUser = (raw: Record<string, unknown>): IWebUIUser => ({
+  id: raw.id as string,
+  username: raw.username as string,
+  isAdmin: Boolean(raw.is_admin),
+  createdAt: raw.created_at as number,
+  updatedAt: raw.updated_at as number,
+  lastLogin: (raw.last_login as number | null | undefined) ?? null,
+});
+
 export const webui = {
   getStatus: bridge.buildProvider<IWebUIStatus, void>('webui.get-status'),
   start: bridge.buildProvider<IWebUIStartResult, { port?: number; allowRemote?: boolean }>('webui.start'),
@@ -1237,6 +1259,18 @@ export const webui = {
   })),
   resetPassword: httpPost<{ new_password: string }, void>('/api/webui/reset-password'),
   generateQRToken: httpPost<{ token: string; expires_at_ms: number }, void>('/api/webui/generate-qr-token'),
+  listUsers: withResponseMap(httpGet<Record<string, unknown>[], void>('/api/webui/users'), (raw) =>
+    raw.map(toWebUIUser)
+  ),
+  createUser: withResponseMap(
+    httpPost<{ user: Record<string, unknown> }, { username: string; password: string }>('/api/webui/users'),
+    (raw) => toWebUIUser(raw.user)
+  ),
+  deleteUser: httpDelete<void, { id: string }>((p) => `/api/webui/users/${encodeURIComponent(p.id)}`),
+  resetUserPassword: withResponseMap(
+    httpPost<{ new_password: string }, { id: string }>((p) => `/api/webui/users/${encodeURIComponent(p.id)}/reset-password`),
+    (raw) => ({ newPassword: raw.new_password })
+  ),
 };
 
 // ---------------------------------------------------------------------------
@@ -1809,7 +1843,7 @@ export const team = {
     fromBackendTeam
   ),
   list: withResponseMap(
-    httpGet<TTeam[], { user_id: string }>((p) => `/api/teams?user_id=${encodeURIComponent(p.user_id)}`),
+    httpGet<TTeam[], void>('/api/teams'),
     fromBackendTeamList
   ),
   get: withResponseMap(
@@ -1836,6 +1870,10 @@ export const team = {
   renameTeam: httpPatch<void, { id: string; name: string }>(
     (p) => `/api/teams/${p.id}/name`,
     (p) => ({ name: p.name })
+  ),
+  transferOwner: httpPost<void, { id: string; targetUserId: string }>(
+    (p) => `/api/teams/${p.id}/owner`,
+    (p) => ({ target_user_id: p.targetUserId })
   ),
   setSessionMode: httpPost<void, { team_id: string; session_mode: string }>(
     (p) => `/api/teams/${p.team_id}/session-mode`,
