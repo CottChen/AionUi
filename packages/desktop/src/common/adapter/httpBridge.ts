@@ -178,9 +178,13 @@ export async function httpRequest<T>(
 ): Promise<T> {
   const url = `${getBaseUrl()}${path}`;
   const headers: Record<string, string> = {};
+  const webUiBrowserMode = isWebUiBrowserMode();
 
   if (body !== undefined) {
     headers['Content-Type'] = 'application/json';
+  }
+  if (!webUiBrowserMode) {
+    headers['x-aionui-internal'] = '1';
   }
 
   console.debug(
