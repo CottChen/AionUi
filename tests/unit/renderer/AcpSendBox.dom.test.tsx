@@ -19,7 +19,6 @@ const {
   setSendBoxHandlerMock,
   useAcpConfigOptionsMock,
   useTeamPermissionMock,
-  savePreferredThoughtLevelMock,
   isMobileMock,
   mobileActionSheetEntries,
 } = vi.hoisted(() => ({
@@ -30,7 +29,6 @@ const {
   setSendBoxHandlerMock: vi.fn(),
   useAcpConfigOptionsMock: vi.fn(),
   useTeamPermissionMock: vi.fn(),
-  savePreferredThoughtLevelMock: vi.fn(),
   isMobileMock: { current: false },
   mobileActionSheetEntries: {
     current: [] as Array<{
@@ -107,9 +105,6 @@ vi.mock('@/renderer/hooks/agent/useAcpModelInfo', () => ({
 vi.mock('@/renderer/hooks/agent/useAcpConfigOptions', () => ({
   classifyConfigSetError: () => 'unknown',
   useAcpConfigOptions: useAcpConfigOptionsMock,
-}));
-vi.mock('@/renderer/hooks/agent/useAgentModesForBackend', () => ({
-  useAgentModesForBackend: () => [],
 }));
 vi.mock('@/renderer/hooks/chat/useSendBoxDraft', () => ({
   getSendBoxDraftHook: () => () => ({
@@ -198,11 +193,6 @@ vi.mock('@/renderer/utils/file/messageFiles', () => ({
 vi.mock('@/renderer/pages/conversation/platforms/acp/useAcpInitialMessage', () => ({
   useAcpInitialMessage: vi.fn(),
 }));
-vi.mock('@/renderer/pages/guid/hooks/agentSelectionUtils', () => ({
-  savePreferredMode: vi.fn(),
-  savePreferredThoughtLevel: savePreferredThoughtLevelMock,
-}));
-
 vi.mock('@arco-design/web-react', () => ({
   Message: {
     success: vi.fn(),
@@ -230,7 +220,6 @@ const makeMessageState = (): UseAcpMessageReturn => ({
 describe('AcpSendBox', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    savePreferredThoughtLevelMock.mockResolvedValue(undefined);
     isMobileMock.current = false;
     mobileActionSheetEntries.current = [];
     useTeamPermissionMock.mockReturnValue(null);
@@ -277,6 +266,23 @@ describe('AcpSendBox', () => {
     });
   });
 
+  it('uses fluid golden-ratio side inset instead of a fixed max width', () => {
+    render(
+      <AcpSendBox
+        conversation_id='conv-1'
+        backend='codex'
+        workspacePath='/tmp/workspace'
+        messageState={makeMessageState()}
+      />
+    );
+
+    const wrapper = screen.getByRole('button', { name: 'send' }).parentElement?.parentElement;
+    expect(wrapper?.className).toContain('w-[calc(100%-24px)]');
+    expect(wrapper?.className).toContain('md:w-[calc(100%-clamp(80px,10vw,240px))]');
+    expect(wrapper?.className).toContain('max-w-none');
+    expect(wrapper?.className).not.toContain('max-w-800px');
+  });
+
   it('keeps ACP config options enabled on desktop without rendering a standalone thought selector', () => {
     useAcpConfigOptionsMock.mockReturnValue({
       setStatus: { state: 'idle' },
@@ -305,7 +311,7 @@ describe('AcpSendBox', () => {
     expect(screen.queryByTestId('mock-thought-selector')).not.toBeInTheDocument();
   });
 
-  it('persists preferred thought level after the mobile action sheet observes the change', async () => {
+  it('applies runtime thought level from the mobile action sheet without persisting a global preference', async () => {
     isMobileMock.current = true;
     const setConfigOption = vi.fn().mockResolvedValue([]);
     useAcpConfigOptionsMock.mockReturnValue({
@@ -340,12 +346,14 @@ describe('AcpSendBox', () => {
       mobileActionSheetEntries.current.find((entry) => entry.key === 'thought-level')?.submenu?.onSelect?.('high');
     });
 
+    // This branch dropped global-preference persistence: only the runtime
+    // config option is set; nothing is saved to a global agent preference.
     await waitFor(() => {
-      expect(savePreferredThoughtLevelMock).toHaveBeenCalledWith('codex', 'high');
+      expect(setConfigOption).toHaveBeenCalledWith('reasoning_effort', 'high');
     });
   });
 
-  it('does not persist preferred thought level when observed confirmation fails', async () => {
+  it('does not apply runtime thought level when observed confirmation fails', async () => {
     isMobileMock.current = true;
     const setConfigOption = vi.fn().mockRejectedValue(new Error('command_ack'));
     useAcpConfigOptionsMock.mockReturnValue({
@@ -380,6 +388,5 @@ describe('AcpSendBox', () => {
     await waitFor(() => {
       expect(setConfigOption).toHaveBeenCalledWith('reasoning_effort', 'high');
     });
-    expect(savePreferredThoughtLevelMock).not.toHaveBeenCalled();
   });
 });

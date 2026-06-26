@@ -253,6 +253,15 @@ export async function captureBackendStartupFailure(error: unknown): Promise<void
     if (typeof details?.stage === 'string') {
       scope.setTag('aionui.backend_startup.stage', details.stage);
     }
+    if (failureInfo.backendBoundaryCode) {
+      scope.setTag('aionui.backend_startup.boundary_code', failureInfo.backendBoundaryCode);
+    }
+    if (failureInfo.backendBoundaryStage) {
+      scope.setTag('aionui.backend_startup.boundary_stage', failureInfo.backendBoundaryStage);
+    }
+    if (failureInfo.localDataIssueKind) {
+      scope.setTag('aionui.backend_startup.local_data_issue_kind', failureInfo.localDataIssueKind);
+    }
     if (failureInfo.incompleteInstallationKind) {
       scope.setTag('aionui.backend_startup.incomplete_installation_kind', failureInfo.incompleteInstallationKind);
     }

@@ -3,6 +3,7 @@
  */
 import type { Page } from '@playwright/test';
 import { invokeBridge } from './bridge';
+import { selectAssistantForBackend } from './conversation';
 import { goToGuid } from './navigation';
 import fs from 'fs';
 import path from 'path';
@@ -277,7 +278,7 @@ export async function getAionrsMessages(page: Page, conversationId: string): Pro
     const result = await invokeBridge<any>(
       page,
       'database.get-conversation-messages',
-      { conversation_id: conversationId, page: 0, pageSize: 100 },
+      { conversation_id: conversationId, limit: 100 },
       10_000
     );
     return Array.isArray(result) ? result : (result?.data ?? []);
@@ -336,18 +337,13 @@ export function createTempWorkspace(scenario: string): { path: string; cleanup: 
   };
 }
 
-/**
- * Select aionrs agent on guid page.
- * @param page Playwright page
- */
+/** Select an available aionrs assistant on the guid page. */
 export async function selectAionrsAgent(page: Page): Promise<void> {
   await goToGuid(page);
-  const pill = page.locator('[data-agent-pill="true"][data-agent-backend="aionrs"]');
-  await pill.waitFor({ state: 'visible', timeout: 15_000 });
-  await pill.click();
-  await page.waitForSelector('[data-agent-pill="true"][data-agent-backend="aionrs"][data-agent-selected="true"]', {
-    timeout: 5_000,
-  });
+  const assistantId = await selectAssistantForBackend(page, 'aionrs');
+  if (!assistantId) {
+    throw new Error('No available aionrs assistant found on guid page');
+  }
 }
 
 /**

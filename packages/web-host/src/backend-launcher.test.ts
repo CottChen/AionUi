@@ -148,6 +148,7 @@ describe('buildSpawnArgs', () => {
       isPackaged: false,
     });
     expect(args).toContain('debug');
+    expect(args).toContain('--dump-prompts');
     expect(args).not.toContain('--managed-resources-mode');
     expect(args).not.toContain('--log-dir');
     expect(args).not.toContain('--local');
@@ -163,6 +164,7 @@ describe('buildSpawnArgs', () => {
     });
     expect(args).toContain('--managed-resources-mode');
     expect(args).toContain('bundled');
+    expect(args).not.toContain('--dump-prompts');
   });
 
   it('respects AIONUI_LOG_LEVEL override', () => {

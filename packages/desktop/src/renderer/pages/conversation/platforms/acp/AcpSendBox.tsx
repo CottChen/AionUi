@@ -17,8 +17,6 @@ import FilePreview from '@/renderer/components/media/FilePreview';
 import HorizontalFileList from '@/renderer/components/media/HorizontalFileList';
 import { classifyConfigSetError, useAcpConfigOptions } from '@/renderer/hooks/agent/useAcpConfigOptions';
 import { useAcpModelInfo } from '@/renderer/hooks/agent/useAcpModelInfo';
-import { useAgentModesForBackend } from '@/renderer/hooks/agent/useAgentModesForBackend';
-import { savePreferredMode, savePreferredThoughtLevel } from '@/renderer/pages/guid/hooks/agentSelectionUtils';
 import { useAutoTitle } from '@/renderer/hooks/chat/useAutoTitle';
 import { getSendBoxDraftHook, type FileOrFolderItem } from '@/renderer/hooks/chat/useSendBoxDraft';
 import { createSetUploadFile, useSendBoxFiles } from '@/renderer/hooks/chat/useSendBoxFiles';
@@ -133,7 +131,6 @@ const AcpSendBox: React.FC<{
   const isMobile = Boolean(layout?.isMobile);
   const conversationContext = useConversationContextSafe();
   const loadedSkills = conversationContext?.loadedSkills ?? [];
-  const assistantId = conversationContext?.assistantId;
   const loadedMcpStatuses =
     conversationContext?.loadedMcpStatuses ??
     (conversationContext?.loadedMcpServers ?? []).map<IConversationMcpStatus>((name) => ({
@@ -157,14 +154,8 @@ const AcpSendBox: React.FC<{
   const runtimeMode = runtimeConfig.mode;
   const runtimeThoughtLevel = runtimeConfig.thoughtLevel;
   const handleThoughtLevelSetOption = useCallback(
-    async (optionId: string, value: string) => {
-      const result = await runtimeConfig.setConfigOption(optionId, value);
-      if (backend && !assistantId) {
-        void savePreferredThoughtLevel(backend, value);
-      }
-      return result;
-    },
-    [assistantId, backend, runtimeConfig]
+    async (optionId: string, value: string) => runtimeConfig.setConfigOption(optionId, value),
+    [runtimeConfig]
   );
 
   // Drive the mobile sheet's model entry off the same source AcpModelSelector uses
@@ -177,12 +168,9 @@ const AcpSendBox: React.FC<{
     backend,
     prepareRuntime: prepareRuntimeSync,
     enabled: isMobile,
-    persistGlobalPreference: !assistantId,
     onSelectModelSuccess: () => Message.success(t('agent.model.switchSuccess')),
     onSelectModelFailed: (_modelId, error) => Message.error(t(configErrorMessageKey(error))),
   });
-  const availableAgentModes = useAgentModesForBackend(backend);
-
   useEffect(() => {
     if (!runtimeMode?.currentValue) return;
     setCurrentMode(runtimeMode.currentValue);
@@ -194,7 +182,6 @@ const AcpSendBox: React.FC<{
       try {
         await runtimeConfig.setConfigOption(runtimeMode.id, mode);
         setCurrentMode(mode);
-        if (backend && !assistantId) void savePreferredMode(backend, mode);
         if (isLeaderInTeam) teamPermission?.propagateMode?.(mode);
         Message.success(t('agentMode.switchSuccess'));
       } catch (error) {
@@ -202,7 +189,7 @@ const AcpSendBox: React.FC<{
         Message.error(t(configErrorMessageKey(error)));
       }
     },
-    [assistantId, backend, isLeaderInTeam, runtimeConfig, runtimeMode, t, teamPermission]
+    [isLeaderInTeam, runtimeConfig, runtimeMode, t, teamPermission]
   );
 
   // In team mode, warmup the agent then fetch slash commands
@@ -409,7 +396,6 @@ Please check your local CLI tool authentication status`,
     enabled: true,
     isBusy,
     runtimeGate: commandQueueRuntimeGate,
-    teamUpgradeHandoffReady: Boolean(teamRuntime && teamSendMessage),
     onExecute: executeCommand,
   });
 
@@ -468,7 +454,7 @@ Please check your local CLI tool authentication status`,
         value: item.value,
         label: item.label,
         description: item.description ?? undefined,
-      })) ?? availableAgentModes;
+      })) ?? [];
     const modeOptions: MobileActionSheetOption[] = availableModes.map((mode) => ({
       key: mode.value,
       label: t(`agentMode.${mode.value}`, { defaultValue: mode.label }),
@@ -603,7 +589,6 @@ Please check your local CLI tool authentication status`,
     return entries;
   }, [
     attachEntries,
-    availableAgentModes,
     canSwitchModel,
     currentMode,
     handleSheetModeChange,
@@ -653,7 +638,7 @@ Please check your local CLI tool authentication status`,
   const effectiveHandleStop = teamRuntime?.onStop ?? handleStop;
 
   return (
-    <div className='max-w-800px w-full mx-auto flex flex-col mt-auto mb-16px'>
+    <div className='w-[calc(100%-24px)] md:w-[calc(100%-clamp(80px,10vw,240px))] max-w-none mx-auto flex flex-col mt-auto mb-16px'>
       <CommandQueuePanel
         items={queuedCommands}
         interactionLocked={isQueueInteractionLocked}
@@ -713,7 +698,6 @@ Please check your local CLI tool authentication status`,
                 hideCompactLabelPrefixOnMobile
                 onModeChanged={isLeaderInTeam ? teamPermission?.propagateMode : undefined}
                 beforeRuntimeSync={prepareRuntimeSync}
-                persistGlobalPreference={!assistantId}
               />
             )}
           </div>
