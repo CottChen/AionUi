@@ -29,6 +29,9 @@ interface MarkdownPreviewProps {
   onScroll?: (scrollTop: number, scrollHeight: number, clientHeight: number) => void; // 滚动回调 / Scroll callback
   file_path?: string; // 当前 Markdown 文件的绝对路径 / Absolute file path of current markdown
   workspace?: string;
+  targetLine?: number; // 原文模式定位行 / Source-mode line reveal
+  targetColumn?: number; // 原文模式定位列 / Source-mode column reveal
+  targetRevealKey?: string; // 重新触发行号定位 / Re-trigger line reveal
 }
 
 const isDataOrRemoteUrl = (value?: string): boolean => {
@@ -196,6 +199,9 @@ const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({
   onScroll: externalOnScroll,
   file_path,
   workspace,
+  targetLine,
+  targetColumn,
+  targetRevealKey,
 }) => {
   const internalContainerRef = useRef<HTMLDivElement>(null);
   const containerRef = externalContainerRef || internalContainerRef; // 使用外部 ref 或内部 ref / Use external ref or internal ref
@@ -236,7 +242,14 @@ const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({
       >
         {viewMode === 'source' ? (
           // 原文模式：使用编辑器 / Source mode: Use editor
-          <MarkdownEditor value={content} onChange={(value) => onContentChange?.(value)} />
+          <MarkdownEditor
+            value={content}
+            onChange={(value) => onContentChange?.(value)}
+            fileName={file_path}
+            targetLine={targetLine}
+            targetColumn={targetColumn}
+            targetRevealKey={targetRevealKey}
+          />
         ) : (
           // 预览模式：Streamdown 原生渲染 / Preview mode: native Streamdown
           <div

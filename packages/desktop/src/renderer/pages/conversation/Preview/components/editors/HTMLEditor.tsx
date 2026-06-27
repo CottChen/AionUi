@@ -13,6 +13,7 @@ import CodeMirror from '@uiw/react-codemirror';
 import { codeEditorSurfaceTheme } from '../../theme/codeEditorTheme';
 import React, { useMemo, useRef, useCallback } from 'react';
 import { useCodeMirrorScroll, useScrollSyncTarget } from '../../hooks/useScrollSyncHelpers';
+import { useRevealCodeMirrorTarget } from '../../hooks/useRevealCodeMirrorTarget';
 
 interface HTMLEditorProps {
   value: string;
@@ -20,6 +21,9 @@ interface HTMLEditorProps {
   containerRef?: React.RefObject<HTMLDivElement>;
   onScroll?: (scrollTop: number, scrollHeight: number, clientHeight: number) => void;
   file_path?: string; // 用于生成稳定的 key / Used to generate stable key
+  targetLine?: number; // 打开文件后定位到的目标行 / Target line to reveal
+  targetColumn?: number; // 打开文件后定位到的目标列 / Target column to reveal
+  targetRevealKey?: string; // 重新触发行号定位 / Re-trigger line reveal
 }
 
 /**
@@ -29,12 +33,28 @@ interface HTMLEditorProps {
  * 使用 CodeMirror 进行 HTML 代码编辑，支持撤销/重做历史记录
  * Uses CodeMirror for HTML code editing with undo/redo history support
  */
-const HTMLEditor: React.FC<HTMLEditorProps> = ({ value, onChange, containerRef, onScroll, file_path }) => {
+const HTMLEditor: React.FC<HTMLEditorProps> = ({
+  value,
+  onChange,
+  containerRef,
+  onScroll,
+  file_path,
+  targetLine,
+  targetColumn,
+  targetRevealKey,
+}) => {
   const { theme } = useThemeContext();
   const editorWrapperRef = useRef<HTMLDivElement>(null);
 
   // 使用 CodeMirror 滚动 Hook / Use CodeMirror scroll hook
   const { setScrollPercent } = useCodeMirrorScroll(editorWrapperRef, onScroll);
+  const revealTarget = useRevealCodeMirrorTarget({
+    fileIdentity: file_path,
+    targetLine,
+    targetColumn,
+    targetRevealKey,
+    value,
+  });
 
   // 监听外部滚动同步请求 / Listen for external scroll sync requests
   const handleTargetScroll = useCallback(
@@ -86,6 +106,7 @@ const HTMLEditor: React.FC<HTMLEditorProps> = ({ value, onChange, containerRef, 
           theme={theme === 'dark' ? 'dark' : 'light'}
           extensions={extensions}
           onChange={handleChange}
+          onCreateEditor={revealTarget}
           basicSetup={{
             lineNumbers: true,
             highlightActiveLineGutter: true,

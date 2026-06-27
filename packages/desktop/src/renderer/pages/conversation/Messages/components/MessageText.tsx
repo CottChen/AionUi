@@ -94,7 +94,11 @@ const useFormatContent = (content: string) => {
   }, [content]);
 };
 
-const MessageText: React.FC<{ message: IMessageText; showCopyRow?: boolean }> = ({ message, showCopyRow = true }) => {
+const MessageText: React.FC<{
+  message: IMessageText;
+  showCopyButton?: boolean;
+  showTimestamp?: boolean;
+}> = ({ message, showCopyButton = true, showTimestamp = true }) => {
   const logos = useAgentLogos();
   // Filter think tags from content before rendering
   // 在渲染前过滤 think 标签
@@ -233,15 +237,15 @@ const MessageText: React.FC<{ message: IMessageText; showCopyRow?: boolean }> = 
         </div>
         {/* Desktop keeps hover-revealed metadata; touch/no-hover devices show it via CSS.
             For AI replies split across several text messages, only the last text
-            of the turn shows this row (showCopyRow); user messages always do. */}
-        {showCopyRow && (
+            of the turn shows the copy button; user messages always do. */}
+        {(showCopyButton || showTimestamp) && (
           <div
             className={classNames('h-32px flex items-center mt-4px gap-8px', {
               'flex-row-reverse': isUserMessage,
             })}
           >
-            {copyButton}
-            {message.created_at && (
+            {showCopyButton && copyButton}
+            {showTimestamp && message.created_at && (
               <span className='message-meta-time text-12px text-t-secondary opacity-0 group-hover:opacity-100 transition-opacity select-none'>
                 {formatMessageTime(message.created_at)}
               </span>

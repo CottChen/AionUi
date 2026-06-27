@@ -432,7 +432,14 @@ const PreviewPanel: React.FC = () => {
         if (layout?.isMobile) {
           return (
             <div className='flex-1 overflow-hidden'>
-              <MarkdownPreview content={content} file_path={metadata?.file_path} workspace={metadata?.workspace} />
+              <MarkdownPreview
+                content={content}
+                file_path={metadata?.file_path}
+                workspace={metadata?.workspace}
+                targetLine={metadata?.targetLine}
+                targetColumn={metadata?.targetColumn}
+                targetRevealKey={metadata?.targetRevealKey}
+              />
             </div>
           );
         }
@@ -452,6 +459,10 @@ const PreviewPanel: React.FC = () => {
                   onChange={updateContent}
                   containerRef={editorContainerRef}
                   onScroll={handleEditorScroll}
+                  fileName={metadata?.file_name}
+                  targetLine={metadata?.targetLine}
+                  targetColumn={metadata?.targetColumn}
+                  targetRevealKey={metadata?.targetRevealKey}
                 />
               </div>
               {/* 拖动分割线 / Drag handle */}
@@ -470,6 +481,9 @@ const PreviewPanel: React.FC = () => {
                   onScroll={handlePreviewScroll}
                   file_path={metadata?.file_path}
                   workspace={metadata?.workspace}
+                  targetLine={metadata?.targetLine}
+                  targetColumn={metadata?.targetColumn}
+                  targetRevealKey={metadata?.targetRevealKey}
                 />
               </div>
             </div>
@@ -486,6 +500,9 @@ const PreviewPanel: React.FC = () => {
           onContentChange={updateContent}
           file_path={metadata?.file_path}
           workspace={metadata?.workspace}
+          targetLine={metadata?.targetLine}
+          targetColumn={metadata?.targetColumn}
+          targetRevealKey={metadata?.targetRevealKey}
         />
       );
     }
@@ -527,6 +544,9 @@ const PreviewPanel: React.FC = () => {
                   containerRef={editorContainerRef}
                   onScroll={handleEditorScroll}
                   file_path={metadata?.file_path}
+                  targetLine={metadata?.targetLine}
+                  targetColumn={metadata?.targetColumn}
+                  targetRevealKey={metadata?.targetRevealKey}
                 />
               </div>
               {/* 拖动分割线 / Drag handle */}
@@ -567,6 +587,9 @@ const PreviewPanel: React.FC = () => {
               value={content}
               onChange={handleContentChange}
               file_path={metadata?.file_path}
+              targetLine={metadata?.targetLine}
+              targetColumn={metadata?.targetColumn}
+              targetRevealKey={metadata?.targetRevealKey}
             />
           </div>
         );
@@ -612,6 +635,7 @@ const PreviewPanel: React.FC = () => {
             readOnly={isEditable === false}
             targetLine={metadata?.targetLine}
             targetColumn={metadata?.targetColumn}
+            targetRevealKey={metadata?.targetRevealKey}
           />
         </div>
       );

@@ -35,6 +35,8 @@ export const useLocalFilePreview = (workspace?: string) => {
     async (file_path: string, reference?: LocalFileLinkReference) => {
       const fileName = getFileNameFromPath(file_path);
       const contentType = getContentTypeByExtension(fileName);
+      const targetRevealKey =
+        reference?.line == null ? undefined : `${file_path}:${reference.line}:${reference.column ?? ''}:${Date.now()}`;
       let content = '';
       let isLargeTextTruncated = false;
 
@@ -69,6 +71,7 @@ export const useLocalFilePreview = (workspace?: string) => {
             truncated: isLargeTextTruncated,
             targetLine: reference?.line,
             targetColumn: reference?.column,
+            targetRevealKey,
             editable: contentType === 'markdown' || contentType === 'image' || isLargeTextTruncated ? false : undefined,
           },
           { replace: true }
@@ -85,6 +88,7 @@ export const useLocalFilePreview = (workspace?: string) => {
             language: getPreviewLanguage(fileName),
             targetLine: reference?.line,
             targetColumn: reference?.column,
+            targetRevealKey,
             editable: false,
             missingFile: true,
           },

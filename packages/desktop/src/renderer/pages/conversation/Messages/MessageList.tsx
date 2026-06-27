@@ -176,7 +176,12 @@ const MessageListSkeleton: React.FC = () => {
   );
 };
 
-const MessageItem: React.FC<{ message: TMessage; highlighted?: boolean; showCopyRow?: boolean }> = React.memo(
+const MessageItem: React.FC<{
+  message: TMessage;
+  highlighted?: boolean;
+  showCopyButton?: boolean;
+  showTimestamp?: boolean;
+}> = React.memo(
   HOC((props) => {
     const { message, highlighted } = props as { message: TMessage; highlighted?: boolean };
     return (
@@ -199,42 +204,56 @@ const MessageItem: React.FC<{ message: TMessage; highlighted?: boolean; showCopy
         {props.children}
       </div>
     );
-  })(({ message, showCopyRow }: { message: TMessage; highlighted?: boolean; showCopyRow?: boolean }) => {
-    const { t } = useTranslation();
-    switch (message.type) {
-      case 'text':
-        return <MessageText message={message} showCopyRow={showCopyRow}></MessageText>;
-      case 'tips':
-        return <MessageTips message={message}></MessageTips>;
-      case 'tool_call':
-        return <MessageToolCall message={message}></MessageToolCall>;
-      case 'tool_group':
-        return <MessageToolGroup message={message}></MessageToolGroup>;
-      case 'agent_status':
-        return <MessageAgentStatus message={message}></MessageAgentStatus>;
-      case 'permission':
-        return <MessagePermission message={message}></MessagePermission>;
-      case 'acp_permission':
-        return <MessageAcpPermission message={message}></MessageAcpPermission>;
-      case 'acp_tool_call':
-        return <MessageAcpToolCall message={message}></MessageAcpToolCall>;
-      case 'plan':
-        return <MessagePlan message={message}></MessagePlan>;
-      case 'thinking':
-        return <MessageThinking message={message}></MessageThinking>;
-      case 'available_commands':
-        return null;
-      default:
-        return <div>{t('messages.unknownMessageType', { type: getUnhandledMessageType(message) })}</div>;
+  })(
+    ({
+      message,
+      showCopyButton,
+      showTimestamp,
+    }: {
+      message: TMessage;
+      highlighted?: boolean;
+      showCopyButton?: boolean;
+      showTimestamp?: boolean;
+    }) => {
+      const { t } = useTranslation();
+      switch (message.type) {
+        case 'text':
+          return (
+            <MessageText message={message} showCopyButton={showCopyButton} showTimestamp={showTimestamp}></MessageText>
+          );
+        case 'tips':
+          return <MessageTips message={message}></MessageTips>;
+        case 'tool_call':
+          return <MessageToolCall message={message}></MessageToolCall>;
+        case 'tool_group':
+          return <MessageToolGroup message={message}></MessageToolGroup>;
+        case 'agent_status':
+          return <MessageAgentStatus message={message}></MessageAgentStatus>;
+        case 'permission':
+          return <MessagePermission message={message}></MessagePermission>;
+        case 'acp_permission':
+          return <MessageAcpPermission message={message}></MessageAcpPermission>;
+        case 'acp_tool_call':
+          return <MessageAcpToolCall message={message}></MessageAcpToolCall>;
+        case 'plan':
+          return <MessagePlan message={message}></MessagePlan>;
+        case 'thinking':
+          return <MessageThinking message={message}></MessageThinking>;
+        case 'available_commands':
+          return null;
+        default:
+          return <div>{t('messages.unknownMessageType', { type: getUnhandledMessageType(message) })}</div>;
+      }
     }
-  }),
+  ),
   (prev, next) =>
     prev.message.id === next.message.id &&
     prev.message.content === next.message.content &&
     prev.message.position === next.message.position &&
     prev.message.type === next.message.type &&
     prev.highlighted === next.highlighted &&
-    prev.showCopyRow === next.showCopyRow
+    prev.showCopyButton === next.showCopyButton &&
+    prev.showTimestamp === next.showTimestamp
 );
 
 const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }> = ({ emptySlot }) => {
@@ -247,8 +266,8 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
   const loadAnchorMessageWindow = useLoadAnchorMessageWindow(conversationContext?.conversation_id);
   useAutoPreviewOfficeFiles(conversationContext);
   // While the agent is still streaming, the in-progress turn's last text keeps
-  // moving down, so we defer its copy/timestamp row until the turn finishes to
-  // avoid the row flashing in and the layout reflowing mid-stream.
+  // moving down, so we defer its copy button until the turn finishes to avoid
+  // inviting users to copy an incomplete final fragment.
   const { isProcessing } = useConversationRuntimeView(conversationContext?.conversation_id ?? '');
   const { t } = useTranslation();
   const location = useLocation();
@@ -362,15 +381,14 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
   }, [artifacts, list]);
 
   // An AI reply can be split into several messages (thinking / multiple text /
-  // tool blocks). The hover copy + timestamp row should appear once per turn,
-  // after the turn's last text — not under every intermediate text block.
+  // tool blocks). The copy button should appear once per turn, after the turn's
+  // last text — not under every intermediate text block.
   // Collect the id of the last AI text in each turn; a turn runs until the next
   // user (right) message. Tool/file/artifact items don't end a turn and, per the
-  // fallback strategy, the row stays on the turn's last text even when followed
-  // by tool blocks. While the conversation is still streaming, the final turn's
-  // row is withheld (it would otherwise appear then shift down as more text
-  // streams in); earlier, already-finished turns always keep their row.
-  const aiCopyRowTextIds = useMemo(() => {
+  // fallback strategy, the copy button stays on the turn's last text even when
+  // followed by tool blocks. While the conversation is still streaming, the
+  // final turn's copy button is withheld; timestamps still render for each text.
+  const aiCopyButtonTextIds = useMemo(() => {
     const ids = new Set<string>();
     let pendingTextId: string | undefined;
     let lastTurnTextId: string | undefined;
@@ -396,7 +414,7 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
     }
     lastTurnTextId = pendingTextId;
     flush();
-    // The final turn is the one that may still be streaming; hide its row until done.
+    // The final turn is the one that may still be streaming; hide its copy button until done.
     if (isProcessing && lastTurnTextId) ids.delete(lastTurnTextId);
     return ids;
   }, [processedList, isProcessing]);
@@ -599,10 +617,18 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
       );
     }
     const message = item as TMessage;
-    // User messages keep their own copy row; AI text only shows it at the turn end.
-    const showCopyRow = message.position !== 'left' || message.type !== 'text' || aiCopyRowTextIds.has(message.id);
+    // User messages keep their own copy button; AI text only shows it at the turn end.
+    const showCopyButton =
+      message.position !== 'left' || message.type !== 'text' || aiCopyButtonTextIds.has(message.id);
+    const showTimestamp = message.type !== 'text' || message.created_at != null;
     return (
-      <MessageItem message={message} key={message.id} highlighted={highlighted} showCopyRow={showCopyRow}></MessageItem>
+      <MessageItem
+        message={message}
+        key={message.id}
+        highlighted={highlighted}
+        showCopyButton={showCopyButton}
+        showTimestamp={showTimestamp}
+      ></MessageItem>
     );
   };
 

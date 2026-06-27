@@ -282,6 +282,32 @@ describe('MessageText attachment paths', () => {
     fireEvent.click(copyButton);
   });
 
+  it('can render timestamp without the copy action', () => {
+    const todayAtTenTwenty = new Date();
+    todayAtTenTwenty.setHours(10, 20, 0, 0);
+    const message: IMessageText = {
+      id: 'msg-time-only',
+      msg_id: 'msg-time-only',
+      conversation_id: 'conv-1',
+      type: 'text',
+      position: 'left',
+      created_at: todayAtTenTwenty.getTime(),
+      createdAt: Date.now(),
+      content: {
+        content: 'intermediate assistant message',
+      },
+    };
+
+    render(
+      <ConversationProvider value={{ conversationId: 'conv-1', workspace: '/workspace/demo', type: 'acp' }}>
+        <MessageText message={message} showCopyButton={false} showTimestamp />
+      </ConversationProvider>
+    );
+
+    expect(screen.queryByRole('button', { name: 'Copy' })).not.toBeInTheDocument();
+    expect(screen.getByText('10:20')).toHaveClass('message-meta-time');
+  });
+
   it('opens a missing-file preview when a local markdown link no longer exists', async () => {
     vi.mocked(ipcBridge.fs.getFileMetadata.invoke).mockResolvedValue(null);
     localFileLinkMocks.payload = {
@@ -309,6 +335,7 @@ describe('MessageText attachment paths', () => {
           editable: false,
           targetLine: 10,
           targetColumn: 2,
+          targetRevealKey: expect.any(String),
         }),
         { replace: true }
       );
@@ -344,6 +371,7 @@ describe('MessageText attachment paths', () => {
           language: 'ts',
           targetLine: 42,
           targetColumn: 7,
+          targetRevealKey: expect.any(String),
           truncated: false,
         }),
         { replace: true }
@@ -380,6 +408,7 @@ describe('MessageText attachment paths', () => {
           language: 'ts',
           targetLine: 10,
           targetColumn: undefined,
+          targetRevealKey: expect.any(String),
           truncated: false,
         }),
         { replace: true }

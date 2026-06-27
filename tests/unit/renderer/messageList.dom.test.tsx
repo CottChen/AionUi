@@ -66,8 +66,20 @@ vi.mock('@/renderer/pages/conversation/Messages/useAutoScroll', () => ({
 }));
 
 vi.mock('@/renderer/pages/conversation/Messages/components/MessageText', () => ({
-  default: ({ message, showCopyRow }: { message: IMessageText; showCopyRow?: boolean }) => (
-    <div data-testid={`msgtext-${message.id}`} data-copy-row={String(showCopyRow ?? true)}>
+  default: ({
+    message,
+    showCopyButton,
+    showTimestamp,
+  }: {
+    message: IMessageText;
+    showCopyButton?: boolean;
+    showTimestamp?: boolean;
+  }) => (
+    <div
+      data-testid={`msgtext-${message.id}`}
+      data-copy-button={String(showCopyButton ?? true)}
+      data-timestamp={String(showTimestamp ?? true)}
+    >
       {message.content.content}
     </div>
   ),
@@ -195,9 +207,9 @@ describe('MessageList', () => {
     expect(messageRow.className).not.toContain('max-w-780px');
   });
 
-  it('shows the copy row only on the last AI text of each turn', () => {
-    // Turn 1: thinking + text(a) + tool + text(b) -> row only on text(b).
-    // A user message ends the turn. Turn 2: text(c) -> row on text(c).
+  it('shows timestamps on each AI text and copy only on the last AI text of each turn', () => {
+    // Turn 1: thinking + text(a) + tool + text(b) -> copy only on text(b).
+    // A user message ends the turn. Turn 2: text(c) -> copy on text(c).
     const messages = [
       { id: 'think-1', type: 'thinking', position: 'left', content: { content: 'thinking' }, created_at: 1 },
       { id: 'text-a', type: 'text', position: 'left', content: { content: 'a' }, created_at: 2 },
@@ -211,17 +223,19 @@ describe('MessageList', () => {
       wrapper: ({ children }) => <Wrapper messages={messages}>{children}</Wrapper>,
     });
 
-    // Intermediate AI text (followed by a tool then another text) hides the row.
-    expect(screen.getByTestId('msgtext-text-a').getAttribute('data-copy-row')).toBe('false');
-    // Last AI text of turn 1 (after the tool block) keeps the row — fallback strategy.
-    expect(screen.getByTestId('msgtext-text-b').getAttribute('data-copy-row')).toBe('true');
-    // User message always keeps its own row.
-    expect(screen.getByTestId('msgtext-user-1').getAttribute('data-copy-row')).toBe('true');
-    // Turn 2's only/last text keeps the row.
-    expect(screen.getByTestId('msgtext-text-c').getAttribute('data-copy-row')).toBe('true');
+    // Intermediate AI text (followed by a tool then another text) hides copy but keeps timestamp.
+    expect(screen.getByTestId('msgtext-text-a').getAttribute('data-copy-button')).toBe('false');
+    expect(screen.getByTestId('msgtext-text-a').getAttribute('data-timestamp')).toBe('true');
+    // Last AI text of turn 1 (after the tool block) keeps copy — fallback strategy.
+    expect(screen.getByTestId('msgtext-text-b').getAttribute('data-copy-button')).toBe('true');
+    expect(screen.getByTestId('msgtext-text-b').getAttribute('data-timestamp')).toBe('true');
+    // User message always keeps its own copy.
+    expect(screen.getByTestId('msgtext-user-1').getAttribute('data-copy-button')).toBe('true');
+    // Turn 2's only/last text keeps copy.
+    expect(screen.getByTestId('msgtext-text-c').getAttribute('data-copy-button')).toBe('true');
   });
 
-  it('withholds the streaming turn copy row but keeps earlier finished turns', () => {
+  it('withholds the streaming turn copy button but keeps timestamps and earlier finished turns', () => {
     mockIsProcessing = true;
     // Turn 1 finished (text-a), then a user message, then turn 2 still streaming (text-b).
     const messages = [
@@ -234,10 +248,11 @@ describe('MessageList', () => {
       wrapper: ({ children }) => <Wrapper messages={messages}>{children}</Wrapper>,
     });
 
-    // Earlier finished turn keeps its row even while a later turn streams.
-    expect(screen.getByTestId('msgtext-text-a').getAttribute('data-copy-row')).toBe('true');
-    // The in-progress final turn withholds its row until streaming ends.
-    expect(screen.getByTestId('msgtext-text-b').getAttribute('data-copy-row')).toBe('false');
+    // Earlier finished turn keeps copy even while a later turn streams.
+    expect(screen.getByTestId('msgtext-text-a').getAttribute('data-copy-button')).toBe('true');
+    // The in-progress final turn withholds copy until streaming ends, but still shows time.
+    expect(screen.getByTestId('msgtext-text-b').getAttribute('data-copy-button')).toBe('false');
+    expect(screen.getByTestId('msgtext-text-b').getAttribute('data-timestamp')).toBe('true');
   });
 
   it('renders the empty slot when there are no messages', () => {

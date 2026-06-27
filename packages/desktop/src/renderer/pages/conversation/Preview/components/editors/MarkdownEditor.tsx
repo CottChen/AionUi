@@ -13,6 +13,7 @@ import { getMarkdownHighlightStyle } from '../../theme/markdownHighlightStyle';
 import { codeEditorSurfaceTheme } from '../../theme/codeEditorTheme';
 import React, { useRef, useCallback } from 'react';
 import { useCodeMirrorScroll, useScrollSyncTarget } from '../../hooks/useScrollSyncHelpers';
+import { useRevealCodeMirrorTarget } from '../../hooks/useRevealCodeMirrorTarget';
 
 interface MarkdownEditorProps {
   value: string; // 编辑器内容 / Editor content
@@ -20,6 +21,10 @@ interface MarkdownEditorProps {
   readOnly?: boolean; // 是否只读 / Whether read-only
   containerRef?: React.RefObject<HTMLDivElement>; // 容器引用，用于滚动同步 / Container ref for scroll sync
   onScroll?: (scrollTop: number, scrollHeight: number, clientHeight: number) => void; // 滚动回调 / Scroll callback
+  fileName?: string; // 用于定位去重 / File identity for reveal de-duplication
+  targetLine?: number; // 打开文件后定位到的目标行 / Target line to reveal
+  targetColumn?: number; // 打开文件后定位到的目标列 / Target column to reveal
+  targetRevealKey?: string; // 重新触发行号定位 / Re-trigger line reveal
 }
 
 /**
@@ -35,12 +40,23 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   readOnly = false,
   containerRef,
   onScroll,
+  fileName,
+  targetLine,
+  targetColumn,
+  targetRevealKey,
 }) => {
   const { theme } = useThemeContext();
   const editorWrapperRef = useRef<HTMLDivElement>(null);
 
   // 使用 CodeMirror 滚动 Hook / Use CodeMirror scroll hook
   const { setScrollPercent } = useCodeMirrorScroll(editorWrapperRef, onScroll);
+  const revealTarget = useRevealCodeMirrorTarget({
+    fileIdentity: fileName,
+    targetLine,
+    targetColumn,
+    targetRevealKey,
+    value,
+  });
 
   // 监听外部滚动同步请求 / Listen for external scroll sync requests
   const handleTargetScroll = useCallback(
@@ -67,6 +83,7 @@ const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
             Prec.highest(codeEditorSurfaceTheme()),
           ]}
           onChange={onChange}
+          onCreateEditor={revealTarget}
           readOnly={readOnly}
           basicSetup={{
             lineNumbers: true, // 显示行号 / Show line numbers
