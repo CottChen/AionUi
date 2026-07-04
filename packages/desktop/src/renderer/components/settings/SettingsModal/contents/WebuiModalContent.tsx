@@ -5,7 +5,7 @@
  */
 
 import { WEBUI_DEFAULT_PORT } from '@/common/config/constants';
-import { conversation, shell, team, webui, type IWebUIStatus, type IWebUIUser } from '@/common/adapter/ipcBridge';
+import { auth, conversation, shell, team, webui, type IWebUIStatus, type IWebUIUser } from '@/common/adapter/ipcBridge';
 import { isBackendHttpError } from '@/common/adapter/httpBridge';
 import { configService } from '@/common/config/configService';
 import AionModal from '@/renderer/components/base/AionModal';
@@ -94,7 +94,7 @@ const WebuiModalContent: React.FC = () => {
 
   // 检测是否在 Electron 桌面环境 / Check if running in Electron desktop environment
   const isDesktop = isElectronDesktop();
-  const { user: authUser } = useAuth();
+  const { user: authUser, logout } = useAuth();
   const canManageUsers = isDesktop || authUser?.isAdmin === true;
 
   const [status, setStatus] = useState<IWebUIStatus | null>(null);
@@ -110,6 +110,8 @@ const WebuiModalContent: React.FC = () => {
   // 设置新密码弹窗 / Set new password modal
   const [setPasswordModalVisible, setSetPasswordModalVisible] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
+  const [changeOwnPasswordModalVisible, setChangeOwnPasswordModalVisible] = useState(false);
+  const [changeOwnPasswordLoading, setChangeOwnPasswordLoading] = useState(false);
   const [setUsernameModalVisible, setSetUsernameModalVisible] = useState(false);
   const [usernameLoading, setUsernameLoading] = useState(false);
   const [users, setUsers] = useState<IWebUIUser[]>([]);
@@ -121,6 +123,7 @@ const WebuiModalContent: React.FC = () => {
     null
   );
   const [form] = Form.useForm();
+  const [changeOwnPasswordForm] = Form.useForm();
   const [usernameForm] = Form.useForm();
   const [createUserForm] = Form.useForm();
   const [transferOwnerForm] = Form.useForm<TransferOwnerFormValues>();
@@ -490,6 +493,43 @@ const WebuiModalContent: React.FC = () => {
     }
   };
 
+  const handleChangeOwnPassword = async () => {
+    try {
+      const values = await changeOwnPasswordForm.validate();
+      setChangeOwnPasswordLoading(true);
+
+      await auth.changePassword.invoke({
+        currentPassword: String(values.currentPassword || ''),
+        newPassword: String(values.newPassword || ''),
+      });
+      Message.success(t('settings.webui.passwordChanged'));
+      setChangeOwnPasswordModalVisible(false);
+      changeOwnPasswordForm.resetFields();
+
+      if (!isDesktop) {
+        await logout();
+      }
+    } catch (error) {
+      console.error('Change own WebUI password error:', error);
+      const errorCodeMap: Record<string, string> = {
+        PASSWORD_TOO_SHORT: t('settings.webui.passwordTooShort'),
+        PASSWORD_TOO_LONG: t('settings.webui.passwordTooLong'),
+        PASSWORD_TOO_COMMON: t('settings.webui.passwordTooCommon'),
+      };
+      const rawMsg =
+        isBackendHttpError(error) && error.backendMessage
+          ? error.backendMessage
+          : error instanceof Error
+            ? error.message
+            : '';
+      const codes = rawMsg.split('; ');
+      const translated = codes.map((code) => errorCodeMap[code]).filter(Boolean);
+      Message.error(translated.length > 0 ? translated.join('; ') : rawMsg || t('settings.webui.passwordChangeFailed'));
+    } finally {
+      setChangeOwnPasswordLoading(false);
+    }
+  };
+
   const handleSetNewUsername = async () => {
     try {
       const values = await usernameForm.validate();
@@ -679,6 +719,55 @@ const WebuiModalContent: React.FC = () => {
   };
   const displayPassword = getDisplayPassword();
   const displayUsername = status?.adminUsername || 'admin';
+  const currentUsername = authUser?.username || displayUsername;
+  const changeOwnPasswordModal = (
+    <AionModal
+      visible={changeOwnPasswordModalVisible}
+      onCancel={() => setChangeOwnPasswordModalVisible(false)}
+      onOk={handleChangeOwnPassword}
+      confirmLoading={changeOwnPasswordLoading}
+      title={t('settings.webui.changePassword')}
+      size='small'
+    >
+      <Form form={changeOwnPasswordForm} layout='vertical' className='pt-16px'>
+        <Form.Item
+          label={t('settings.webui.currentPassword')}
+          field='currentPassword'
+          rules={[{ required: true, message: t('settings.webui.currentPasswordRequired') }]}
+        >
+          <Input.Password placeholder={t('settings.webui.currentPasswordPlaceholder')} />
+        </Form.Item>
+        <Form.Item
+          label={t('settings.webui.newPassword')}
+          field='newPassword'
+          rules={[
+            { required: true, message: t('settings.webui.newPasswordRequired') },
+            { minLength: 8, message: t('settings.webui.passwordMinLength') },
+          ]}
+        >
+          <Input.Password placeholder={t('settings.webui.newPasswordPlaceholder')} />
+        </Form.Item>
+        <Form.Item
+          label={t('settings.webui.confirmPassword')}
+          field='confirmPassword'
+          rules={[
+            { required: true, message: t('settings.webui.confirmPasswordRequired') },
+            {
+              validator: (value, callback) => {
+                if (value !== changeOwnPasswordForm.getFieldValue('newPassword')) {
+                  callback(t('settings.webui.passwordMismatch'));
+                } else {
+                  callback();
+                }
+              },
+            },
+          ]}
+        >
+          <Input.Password placeholder={t('settings.webui.confirmPasswordPlaceholder')} />
+        </Form.Item>
+      </Form>
+    </AionModal>
+  );
 
   // 浏览器端只显示 Channels 配置，不显示 WebUI 服务配置 / In browser mode, only show Channels config, not WebUI service config
   if (!isDesktop) {
@@ -686,12 +775,25 @@ const WebuiModalContent: React.FC = () => {
       <div className='flex flex-col h-full w-full'>
         <AionScrollArea className='flex-1 min-h-0 pb-16px' disableOverflow={isPageMode}>
           <div className='space-y-16px'>
+            <div className='px-[12px] md:px-[28px] py-14px bg-2 rd-16px'>
+              <div className='text-14px font-500 mb-8px text-t-primary'>{t('settings.webui.accountInfo')}</div>
+              <div className='flex items-center justify-between gap-12px py-8px'>
+                <div className='min-w-0'>
+                  <div className='text-13px text-t-secondary'>{t('settings.webui.username')}</div>
+                  <div className='text-14px text-t-primary truncate mt-2px'>{currentUsername}</div>
+                </div>
+                <Button size='small' onClick={() => setChangeOwnPasswordModalVisible(true)}>
+                  {t('settings.webui.changePassword')}
+                </Button>
+              </div>
+            </div>
             <h2 className='text-20px font-500 text-t-primary m-0'>Channels</h2>
             <Suspense fallback={<div className='text-13px text-t-secondary'>{t('common.loading')}</div>}>
               <ChannelModalContentLazy />
             </Suspense>
           </div>
         </AionScrollArea>
+        {changeOwnPasswordModal}
       </div>
     );
   }
@@ -858,6 +960,13 @@ const WebuiModalContent: React.FC = () => {
             </div>
           </div>
 
+          <div className='flex items-center justify-between gap-12px py-12px border-t border-line'>
+            <span className='text-14px text-t-secondary shrink-0'>{t('settings.webui.changePassword')}:</span>
+            <Button size='small' onClick={() => setChangeOwnPasswordModalVisible(true)}>
+              {t('settings.webui.changePassword')}
+            </Button>
+          </div>
+
           {/* 二维码登录（仅服务器运行且允许远程访问时显示）/ QR Code Login (only when server running and remote access allowed) */}
           {status?.running && status.allowRemote && (
             <>
@@ -977,11 +1086,7 @@ const WebuiModalContent: React.FC = () => {
                       <div className='text-12px text-t-tertiary truncate'>{item.id}</div>
                     </div>
                     <div className='flex items-center gap-6px shrink-0'>
-                      <Button
-                        size='mini'
-                        disabled={item.isAdmin}
-                        onClick={() => void handleResetUserPassword(item)}
-                      >
+                      <Button size='mini' disabled={item.isAdmin} onClick={() => void handleResetUserPassword(item)}>
                         {t('settings.webui.resetPassword')}
                       </Button>
                       <Button
@@ -999,9 +1104,7 @@ const WebuiModalContent: React.FC = () => {
             </div>
 
             <div className='border-t border-line mt-12px pt-12px'>
-              <div className='text-14px font-500 text-t-primary mb-8px'>
-                {t('settings.webui.transferOwnerTitle')}
-              </div>
+              <div className='text-14px font-500 text-t-primary mb-8px'>{t('settings.webui.transferOwnerTitle')}</div>
               <Form
                 form={transferOwnerForm}
                 layout='vertical'
@@ -1104,6 +1207,8 @@ const WebuiModalContent: React.FC = () => {
           </Suspense>
         </div>
       )}
+
+      {changeOwnPasswordModal}
 
       <AionModal
         visible={setUsernameModalVisible}

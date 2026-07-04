@@ -1344,8 +1344,20 @@ export const webui = {
   ),
   deleteUser: httpDelete<void, { id: string }>((p) => `/api/webui/users/${encodeURIComponent(p.id)}`),
   resetUserPassword: withResponseMap(
-    httpPost<{ new_password: string }, { id: string }>((p) => `/api/webui/users/${encodeURIComponent(p.id)}/reset-password`),
+    httpPost<{ new_password: string }, { id: string }>(
+      (p) => `/api/webui/users/${encodeURIComponent(p.id)}/reset-password`
+    ),
     (raw) => ({ newPassword: raw.new_password })
+  ),
+};
+
+export const auth = {
+  changePassword: httpPost<void, { currentPassword: string; newPassword: string }>(
+    '/api/auth/change-password',
+    (p) => ({
+      current_password: p.currentPassword,
+      new_password: p.newPassword,
+    })
   ),
 };
 
@@ -1955,10 +1967,7 @@ export const team = {
     })),
     fromBackendTeam
   ),
-  list: withResponseMap(
-    httpGet<TTeam[], void>('/api/teams'),
-    fromBackendTeamList
-  ),
+  list: withResponseMap(httpGet<TTeam[], void>('/api/teams'), fromBackendTeamList),
   get: withResponseMap(
     httpGet<TTeam | null, { id: string }>((p) => `/api/teams/${p.id}`),
     fromBackendTeamOptional

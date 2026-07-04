@@ -121,7 +121,10 @@ describe('httpBridge', () => {
       expect(fetchSpy).toHaveBeenCalledTimes(1);
       expect(fetchSpy.mock.calls[0][1]?.method).toBe('POST');
       expect(fetchSpy.mock.calls[0][1]?.body).toBe('{"k":"v"}');
-      expect(fetchSpy.mock.calls[0][1]?.headers).toEqual({ 'Content-Type': 'application/json' });
+      expect(fetchSpy.mock.calls[0][1]?.headers).toEqual({
+        'Content-Type': 'application/json',
+        'x-aionui-internal': '1',
+      });
     });
 
     it('applies mapBody custom mapper', async () => {
@@ -392,7 +395,8 @@ describe('httpBridge', () => {
       expect(result).toEqual({ result: 'ok' });
       expect(fetchSpy).toHaveBeenCalledWith(expect.stringContaining('/api/test'), {
         method: 'GET',
-        headers: {},
+        headers: { 'x-aionui-internal': '1' },
+        credentials: 'include',
         body: undefined,
       });
     });
@@ -410,7 +414,10 @@ describe('httpBridge', () => {
       await httpRequest('POST', '/api/create', { key: 'value' });
 
       expect(fetchSpy.mock.calls[0][1]?.body).toBe('{"key":"value"}');
-      expect(fetchSpy.mock.calls[0][1]?.headers).toEqual({ 'Content-Type': 'application/json' });
+      expect(fetchSpy.mock.calls[0][1]?.headers).toEqual({
+        'Content-Type': 'application/json',
+        'x-aionui-internal': '1',
+      });
     });
   });
 
