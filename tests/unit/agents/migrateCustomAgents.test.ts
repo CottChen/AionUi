@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@/common', () => ({
   ipcBridge: {
     acpConversation: {
-      getAvailableAgents: { invoke: vi.fn(async () => []) },
+      getManagedAgents: { invoke: vi.fn(async () => []) },
       createCustomAgent: { invoke: vi.fn(async (payload) => ({ id: payload.id })) },
       setAgentEnabled: { invoke: vi.fn(async () => undefined) },
     },
@@ -39,7 +39,7 @@ function makeConfig(seed: Record<string, unknown> = {}): FakeConfig {
 describe('migrateCustomAgents', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    ipcBridge.acpConversation.getAvailableAgents.invoke.mockResolvedValue([]);
+    ipcBridge.acpConversation.getManagedAgents.invoke.mockResolvedValue([]);
     ipcBridge.acpConversation.createCustomAgent.invoke.mockImplementation(async (payload) => ({ id: payload.id }));
     ipcBridge.acpConversation.setAgentEnabled.invoke.mockResolvedValue(undefined);
   });
@@ -105,7 +105,7 @@ describe('migrateCustomAgents', () => {
   it('skips backend rows that already exist', async () => {
     const legacyRows = [{ id: 'legacy-custom-1', name: 'Legacy Custom', defaultCliPath: 'legacy-cli' }];
     const config = makeConfig({ 'acp.customAgents': legacyRows });
-    ipcBridge.acpConversation.getAvailableAgents.invoke.mockResolvedValue([
+    ipcBridge.acpConversation.getManagedAgents.invoke.mockResolvedValue([
       { id: 'legacy-custom-1', agent_source: 'custom' },
     ]);
 

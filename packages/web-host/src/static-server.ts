@@ -135,6 +135,7 @@ const PEEK_LIMIT_BYTES = 4096;
  * so the endpoint sees the full HTTP request as-sent.
  */
 function spliceToTcpEndpoint(client: Socket, targetPort: number, initialBytes: Buffer): void {
+  client.pause();
   client.setNoDelay(true);
   client.setKeepAlive(true);
   client.setTimeout(0);
@@ -145,6 +146,7 @@ function spliceToTcpEndpoint(client: Socket, targetPort: number, initialBytes: B
     if (initialBytes.length > 0) upstream.write(initialBytes);
     upstream.pipe(client);
     client.pipe(upstream);
+    client.resume();
   });
   const tearDown = (): void => {
     client.destroy();
@@ -154,6 +156,69 @@ function spliceToTcpEndpoint(client: Socket, targetPort: number, initialBytes: B
   client.on('error', tearDown);
   upstream.on('close', tearDown);
   client.on('close', tearDown);
+}
+
+function forwardUpgradeToBackend(client: Socket, targetPort: number, initialBytes: Buffer): void {
+  client.pause();
+  const raw = initialBytes.toString('latin1');
+  const headerEnd = raw.indexOf('\r\n\r\n');
+  const headerBlock = headerEnd >= 0 ? raw.slice(0, headerEnd) : raw;
+  const [requestLine = '', ...headerLines] = headerBlock.split('\r\n');
+  const [method = 'GET', path = '/'] = requestLine.split(/\s+/);
+  const headers: Record<string, string> = {};
+  for (const line of headerLines) {
+    const idx = line.indexOf(':');
+    if (idx <= 0) continue;
+    headers[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
+  }
+
+  const proxy = http.request({
+    hostname: '127.0.0.1',
+    port: targetPort,
+    path,
+    method,
+    headers: { ...headers, host: `127.0.0.1:${targetPort}` },
+  });
+
+  const tearDown = (): void => {
+    client.destroy();
+    proxy.destroy();
+  };
+
+  proxy.on('upgrade', (res, upstream, head) => {
+    client.write(`HTTP/${res.httpVersion} ${res.statusCode} ${res.statusMessage}\r\n`);
+    for (const [name, value] of Object.entries(res.headers)) {
+      if (Array.isArray(value)) {
+        for (const item of value) client.write(`${name}: ${item}\r\n`);
+      } else if (value !== undefined) {
+        client.write(`${name}: ${value}\r\n`);
+      }
+    }
+    client.write('\r\n');
+    if (head.length > 0) client.write(head);
+    upstream.pipe(client);
+    client.pipe(upstream);
+    client.resume();
+    upstream.on('error', tearDown);
+    client.on('error', tearDown);
+    upstream.on('close', () => client.destroy());
+    client.on('close', () => upstream.destroy());
+  });
+
+  proxy.on('response', (res) => {
+    client.write(`HTTP/${res.httpVersion} ${res.statusCode ?? 502} ${res.statusMessage}\r\n`);
+    for (const [name, value] of Object.entries(res.headers)) {
+      if (Array.isArray(value)) {
+        for (const item of value) client.write(`${name}: ${item}\r\n`);
+      } else if (value !== undefined) {
+        client.write(`${name}: ${value}\r\n`);
+      }
+    }
+    client.write('\r\n');
+    res.pipe(client);
+  });
+  proxy.on('error', tearDown);
+  proxy.end();
 }
 
 /**
@@ -171,7 +236,9 @@ function peekWsRoute(buf: Buffer): boolean | null {
   const newlineIdx = buf.indexOf(0x0a); // \n
   if (newlineIdx < 0) return null;
   const firstLine = buf.slice(0, newlineIdx).toString('ascii');
-  return /^GET\s+\/(?:ws|api\/stt\/stream)(?:\?[^\s]*)?\s+HTTP\/1\.[01]\r?$/.test(firstLine);
+  const isWsRoute = /^GET\s+\/(?:ws|api\/stt\/stream)(?:\?[^\s]*)?\s+HTTP\/1\.[01]\r?$/.test(firstLine);
+  if (!isWsRoute) return false;
+  return buf.indexOf('\r\n\r\n') >= 0 ? true : null;
 }
 
 export async function startStaticServer(opts: StaticServerOptions): Promise<StaticServerHandle> {
@@ -189,6 +256,9 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
   // socket delivered to the `upgrade` handler, so the backend's 101 response
   // never reaches the browser (see #2824). Making the outer listener pure
   // TCP avoids touching that code path on both bun and node.
+  const httpSockets = new Set<Socket>();
+  const tcpSockets = new Set<Socket>();
+
   const http_server: Server = http.createServer(async (req, res) => {
     try {
       if (!req.url || !req.method) {
@@ -218,6 +288,10 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
       }
     }
   });
+  http_server.on('connection', (socket: Socket) => {
+    httpSockets.add(socket);
+    socket.on('close', () => httpSockets.delete(socket));
+  });
 
   // Internal HTTP server — 127.0.0.1 ephemeral port, never visible to the user.
   await new Promise<void>((resolve, reject) => {
@@ -237,6 +311,8 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
   // server (everything else). Both routes use raw TCP splice — no reliance
   // on http.Server's upgrade event.
   const tcp_server = net.createServer((client: Socket) => {
+    tcpSockets.add(client);
+    client.on('close', () => tcpSockets.delete(client));
     let peeked = Buffer.alloc(0);
     let settled = false;
     const cleanup = (): void => {
@@ -251,8 +327,11 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
       const decision = peekWsRoute(peeked);
       if (decision === null && peeked.length < PEEK_LIMIT_BYTES) return;
       cleanup();
-      const target = decision === true ? opts.backendPort : internalPort;
-      spliceToTcpEndpoint(client, target, peeked);
+      if (decision === true) {
+        forwardUpgradeToBackend(client, opts.backendPort, peeked);
+      } else {
+        spliceToTcpEndpoint(client, internalPort, peeked);
+      }
     };
     const onEarlyError = (): void => {
       cleanup();
@@ -266,6 +345,7 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
     client.on('data', onData);
     client.on('error', onEarlyError);
     client.on('end', onEarlyEnd);
+    client.resume();
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -289,6 +369,8 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
     lanIP,
     stop: () =>
       new Promise<void>((resolve) => {
+        for (const socket of tcpSockets) socket.destroy();
+        for (const socket of httpSockets) socket.destroy();
         tcp_server.close(() => {
           http_server.close(() => resolve());
         });

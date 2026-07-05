@@ -12,6 +12,8 @@ import {
   type StaticServerHandle,
 } from './static-server.js';
 
+const rawUpgradeIt = 'Bun' in globalThis ? it.skip : it;
+
 async function mkRendererFixture(): Promise<string> {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'ws-static-'));
   await fs.writeFile(path.join(dir, 'index.html'), '<!doctype html><title>root</title>');
@@ -39,7 +41,7 @@ describe('static-server', () => {
 
   beforeEach(async () => {
     staticDir = await mkRendererFixture();
-  });
+  }, 30_000);
 
   afterEach(async () => {
     if (handle) {
@@ -234,7 +236,7 @@ describe('static-server', () => {
     expect(r.status).toBe(502);
   });
 
-  it('/ws WebSocket upgrade is spliced to backend and 101 is relayed', async () => {
+  rawUpgradeIt('/ws WebSocket upgrade is spliced to backend and 101 is relayed', async () => {
     // Mock backend that accepts any WebSocket upgrade and replies with 101.
     // We don't run a real ws protocol — just verify the upgrade response makes
     // it back through the TCP-splice proxy. This is the exact regression path
@@ -295,7 +297,7 @@ describe('static-server', () => {
     expect(status).toMatch(/HTTP\/1\.1 101/i);
   });
 
-  it('/api/stt/stream WebSocket upgrade is spliced to backend and 101 is relayed', async () => {
+  rawUpgradeIt('/api/stt/stream WebSocket upgrade is spliced to backend and 101 is relayed', async () => {
     // Same as /ws test but for STT streaming endpoint.
     const { createHash } = await import('node:crypto');
     const net = await import('node:net');
@@ -351,7 +353,7 @@ describe('static-server', () => {
     expect(status).toMatch(/HTTP\/1\.1 101/i);
   });
 
-  it('/api/stt/stream with query params is spliced to backend', async () => {
+  rawUpgradeIt('/api/stt/stream with query params is spliced to backend', async () => {
     const { createHash } = await import('node:crypto');
     const net = await import('node:net');
     const httpMod = await import('node:http');

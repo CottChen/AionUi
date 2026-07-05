@@ -4,16 +4,16 @@
  * SPDX-License-Identifier: Apache-2.0
  *
  * Regression coverage for the Guid action row responsive split:
- * mobile keeps core actions visible and moves long config labels into the
- * existing action sheet pattern; desktop keeps inline config controls.
+ * mobile keeps core actions visible and marks long config labels for compact
+ * styling; desktop keeps the same inline config controls without the marker.
  */
 
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { LayoutContext } from '@/renderer/hooks/context/LayoutContext';
-import GuidActionRow, { type GuidMobileModelEntry } from '@/renderer/pages/guid/components/GuidActionRow';
+import GuidActionRow from '@/renderer/pages/guid/components/GuidActionRow';
 
 vi.mock('@/common', () => ({
   ipcBridge: {
@@ -39,42 +39,6 @@ vi.mock('@/renderer/utils/platform', () => ({
 vi.mock('@/renderer/components/agent/AgentModeSelector', () => ({
   __esModule: true,
   default: () => <div data-testid='inline-agent-mode'>Permission inline</div>,
-}));
-
-vi.mock('@/renderer/components/chat/MobileActionSheet', () => ({
-  __esModule: true,
-  default: ({
-    open,
-    entries,
-  }: {
-    open: boolean;
-    entries: Array<{
-      key: string;
-      label: React.ReactNode;
-      meta?: React.ReactNode;
-      submenu?: { options: Array<{ key: string; label: React.ReactNode }> };
-    }>;
-  }) =>
-    open ? (
-      <div data-testid='mobile-action-sheet'>
-        {entries.map((entry) => (
-          <section key={entry.key} data-testid={`sheet-entry-${entry.key}`}>
-            <span>{entry.label}</span>
-            {entry.meta && <span>{entry.meta}</span>}
-            {entry.submenu?.options.map((option) => (
-              <span key={option.key}>{option.label}</span>
-            ))}
-          </section>
-        ))}
-      </div>
-    ) : null,
-}));
-
-vi.mock('@/renderer/hooks/agent/useAgentModesForBackend', () => ({
-  useAgentModesForBackend: () => [
-    { value: 'read-only', label: 'Read Only' },
-    { value: 'full-access', label: 'Full Access' },
-  ],
 }));
 
 vi.mock('@arco-design/web-react', () => ({
@@ -129,37 +93,17 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-const mobileModelEntry: GuidMobileModelEntry = {
-  key: 'model',
-  label: 'Model',
-  meta: 'a-very-long-provider-model-name-that-should-not-live-inline-on-mobile',
-  submenu: {
-    title: 'Model',
-    options: [
-      {
-        key: 'long-model',
-        label: 'a-very-long-provider-model-name-that-should-not-live-inline-on-mobile',
-        active: true,
-      },
-    ],
-    onSelect: vi.fn(),
-  },
-};
-
 const defaultProps = {
   files: [],
   onFilesUploaded: vi.fn(),
   modelSelectorNode: <div data-testid='inline-model-selector'>Inline model selector</div>,
-  mobileModelEntry,
-  selectedAgent: 'codex' as const,
-  effectiveModeAgent: 'codex',
+  modeBackend: 'codex',
   selectedMode: 'full-access',
+  dynamicModes: [
+    { value: 'read-only', label: 'Read Only' },
+    { value: 'full-access', label: 'Full Access' },
+  ],
   onModeSelect: vi.fn(),
-  is_presetAgent: false,
-  selectedAgentInfo: undefined,
-  assistants: [],
-  localeKey: 'en',
-  onClosePresetTag: vi.fn(),
   allSkills: [],
   disabledBuiltinSkills: [],
   enabledSkills: [],
@@ -181,19 +125,12 @@ const renderActionRow = (isMobile: boolean) =>
   );
 
 describe('GuidActionRow responsive config controls', () => {
-  it('moves model and permission controls into the mobile action sheet', () => {
+  it('marks inline config controls for compact mobile styling', () => {
     renderActionRow(true);
 
-    expect(screen.queryByTestId('inline-model-selector')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('inline-agent-mode')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByTestId('file-upload-btn'));
-
-    expect(screen.getByTestId('mobile-action-sheet')).toBeInTheDocument();
-    expect(screen.getByTestId('sheet-entry-model')).toHaveTextContent(
-      'a-very-long-provider-model-name-that-should-not-live-inline-on-mobile'
-    );
-    expect(screen.getByTestId('sheet-entry-permission')).toHaveTextContent('Full Access');
+    expect(screen.getByTestId('inline-model-selector')).toBeInTheDocument();
+    expect(screen.getByTestId('inline-agent-mode')).toBeInTheDocument();
+    expect(screen.getByTestId('inline-model-selector').parentElement).toHaveAttribute('data-mobile', 'true');
   });
 
   it('keeps inline model and permission controls on desktop', () => {
@@ -201,6 +138,6 @@ describe('GuidActionRow responsive config controls', () => {
 
     expect(screen.getByTestId('inline-model-selector')).toBeInTheDocument();
     expect(screen.getByTestId('inline-agent-mode')).toBeInTheDocument();
-    expect(screen.queryByTestId('mobile-action-sheet')).not.toBeInTheDocument();
+    expect(screen.getByTestId('inline-model-selector').parentElement).not.toHaveAttribute('data-mobile');
   });
 });

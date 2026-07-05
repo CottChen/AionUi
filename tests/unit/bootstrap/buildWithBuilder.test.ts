@@ -40,7 +40,7 @@ describe('build-with-builder', () => {
     writeFileSync(
       hookPath,
       `
-const childProcess = require('node:child_process');
+const childProcess = require('child_process');
 const fs = require('node:fs');
 const Module = require('node:module');
 const path = require('node:path');
@@ -55,22 +55,6 @@ function recordPrepareCall(options) {
   return { prepared: true, dir: 'mock-bundled-aioncore', sourceType: 'mock' };
 }
 
-Module._load = function patchedLoad(request, parent, isMain) {
-  if (request === './prepareAioncore' || request.endsWith('/prepareAioncore')) {
-    return recordPrepareCall;
-  }
-
-  if (request.endsWith('packages/shared-scripts/src/prepare-aioncore.js')) {
-    return { prepareAioncore: recordPrepareCall };
-  }
-
-  if (request === './resolveAioncoreVersion.js' || request.endsWith('/resolveAioncoreVersion.js')) {
-    return { resolveAioncoreVersion: () => 'v-test' };
-  }
-
-  return originalLoad.call(this, request, parent, isMain);
-};
-
 // Satisfy build-with-builder's output checks without clobbering real build
 // artifacts: out/ lives in the actual repo (the script resolves it from its
 // own __dirname), so only create empty placeholders when nothing is there.
@@ -82,26 +66,54 @@ function ensurePlaceholder(relativePath) {
   }
 }
 
-childProcess.execSync = function mockedExecSync(command) {
+function mockedExecSync(command) {
   const commandText = String(command);
   if (commandText.includes('electron-vite build')) {
     ensurePlaceholder('out/main/index.js');
     ensurePlaceholder('out/renderer/index.html');
   }
   return Buffer.from('');
+}
+
+Module._load = function patchedLoad(request, parent, isMain) {
+  let resolved = '';
+  try {
+    resolved = Module._resolveFilename(request, parent, isMain);
+  } catch {
+    resolved = '';
+  }
+  const moduleRef = String(request) + ' ' + String(resolved);
+
+  if (request === 'child_process' || request === 'node:child_process') {
+    return { ...childProcess, execSync: mockedExecSync };
+  }
+
+  if (moduleRef.includes('prepare-aioncore') || request === './prepareAioncore' || request.endsWith('/prepareAioncore')) {
+    return { prepareAioncore: recordPrepareCall };
+  }
+
+  if (moduleRef.endsWith('packages/shared-scripts/src/prepare-aioncore.js')) {
+    return { prepareAioncore: recordPrepareCall };
+  }
+
+  if (request === './resolveAioncoreVersion.js' || moduleRef.includes('resolveAioncoreVersion.js')) {
+    return { resolveAioncoreVersion: () => 'v-test' };
+  }
+
+  return originalLoad.call(this, request, parent, isMain);
 };
 `,
       'utf8'
     );
 
     try {
-      const result = spawnSync(process.execPath, ['scripts/build-with-builder.js', ...args], {
+      const result = spawnSync('node', [`--require=${hookPath}`, 'scripts/build-with-builder.js', ...args], {
         cwd: repoRoot,
         encoding: 'utf8',
         env: {
           ...process.env,
           AIONUI_PREPARE_CALLS_FILE: callsPath,
-          NODE_OPTIONS: [process.env.NODE_OPTIONS, `--require=${hookPath}`].filter(Boolean).join(' '),
+          NODE_OPTIONS: process.env.NODE_OPTIONS,
         },
       });
 

@@ -13,7 +13,7 @@ describe('Sentry release CI configuration', () => {
     const workflow = readRepoFile('.github/workflows/_build-reusable.yml');
 
     expect(workflow).toContain('Validate Sentry source map upload configuration');
-    expect(workflow).toContain("matrix.platform == 'linux-x64'");
+    expect(workflow).toContain('"${{ matrix.platform }}" == "linux-x64"');
     expect(workflow).toContain('SENTRY_AUTH_TOKEN SENTRY_ORG SENTRY_PROJECT SENTRY_RELEASE');
     expect(workflow).toContain('SENTRY_RELEASE');
   });

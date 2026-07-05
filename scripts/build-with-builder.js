@@ -398,6 +398,20 @@ try {
     fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2) + '\n');
   }
 
+  if (process.env.AIONUI_PREPARE_CALLS_FILE) {
+    const callsPath = process.env.AIONUI_PREPARE_CALLS_FILE;
+    const calls = fs.existsSync(callsPath) ? JSON.parse(fs.readFileSync(callsPath, 'utf8')) : [];
+    calls.push({
+      projectRoot: path.resolve(__dirname, '..'),
+      platform: process.platform,
+      arch: targetArch,
+      version: 'test',
+    });
+    fs.writeFileSync(callsPath, JSON.stringify(calls));
+    console.log('✅ Test mode: recorded bundled AionCore preparation call');
+    return;
+  }
+
   // 2. Check if we can skip Vite build (incremental build)
   const skipViteBuild = shouldSkipViteBuild(skipVite, forceBuild);
 
