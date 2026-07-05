@@ -339,10 +339,24 @@ export function stubProvider<Data, Params = undefined>(name: string, defaultValu
 // ---------------------------------------------------------------------------
 
 type WsCallback = (data: unknown) => void;
+const REALTIME_RECONNECTED_EVENT = 'realtime.reconnected';
 const wsListeners = new Map<string, Set<WsCallback>>();
 let ws: WebSocket | null = null;
 let wsReconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let wsReconnectAttempt = 0;
+let wsHasOpened = false;
+
+function dispatchWsEvent(eventName: string, payload: unknown): void {
+  const handlers = wsListeners.get(eventName);
+  if (!handlers) return;
+  for (const handler of handlers) {
+    try {
+      handler(payload);
+    } catch {
+      /* never crash listener */
+    }
+  }
+}
 
 function ensureWs(): void {
   if (typeof window === 'undefined') {
@@ -368,7 +382,12 @@ function ensureWs(): void {
 
   current.addEventListener('open', () => {
     console.debug('[ensureWs] CONNECTED');
+    const isReconnect = wsHasOpened;
+    wsHasOpened = true;
     wsReconnectAttempt = 0;
+    if (isReconnect) {
+      dispatchWsEvent(REALTIME_RECONNECTED_EVENT, { timestamp: Date.now() });
+    }
   });
 
   current.addEventListener('close', (e) => {
@@ -394,16 +413,7 @@ function ensureWs(): void {
       const payload = msg.data ?? msg.payload;
       console.debug('[WS:msg]', eventName, JSON.stringify(payload).slice(0, 200));
       if (eventName) {
-        const handlers = wsListeners.get(eventName);
-        if (handlers) {
-          for (const h of handlers) {
-            try {
-              h(payload);
-            } catch {
-              /* never crash listener */
-            }
-          }
-        }
+        dispatchWsEvent(eventName, payload);
       }
     } catch {
       // ignore non-JSON

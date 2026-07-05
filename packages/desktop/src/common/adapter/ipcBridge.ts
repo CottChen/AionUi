@@ -36,7 +36,7 @@ import type {
 } from '../types/agent/assistantTypes';
 import type { PreviewHistoryTarget, PreviewSnapshotInfo } from '../types/office/preview';
 import type {
-  GetConfigOptionsResponse,
+  EnsureConversationRuntimeResponse,
   SetConfigOptionRequest,
   SetConfigOptionResponse,
 } from '../types/platform/acpTypes';
@@ -61,6 +61,7 @@ import type {
   ITeamRenamedEvent,
   ITeamRunAck,
   ITeamRunEvent,
+  ITeamRunStateResponse,
   ITeamSessionChangedEvent,
   ITeamTaskChangedEvent,
   ICancelTeamChildTurnParams,
@@ -227,7 +228,14 @@ export const conversation = {
     (p) => ({ target_user_id: p.targetUserId })
   ),
   reset: httpPost<void, IResetConversationParams>((p) => `/api/conversations/${p.id}/reset`),
-  warmup: httpPost<void, { conversation_id: string }>((p) => `/api/conversations/${p.conversation_id}/warmup`),
+  ensureRuntime: httpPost<EnsureConversationRuntimeResponse, { conversation_id: string }>(
+    (p) => `/api/conversations/${p.conversation_id}/runtime/ensure`,
+    () => undefined
+  ),
+  activeLease: httpPost<void, { conversation_id: string }>(
+    (p) => `/api/conversations/${p.conversation_id}/active-lease`,
+    () => undefined
+  ),
   stop: httpPost<{ runtime: TConversationRuntimeSummary }, { conversation_id: string; turn_id: string }>(
     (p) => `/api/conversations/${p.conversation_id}/cancel`,
     (p) => ({ turn_id: p.turn_id })
@@ -560,11 +568,13 @@ export const fs = {
   readFile: httpPost<string | null, { path: string; workspace?: string }>('/api/fs/read'),
   readFileBuffer: httpPost<string | null, { path: string; workspace?: string }>('/api/fs/read-buffer'),
   createTempFile: httpPost<string, { file_name: string }>('/api/fs/temp'),
-  writeFile: httpPost<boolean, { path: string; data: string }>('/api/fs/write'),
+  writeFile: httpPost<boolean, { path: string; data: string; workspace?: string }>('/api/fs/write'),
   createZip: httpPost<
     boolean,
     {
       path: string;
+      workspace?: string;
+      source_root?: string;
       request_id?: string;
       files: Array<{
         name: string;
@@ -579,8 +589,8 @@ export const fs = {
     { copied_files: string[]; failed_files?: Array<{ path: string; error: string }> },
     { file_paths: string[]; workspace: string; source_root?: string }
   >('/api/fs/copy'),
-  removeEntry: httpPost<void, { path: string }>('/api/fs/remove'),
-  renameEntry: httpPost<{ new_path: string }, { path: string; new_name: string }>('/api/fs/rename'),
+  removeEntry: httpPost<void, { path: string; workspace?: string }>('/api/fs/remove'),
+  renameEntry: httpPost<{ new_path: string }, { path: string; new_name: string; workspace?: string }>('/api/fs/rename'),
   readBuiltinRule: httpPost<string, { file_name: string }>('/api/skills/builtin-rule'),
   readBuiltinSkill: httpPost<string, { file_name: string }>('/api/skills/builtin-skill'),
   readAssistantRule: httpPost<string, { assistant_id: string; locale?: string }>('/api/skills/assistant-rule/read'),
@@ -896,10 +906,6 @@ export const acpConversation = {
   ),
   checkProviderHealth: httpPost<ProviderHealthCheckResponse, ProviderHealthCheckRequest>(
     '/api/agents/provider-health-check'
-  ),
-  getConfigOptions: httpGet<GetConfigOptionsResponse, { conversation_id: string }>(
-    (p) => `/api/conversations/${p.conversation_id}/config-options`,
-    { silentStatuses: [404] }
   ),
   setConfigOption: httpPut<SetConfigOptionResponse, { conversation_id: string; option_id: string; value: string }>(
     (p) => `/api/conversations/${p.conversation_id}/config-options/${encodeURIComponent(p.option_id)}`,
@@ -1971,6 +1977,14 @@ export const hub = {
 
 export type { IAddTeamAssistantParams, ICreateTeamParams } from './teamMapper';
 
+export type IRealtimeReconnectedEvent = {
+  timestamp: number;
+};
+
+export const realtime = {
+  reconnected: wsEmitter<IRealtimeReconnectedEvent>('realtime.reconnected'),
+};
+
 export const team = {
   create: withResponseMap(
     httpPost<TTeam, ICreateTeamParams>('/api/teams', (p) => ({
@@ -1998,6 +2012,10 @@ export const team = {
   ),
   stop: httpDelete<void, { team_id: string }>((p) => `/api/teams/${p.team_id}/session`),
   ensureSession: httpPost<void, { team_id: string }>((p) => `/api/teams/${p.team_id}/session`),
+  activeLease: httpPost<void, { team_id: string }>(
+    (p) => `/api/teams/${p.team_id}/active-lease`,
+    () => undefined
+  ),
   renameAgent: httpPatch<void, { team_id: string; slot_id: string; new_name: string }>(
     (p) => `/api/teams/${p.team_id}/agents/${p.slot_id}/name`,
     (p) => ({ name: p.new_name })
@@ -2014,6 +2032,7 @@ export const team = {
     (p) => `/api/teams/${p.team_id}/session-mode`,
     (p) => ({ mode: p.session_mode })
   ),
+  getRunState: httpGet<ITeamRunStateResponse, { team_id: string }>((p) => `/api/teams/${p.team_id}/run-state`),
   sendMessage: httpPost<ITeamRunAck, ISendTeamMessageParams>(
     (p) => `/api/teams/${p.team_id}/messages`,
     (p) => ({

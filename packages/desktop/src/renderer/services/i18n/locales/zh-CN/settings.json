@@ -127,6 +127,31 @@
   "assistantSourceCli": "CLI",
   "assistantSectionEnabled": "已启用",
   "assistantSectionDisabled": "已禁用",
+  "assistantTabMine": "我的助手",
+  "assistantTabOfficial": "官方助手",
+  "assistantHomeLead": "助手是配好技能和工具、能直接上岗的 AI 专家。这里有你本机的 CLI、你亲手调教的助手，还有一批官方专家。启用后，它们就会出现在你的对话、开团和定时任务里，随时待命。",
+  "assistantHomeLeadShort": "配好技能和工具、能直接上岗的 AI 专家。启用后即可用于对话、开团和定时任务。",
+  "assistantReorderHintShort": "拖拽排序",
+  "myAssistantsHintShort": "由本机 CLI 自动生成、你自己创建或从官方复制的助手。拖拽可调整它们的展示顺序。",
+  "assistantRuntimeLabel": "Agent:",
+  "assistantGoChat": "去对话",
+  "assistantReorderHint": "拖拽可调整顺序，它决定你挑选助手时（首页、开团、定时任务等）列表里的展示先后。",
+  "assistantGroupCli": "CLI 助手",
+  "assistantGroupCreated": "自定义助手",
+  "myAssistantsEmpty": "你的助手列表还是空的。去「官方助手」启用一个专家，或让 AionUi 识别你本机的 CLI 工具。",
+  "customEmptyTitle": "还没有自定义助手",
+  "customEmptyBody": "可以通过对话来创建一个，或从官方助手复制一个。",
+  "customEmptyCreate": "通过对话创建",
+  "customEmptyBrowseOfficial": "逛逛官方助手",
+  "officialAssistantsHint": "官方助手由 AionUi 持续维护、随版本更新能力。启用后即可在你的对话、开团和定时任务里使用；若想调整成专属于你的版本，可将它复制为我的助手。",
+  "officialAssistantsHintShort": "AionUi 内置的官方助手，由官方持续维护、随版本更新；可复制为「我的助手」后自由修改。",
+  "reorderCoachTitle": "拖拽调整顺序",
+  "reorderCoachBody": "把你常用的助手拖到前面——这个顺序决定你挑选助手时（首页、开团、定时任务等）列表里的展示先后。",
+  "assistantFilter": {
+    "all": "全部",
+    "enabled": "已启用",
+    "disabled": "已禁用"
+  },
   "searchAssistants": "按名称或描述搜索助手",
   "assistantNoMatch": "没有匹配当前筛选条件的助手。",
   "assistantCreated": "助手已创建",
@@ -147,8 +172,8 @@
   "deleteAssistantTitle": "删除助手",
   "deleteAssistantConfirm": "确定要删除此助手吗？此操作无法撤销。",
   "cannotDeleteBuiltin": "无法删除内置助手",
-  "duplicateAssistant": "复制新建",
-  "assistantMainAgent": "主代理",
+  "duplicateAssistant": "复制为我的助手",
+  "assistantMainAgent": "Agent",
   "assistantName": "名称",
   "assistantIdentitySection": "身份",
   "assistantEngineSection": "引擎",
@@ -158,7 +183,7 @@
   "assistantManagedSkillsSummary": "内置规则与技能默认值会随官方版本更新保持一致。",
   "assistantManagedPromptCount": "当前由产品内置维护 {{count}} 条推荐提示词。",
   "assistantManagedPromptFallback": "推荐提示词由产品内置维护。",
-  "assistantEngineAffectsDefaults": "更换主代理后，下方可选的模型和权限范围会随之更新。",
+  "assistantEngineAffectsDefaults": "更换 Agent 后，下方可选的模型和权限范围会随之更新。",
   "assistantEffectiveImmediately": "改动立即生效",
   "assistantOnlyNewConversation": "仅对新会话生效",
   "assistantDefaultModelLabel": "默认模型",
@@ -185,10 +210,10 @@
   "assistantNoDefaultMcpsSelected": "未选择默认 MCP",
   "assistantRecommendedPromptsLabel": "推荐提示词",
   "assistantRecommendedPromptsPlaceholder": "每行输入一条建议提示词",
-  "assistantBuiltinReadonlyTip": "这是内置助手，可修改「主代理」「默认模型」和「默认权限」。如需自定义其他配置，请",
-  "assistantBuiltinReadonlyDuplicateLink": "复制新建",
+  "assistantBuiltinReadonlyTip": "这是官方助手，仅支持修改引擎相关的配置。如需自定义其他内容，请",
+  "assistantBuiltinReadonlyDuplicateLink": "复制为「我的助手」",
   "assistantBuiltinReadonlyTipSuffix": "。",
-  "assistantCliReadonlyTip": "该助手由 Agents 自动生成，与对应 CLI 一对一关联。名称、头像、主代理不可修改；其余配置可自由编辑，并仅保存在本地，不会被更新覆盖。",
+  "assistantCliReadonlyTip": "该助手由 Agent 自动生成，与对应 CLI 一对一关联。名称、头像、Agent 不可修改，其余配置可自由编辑。",
   "addSkills": "添加技能",
   "customSkills": "自定义技能",
   "builtinSkills": "内置技能",
@@ -925,7 +950,8 @@
     "agentDescTelegram": "用于与Channel进行对话",
     "autoFollowCliModel": "自动跟随CLI运行时的模型",
     "agentSwitched": "助手切换成功",
-    "modelSwitched": "模型切换成功"
+    "modelSwitched": "模型切换成功",
+    "name": "助手"
   },
   "lark": {
     "appId": "App ID",
@@ -1041,7 +1067,15 @@
     "step4": "授权成功后，即可通过企业微信与 AI 助手对话",
     "waitingConnection": "请确保 WebUI 已运行，以便企微能访问回调地址",
     "agent": "对话 Agent",
-    "agentDesc": "用于企业微信对话"
+    "agentDesc": "用于企业微信对话",
+    "wsTitle": "企业微信 WebSocket 连接",
+    "wsHint": "使用企业微信智能机器人「长连接（WebSocket）」模式。无需回调 URL、域名或公网 IP。",
+    "botId": "Bot ID",
+    "botIdDesc": "企业微信智能机器人（长连接模式）的 Bot ID",
+    "secret": "Secret",
+    "secretDesc": "企业微信智能机器人（长连接模式）的 Secret",
+    "callbackPublic": "公网",
+    "callbackRecommendation": "建议：使用反向代理 + 证书，或 Cloudflare Tunnel / ngrok 映射到本机。"
   },
   "addAssistant": "添加助手",
   "agentManagement": {
@@ -1082,6 +1116,7 @@
     "statusNeedsAuth": "需登录",
     "statusOffline": "不可用",
     "statusMissing": "未安装",
+    "statusUnchecked": "未检测",
     "statusUnknown": "未知",
     "localAgentsEmpty": "未检测到本地 Agent",
     "detected": "已检测",
@@ -1128,7 +1163,8 @@
     "envScenarioApiKey": "缺少 API 密钥或访问令牌（如 ANTHROPIC_API_KEY、OPENAI_API_KEY）——这是「需登录」/ 连接失败最常见的原因",
     "envScenarioBaseUrl": "自定义 API 地址或网关（如 ANTHROPIC_BASE_URL、OPENAI_BASE_URL），用于自建或代理的服务",
     "envScenarioProxy": "网络代理设置（如 HTTPS_PROXY、HTTP_PROXY），当 Agent 无法直接访问网络时",
-    "envOauthNote": "注意：这无法替代在 CLI 中的账号登录（例如用 Google 账号登录 Gemini）。OAuth 登录请在终端里通过 CLI 完成。"
+    "envOauthNote": "注意：这无法替代在 CLI 中的账号登录（例如用 Google 账号登录 Gemini）。OAuth 登录请在终端里通过 CLI 完成。",
+    "emptyOverridesError": "请先填写启动路径或至少一个环境变量。"
   },
   "remoteAgent": {
     "title": "远程 Agent",
@@ -1201,6 +1237,7 @@
   },
   "updateReadyInstall": "{{version}} 已就绪, 立即安装",
   "assistantAgentUnavailable": "所依赖的 Agent 当前不可用。",
+  "assistantAgentUnchecked": "所依赖的 Agent 尚未检测。",
   "assistantAgentMissing": "所依赖的 Agent 尚未安装。",
   "assistantTeamUnsupported": "该助手目前无法在团队模式中使用。",
   "webui.letButlerSetup": "让管家帮我设置",
@@ -1220,5 +1257,6 @@
       "setupRemote": "帮我配置远程访问，让我在手机或外网也能打开 AionUi。",
       "diagnose": "我在使用 AionUi 时遇到问题，帮我排查一下。\n\n【模块】{{module}}\n【问题描述】{{description}}\n【附件】见输入框中的截图。\n\n请帮我诊断原因并给出解决办法。"
     }
-  }
+  },
+  "providerIdConflict": "Provider ID 已存在，请重试。"
 }

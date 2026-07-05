@@ -9,11 +9,38 @@ import type { ICronJob, ICronJobUpdateParams } from '@/common/adapter/ipcBridge'
 import type { TChatConversation } from '@/common/config/storage';
 import { emitter } from '@/renderer/utils/emitter';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useConversationListSync } from '@renderer/pages/conversation/GroupedHistory/hooks/useConversationListSync';
 import { repairCronJobTimeZones } from '@renderer/pages/cron/repairCronJobTimeZone';
+import { formatCronRunConversationTitle } from '@renderer/pages/cron/cronUtils';
+import { getActivityTime } from '@/renderer/utils/chat/timeline';
 
 const isJobErrorLike = (job: ICronJob): boolean => {
   return job.state.last_status === 'error' || job.state.last_status === 'missed';
+};
+
+const renameLatestNewConversationRun = async (job: ICronJob): Promise<void> => {
+  if (job.target?.execution_mode !== 'new_conversation' || !job.state.last_run_at_ms) {
+    return;
+  }
+
+  try {
+    const conversations = await ipcBridge.conversation.listByCronJob.invoke({ cron_job_id: job.id });
+    const latestConversation = (conversations ?? []).toSorted((a, b) => getActivityTime(b) - getActivityTime(a))[0];
+    if (!latestConversation) return;
+
+    const nextName = formatCronRunConversationTitle(
+      job.name,
+      latestConversation.created_at || job.state.last_run_at_ms
+    );
+    if (latestConversation.name === nextName) return;
+
+    await ipcBridge.conversation.update.invoke({
+      id: latestConversation.id,
+      updates: { name: nextName },
+    });
+    emitter.emit('chat.history.refresh');
+  } catch (error) {
+    console.error('[useCronJobsMap] Failed to rename cron run conversation:', error);
+  }
 };
 
 /**
@@ -332,6 +359,7 @@ export function useCronJobsMap() {
         const newLastRunAt = job.state.last_run_at_ms;
         if (newLastRunAt && newLastRunAt !== prevLastRunAt) {
           lastRunAtMapRef.current.set(job.id, newLastRunAt);
+          void renameLatestNewConversationRun(job);
 
           // Mark as unread only if user is not currently viewing this conversation
           // Use ref to access the latest activeConversationId value
@@ -477,36 +505,77 @@ export function useCronJobsMap() {
   );
 }
 
-/**
- * Hook for fetching conversations spawned by a specific cron job.
- *
- * Derives the result from the shared `useConversationListSync` store
- * (which already keeps the full conversation list cached and updated via
- * the `conversation.listChanged` / `responseStream` channels) instead of
- * issuing a per-row `GET /api/cron/jobs/{id}/conversations`. With N cron
- * rows in the Sider that endpoint was the busiest path in the access
- * log on every app start.
- *
- * @param job_id - The cron job ID to fetch conversations for
- */
 export function useCronJobConversations(job_id: string | undefined) {
-  const { conversations: allConversations } = useConversationListSync();
+  const [conversations, setConversations] = useState<TChatConversation[]>([]);
+  const [loading, setLoading] = useState(Boolean(job_id));
+  const requestSeqRef = useRef(0);
 
-  const conversations = useMemo<TChatConversation[]>(() => {
-    if (!job_id) return [];
-    return allConversations.filter((conversation) => {
-      const extra = conversation.extra as { cron_job_id?: unknown; cronJobId?: unknown } | undefined;
-      const cronId =
-        typeof extra?.cron_job_id === 'string'
-          ? extra.cron_job_id
-          : typeof extra?.cronJobId === 'string'
-            ? extra.cronJobId
-            : '';
-      return cronId === job_id;
+  const fetchConversations = useCallback(async () => {
+    const requestSeq = requestSeqRef.current + 1;
+    requestSeqRef.current = requestSeq;
+
+    if (!job_id) {
+      setConversations([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const result = await ipcBridge.conversation.listByCronJob.invoke({ cron_job_id: job_id });
+      if (requestSeqRef.current === requestSeq) {
+        setConversations(result ?? []);
+      }
+    } catch (err) {
+      console.error('[useCronJobConversations] Failed to fetch conversations:', err);
+      if (requestSeqRef.current === requestSeq) {
+        setConversations([]);
+      }
+    } finally {
+      if (requestSeqRef.current === requestSeq) {
+        setLoading(false);
+      }
+    }
+  }, [job_id]);
+
+  useEffect(() => {
+    void fetchConversations();
+  }, [fetchConversations]);
+
+  useEffect(() => {
+    if (!job_id) return;
+
+    const refreshIfCurrentJob = (job: ICronJob) => {
+      if (job.id === job_id) {
+        void fetchConversations();
+      }
+    };
+    const unsubCreated = ipcBridge.cron.onJobCreated.on(refreshIfCurrentJob);
+    const unsubUpdated = ipcBridge.cron.onJobUpdated.on(refreshIfCurrentJob);
+    const unsubRemoved = ipcBridge.cron.onJobRemoved.on(({ job_id: removedJobId }) => {
+      if (removedJobId === job_id) {
+        setConversations([]);
+      }
     });
-  }, [allConversations, job_id]);
+    const unsubExecuted = ipcBridge.cron.onJobExecuted.on(({ job_id: executedJobId }) => {
+      if (executedJobId === job_id) {
+        void fetchConversations();
+      }
+    });
+    const unsubListChanged = ipcBridge.conversation.listChanged.on(() => {
+      void fetchConversations();
+    });
 
-  return { conversations, loading: false };
+    return () => {
+      unsubCreated();
+      unsubUpdated();
+      unsubRemoved();
+      unsubExecuted();
+      unsubListChanged();
+    };
+  }, [fetchConversations, job_id]);
+
+  return { conversations, loading, refetch: fetchConversations };
 }
 
 export default useCronJobs;

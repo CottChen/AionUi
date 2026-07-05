@@ -133,7 +133,7 @@ export async function migrateCustomAgentsToBackend(configFile: ConfigFile): Prom
 
   let existingIds: Set<string>;
   try {
-    const existing = await ipcBridge.acpConversation.getAvailableAgents.invoke();
+    const existing = await ipcBridge.acpConversation.getManagedAgents.invoke();
     existingIds = new Set(
       (Array.isArray(existing) ? existing : [])
         .filter((agent) => agent.agent_source === 'custom')

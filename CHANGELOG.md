@@ -1,5 +1,152 @@
 # Changelog
 
+## [2.1.29](https://github.com/iOfficeAI/AionUi/compare/v2.1.28...v2.1.29) (2026-07-03)
+
+### Desktop
+
+#### Bug Fixes
+
+- **assistant:** use management catalog for editor engines (#3511)
+- **cron:** improve scheduled task conversation history (#3510)
+- show unchecked agents and rotate frontend logs by message date (#3507)
+- **assistant:** return to My Assistants after duplicating/creating
+
+#### Features
+
+- **assistant:** promote assistants to a top-level sidebar entry
+- **assistant:** unify selection-list ordering, keep CLI agents on top
+- **assistant:** rebuild management page into My / Official tabs
+- **assistant:** reword official read-only banner and make copy link inline
+- **assistant:** custom-empty state, return-to-official on save, field polish
+
+#### Refactoring
+
+- **layout:** move conversation search into the titlebar toolbar
+
+#### Styling
+
+- **assistant:** apply oxfmt formatting to assistant home components
+
+### Core ([v0.1.42](https://github.com/iOfficeAI/AionCore/releases/tag/v0.1.42))
+
+#### Bug Fixes
+
+- **agent:** align unchecked availability with team runtime selection (#571)
+- **agent:** avoid full availability refresh on reads (#566)
+- **cron:** preserve existing conversation jobs across lifecycle changes (#572)
+- **mcp:** support aionrs config path subcommand with legacy fallback (#568)
+- preserve ACP config catalogs on resume (#570)
+- preserve Linux GLIBC baselines (#573)
+
+#### Features
+
+- **assistant:** 官方助手默认关闭 + 固定顺序 + 一次性重置迁移 (#567)
+
+---
+
+## [2.1.28](https://github.com/iOfficeAI/AionUi/compare/v2.1.27...v2.1.28) (2026-07-02)
+
+### Desktop
+
+#### Bug Fixes
+
+- **i18n:** resolve main locale gaps (#3503)
+- **startup:** confirm corrupted database rebuild (#3502)
+- **team:** pass capabilities to team chat send box (#3501)
+- **runtime:** coordinate foreground leases and runtime ensure (#3497)
+- **cron:** lock team cron task editing (#3496)
+- **desktop:** support dated frontend log layout (#3495)
+- **assistant:** render empty avatars consistently (#3493)
+- **cron:** support team context job navigation (#3492)
+- **acp:** dedupe runtime option requests (#3490)
+- **assistant:** correct engine section badge tone to warning
+- **cron:** sync manual task assistant selection (#3485)
+- **desktop:** wait for macOS update install readiness (#3484)
+
+#### Features
+
+- **i18n:** add Persian (fa-IR) locale support (#3284)
+- **i18n:** add complete Spanish (es-ES) translation (#3402)
+- **conversation:** keep batch-selection panel pinned while scrolling
+- **conversation:** keep project folder header sticky while scrolling
+- **conversation:** reveal active conversation by expanding its section and folder
+- **conversation:** surface session skills in slash command menu
+
+### Core ([v0.1.41](https://github.com/iOfficeAI/AionCore/releases/tag/v0.1.41))
+
+#### Bug Fixes
+
+- **assistant:** normalize avatar storage and identity (#558)
+- **conversation:** derive assistant runtime type from metadata (#555)
+- **conversation:** partition temp workspaces and logs by date (#560)
+- **cron:** apply custom assistant rules in scheduled runs (#495)
+- **cron:** lock team cron execution mode (#562)
+- **cron:** route skill scheduling through helper (#553)
+- **database:** require explicit corrupted database recovery (#563)
+- resolve ACP backends from metadata (#559)
+- **runtime:** harden managed Node command resolution (#565)
+- **runtime:** protect active ACP tasks from idle cleanup (#561)
+- **skill:** raise import size limits (#564)
+- **skills:** correct AionUi Butler skill drift against current backend (#557)
+
+---
+
+## [2.1.27](https://github.com/iOfficeAI/AionUi/compare/v2.1.26...v2.1.27) (2026-06-30)
+
+### Desktop
+
+#### Bug Fixes
+
+- **team:** reconcile stale run state (#3480)
+- **cron:** preserve scheduled task conversations (#3479)
+- **cron:** restore scheduled conversations to history (#3478)
+- **mcp:** isolate backend cwd for stdio tools (#3476)
+- **agent:** show ACP model descriptions (#3463)
+
+### Core ([v0.1.40](https://github.com/iOfficeAI/AionCore/releases/tag/v0.1.40))
+
+#### Features
+
+- **team:** add run state snapshot endpoint (#549)
+
+#### Bug Fixes
+
+- **acp:** preserve selectors for partial config snapshots (#548)
+- **cron:** restore create command heading (#547)
+- **cron:** run jobs through conversation service (#546)
+- **skills:** repair butler endpoint drift + add cron scheduling (#550)
+- **windows:** handle runtime process lifecycle
+
+---
+
+## [2.1.26](https://github.com/iOfficeAI/AionUi/compare/v2.1.25...v2.1.26) (2026-06-29)
+
+### Desktop
+
+#### Bug Fixes
+
+- **agent:** tighten repair save and test flow (#3470)
+- **guid:** remember last selected assistant (#3468)
+- **assistant:** prefer runtime config options for defaults (#3466)
+- **conversation:** restore team chat full width (#3464)
+- **fs:** pass workspace roots to local fs routes (#3451)
+
+#### Styling
+
+- **settings:** clean up assistant card more-button
+
+### Core ([v0.1.39](https://github.com/iOfficeAI/AionCore/releases/tag/v0.1.39))
+
+#### Bug Fixes
+
+- **agent:** adapt aionrs compat API (#528)
+- **agent:** guard internal Aion CLI command overrides (#538)
+- **app:** reuse conversation service for channel messages (#531)
+- **assistant:** preserve builtin override selections (#535)
+- **file:** trust local workspace roots for fs routes (#527)
+
+---
+
 ## [2.1.25](https://github.com/iOfficeAI/AionUi/compare/v2.1.24...v2.1.25) (2026-06-26)
 
 ### Desktop

@@ -7,7 +7,6 @@ import { ipcBridge } from '@/common';
 import { resolveLocaleKey } from '@/common/utils';
 import type { TTeam } from '@/common/types/team/teamTypes';
 import type { TeamAssistantInput } from '@/common/adapter/teamMapper';
-import { useAuth } from '@renderer/hooks/context/AuthContext';
 import { useConversationAssistants } from '@renderer/pages/conversation/hooks/useConversationAssistants';
 import AionModal from '@renderer/components/base/AionModal';
 import { WorkspaceFolderSelect } from '@renderer/components/workspace';
@@ -80,7 +79,6 @@ const AssistantRadioRow: React.FC<{
 const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
   const { t, i18n } = useTranslation();
   const localeKey = resolveLocaleKey(i18n?.language ?? 'en-US');
-  const { user } = useAuth();
   const { presetAssistants } = useConversationAssistants();
   const [name, setName] = useState('');
   const [leaderAssistantId, setLeaderAssistantId] = useState<string | undefined>(undefined);
@@ -145,7 +143,6 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
       Message.warning(t('team.create.leaderRequired', { defaultValue: 'Please select a team leader' }));
       return;
     }
-    const user_id = user?.id ?? 'system_default_user';
     setLoading(true);
     try {
       const assistants: TeamAssistantInput[] = [];
@@ -163,7 +160,6 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
       });
 
       const team = await ipcBridge.team.create.invoke({
-        user_id,
         name,
         workspace,
         workspace_mode: 'shared',

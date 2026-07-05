@@ -15,6 +15,8 @@ import { useTeamPendingPermissions } from './hooks/useTeamPendingPermissions';
 import AcpModelSelector from '@/renderer/components/agent/AcpModelSelector';
 import AionrsModelSelector from '@/renderer/pages/conversation/platforms/aionrs/AionrsModelSelector';
 import { useAionrsModelSelection } from '@/renderer/pages/conversation/platforms/aionrs/useAionrsModelSelection';
+import { CronJobManager } from '@/renderer/pages/cron';
+import { resolveCronJobId } from '@/renderer/pages/cron/cronUtils';
 import TeamTabs from './components/TeamTabs';
 import TeamChatView from './components/TeamChatView';
 import TeamAgentIdentity from './components/TeamAgentIdentity';
@@ -23,8 +25,9 @@ import { TeamPermissionProvider, useTeamPermission } from './hooks/TeamPermissio
 import { useTeamSession } from './hooks/useTeamSession';
 import { useTeamRunView, type TeamRunViewState } from './hooks/useTeamRunView';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
-import { warmupConversation } from '@/renderer/pages/conversation/utils/warmupConversation';
+import { useActiveLease } from '@/renderer/pages/conversation/hooks/useActiveLease';
 import { resolveTeamWorkspaceView } from './utils/teamWorkspaceView';
+import { removeTeamAssistantWithCronCleanup } from './utils/removeTeamAssistantWithCronCleanup';
 
 type Props = {
   team: TTeam;
@@ -68,8 +71,7 @@ const AionrsHeaderModelSelector: React.FC<{ conversation_id: string; initialMode
   const modelSelection = useAionrsModelSelection({ initialModel, onSelectModel });
   const prepareRuntimeConfig = useCallback(async () => {
     await teamPermission?.warmupSession();
-    await warmupConversation(conversation_id);
-  }, [conversation_id, teamPermission]);
+  }, [teamPermission]);
   const runtimeConfig = useAcpConfigOptions({
     conversation_id,
     prepareRuntime: prepareRuntimeConfig,
@@ -108,6 +110,7 @@ const AssistantChatSlot: React.FC<{
   onRemove?: () => void;
   teamRunView: TeamRunViewState;
   onTeamRunAck: ReturnType<typeof useTeamRunView>['applyAck'];
+  onRunStateStale: ReturnType<typeof useTeamRunView>['reconcile'];
 }> = ({
   assistant,
   team_id,
@@ -117,6 +120,7 @@ const AssistantChatSlot: React.FC<{
   onRemove,
   teamRunView,
   onTeamRunAck,
+  onRunStateStale,
 }) => {
   const layout = useLayoutContext();
   const isMobile = layout?.isMobile ?? false;
@@ -128,6 +132,7 @@ const AssistantChatSlot: React.FC<{
   const isAionrs = conversation?.type === 'aionrs';
   const initialModelId = (conversation?.extra as { current_model_id?: string })?.current_model_id;
   const isAcpLike = conversation?.type === 'acp' || isAcpLikeBackend(assistant.assistant_backend);
+  const cronJobId = resolveCronJobId(conversation?.extra);
 
   return (
     <div
@@ -159,6 +164,7 @@ const AssistantChatSlot: React.FC<{
           nameClassName='text-13px text-[color:var(--color-text-2)] font-medium'
         />
         <div className='flex items-center gap-8px shrink-0'>
+          {conversation && <CronJobManager conversation_id={conversation.id} cron_job_id={cronJobId} />}
           {!isMobile && assistant.conversation_id && !isAionrs && isAcpLike && (
             <div className='min-w-0 max-w-140px [&_button]:max-w-full [&_button_span]:truncate'>
               <AcpModelSelector
@@ -180,6 +186,7 @@ const AssistantChatSlot: React.FC<{
           )}
           {!isLeader && onRemove && (
             <div
+              data-testid={`team-remove-assistant-${assistant.slot_id}`}
               className='shrink-0 cursor-pointer hover:bg-[var(--fill-3)] p-4px rd-4px text-[color:var(--color-text-3)] hover:text-[color:var(--color-danger-6)] transition-colors'
               onClick={onRemove}
             >
@@ -206,6 +213,7 @@ const AssistantChatSlot: React.FC<{
             isLeader={isLeader}
             teamRunView={teamRunView}
             onTeamRunAck={onTeamRunAck}
+            onRunStateStale={() => onRunStateStale('pause.stale')}
           />
         ) : (
           <div className='flex flex-1 items-center justify-center'>
@@ -220,6 +228,7 @@ const AssistantChatSlot: React.FC<{
 /** Inner component that reads active tab from context and renders the chat layout */
 const TeamPageContent: React.FC<TeamPageContentProps> = ({ team, onRenameTeam }) => {
   const { t } = useTranslation();
+  useActiveLease({ type: 'team', id: team.id });
   const { assistants, activeSlotId, statusMap, switchTab } = useTeamTabs();
   const [, messageContext] = Message.useMessage({ maxCount: 1 });
 
@@ -236,7 +245,13 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({ team, onRenameTeam })
   const doRemoveAssistant = useCallback(
     async (slot_id: string) => {
       try {
-        await ipcBridge.team.removeAgent.invoke({ team_id: team.id, slot_id });
+        await removeTeamAssistantWithCronCleanup({
+          team,
+          slot_id,
+          getConversation: getConversationOrNull,
+          removeCronJob: (job_id) => ipcBridge.cron.removeJob.invoke({ job_id }),
+          removeAgent: (params) => ipcBridge.team.removeAgent.invoke(params),
+        });
         Message.success(t('common.deleteSuccess'));
         // Only switch tab when removing the currently active tab
         if (slot_id === activeSlotId && leadAssistant?.slot_id) switchTab(leadAssistant.slot_id);
@@ -246,7 +261,7 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({ team, onRenameTeam })
         Message.error(String(error));
       }
     },
-    [team.id, activeSlotId, leadAssistant?.slot_id, switchTab, fullscreenSlotId, t]
+    [team, activeSlotId, leadAssistant?.slot_id, switchTab, fullscreenSlotId, t]
   );
 
   const handleRemoveAssistant = useCallback(
@@ -451,6 +466,7 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({ team, onRenameTeam })
                     onRemove={() => handleRemoveAssistant(assistant.slot_id)}
                     teamRunView={teamRun.state}
                     onTeamRunAck={teamRun.applyAck}
+                    onRunStateStale={teamRun.reconcile}
                   />
                 </div>
               );
@@ -507,6 +523,7 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({ team, onRenameTeam })
                         onRemove={() => handleRemoveAssistant(assistant.slot_id)}
                         teamRunView={teamRun.state}
                         onTeamRunAck={teamRun.applyAck}
+                        onRunStateStale={teamRun.reconcile}
                       />
                     </div>
                   );

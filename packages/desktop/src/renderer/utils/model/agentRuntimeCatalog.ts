@@ -40,7 +40,7 @@ function normalizeConfigOptions(value: unknown): AcpSessionConfigOption[] {
   return payload.config_options as AcpSessionConfigOption[];
 }
 
-function normalizeModelOption(value: unknown): { id: string; label: string } | null {
+function normalizeModelOption(value: unknown): { id: string; label: string; description?: string } | null {
   if (typeof value === 'string' && value.trim()) {
     return { id: value, label: value };
   }
@@ -49,7 +49,8 @@ function normalizeModelOption(value: unknown): { id: string; label: string } | n
   const id = typeof value.id === 'string' ? value.id : typeof value.value === 'string' ? value.value : '';
   if (!id) return null;
   const label = typeof value.label === 'string' ? value.label : typeof value.name === 'string' ? value.name : id;
-  return { id, label };
+  const description = typeof value.description === 'string' ? value.description : undefined;
+  return { id, label, description };
 }
 
 function buildModelInfoFromPayload(value: unknown): AcpModelInfo | null {
@@ -94,6 +95,7 @@ function buildModelInfoFromConfigOptions(configOptions: AcpSessionConfigOption[]
   const available_models = modelOption.options.map((option) => ({
     id: option.value,
     label: option.label || option.name || option.value,
+    description: option.description || undefined,
   }));
   const current_model_id = getConfigOptionCurrentValue(modelOption) || available_models[0]?.id || null;
   const matchedModel = available_models.find((model) => model.id === current_model_id);
@@ -109,8 +111,8 @@ export function buildAgentRuntimeModelInfo(agent: AgentRuntimeCatalog | null | u
   if (!agent) return null;
 
   return (
-    buildModelInfoFromPayload(agent.available_models) ??
-    buildModelInfoFromConfigOptions(normalizeConfigOptions(agent.config_options))
+    buildModelInfoFromConfigOptions(normalizeConfigOptions(agent.config_options)) ??
+    buildModelInfoFromPayload(agent.available_models)
   );
 }
 
@@ -175,8 +177,11 @@ export function buildAgentRuntimeModeState(agent: AgentRuntimeCatalog | null | u
 } {
   if (!agent) return { options: [] };
 
+  const fromConfigOptions = buildModeStateFromConfigOptions(normalizeConfigOptions(agent.config_options));
+  if (fromConfigOptions.options.length > 0) return fromConfigOptions;
+
   const fromTopLevelModes = buildModeStateFromPayload(agent.available_modes);
   if (fromTopLevelModes.options.length > 0) return fromTopLevelModes;
 
-  return buildModeStateFromConfigOptions(normalizeConfigOptions(agent.config_options));
+  return { options: [] };
 }

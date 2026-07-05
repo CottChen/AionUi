@@ -13,9 +13,8 @@ import { ipcBridge } from '@/common';
 import { resolveLocaleKey } from '@/common/utils';
 import type { ICreateCronJobParams, ICronJob, ICronJobUpdateParams } from '@/common/adapter/ipcBridge';
 import { useConversationAssistants } from '@renderer/pages/conversation/hooks/useConversationAssistants';
-import { resolveAgentLogo, useAgentLogos } from '@renderer/utils/model/agentLogo';
 import dayjs from 'dayjs';
-import type { TProviderWithModel } from '@/common/config/storage';
+import type { TChatConversation, TProviderWithModel } from '@/common/config/storage';
 import { type AcpModelInfo } from '@/common/types/platform/acpTypes';
 import { useManagedAgentRuntimeCatalog } from '@/renderer/hooks/agent/useManagedAgents';
 import { useModelProviderList } from '@renderer/hooks/agent/useModelProviderList';
@@ -26,7 +25,6 @@ import { createCronSchedule } from '@renderer/pages/cron/cronUtils';
 import { getConversationCreateErrorMessage } from '@renderer/pages/conversation/utils/conversationCreateError';
 import { resolveAssistantAvatar } from '@renderer/utils/model/assistantAvatar';
 import { resolveAssistantName } from '@renderer/utils/model/assistantDisplay';
-import { resolveSupportedConversationType } from '@renderer/utils/model/agentTypeSupportPolicy';
 import { resolveCronAgentConfig } from './resolveCronAgentConfig';
 import { assistantRuntimeKey, isAionrsAssistant } from '@/common/types/agent/assistantTypes';
 
@@ -111,25 +109,25 @@ function parseCronExpr(expr: string): { frequency: FrequencyType; time: string; 
   return { frequency: 'custom', time: '09:00', weekday: 'MON' };
 }
 
-function getDescriptionInitialValue(job: ICronJob): string {
-  const storedDescription = job.description?.trim();
-  if (storedDescription) return storedDescription;
-  return '';
-}
-
 /**
  * Infer the assistant selection key from an ICronJob's agent_config.
  *
  * New jobs persist `assistant_id`; legacy rows fall back to their derived runtime type.
  */
-function getAssistantSelectionFromJob(
-  job: ICronJob,
-  _presetAssistants: { id: string; agent_id: string; source: string }[]
-): string | undefined {
+function getAssistantSelectionFromJob(job: ICronJob): string | undefined {
   const config = job.metadata.agent_config;
   if (config) {
     if (config.assistant_id) return config.assistant_id;
   }
+  return undefined;
+}
+
+function resolveTeamIdFromExtra(extra: TChatConversation['extra'] | undefined): string | undefined {
+  const maybeExtra = extra as { team_id?: unknown; teamId?: unknown } | undefined;
+  const snakeCase = maybeExtra?.team_id;
+  if (typeof snakeCase === 'string' && snakeCase.trim()) return snakeCase;
+  const camelCase = maybeExtra?.teamId;
+  if (typeof camelCase === 'string' && camelCase.trim()) return camelCase;
   return undefined;
 }
 
@@ -142,12 +140,11 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
 }) => {
   const { t, i18n } = useTranslation();
   const localeKey = resolveLocaleKey(i18n?.language ?? 'en-US');
-  const logos = useAgentLogos();
   const [form] = Form.useForm();
   const [submitting, setSubmitting] = useState(false);
   const { presetAssistants } = useConversationAssistants();
   const managedAgentRuntimeCatalog = useManagedAgentRuntimeCatalog();
-  const { providers, getAvailableModels, formatModelLabel } = useModelProviderList();
+  const { providers, getAvailableModels } = useModelProviderList();
   const [frequency, setFrequency] = useState<FrequencyType>('manual');
   const [time, setTime] = useState('09:00');
   const [weekday, setWeekday] = useState('MON');
@@ -156,6 +153,7 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
   const isEditMode = !!editJob;
   const [execution_mode, setExecutionMode] = useState<ExecutionMode>('new_conversation');
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [teamOwnershipStatus, setTeamOwnershipStatus] = useState<'checking' | 'team' | 'standalone'>('standalone');
 
   // Advanced settings state
   const [model_id, setModelId] = useState<string | undefined>(undefined);
@@ -171,11 +169,13 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
     if (editJob) {
       const cronExpr = editJob.schedule.kind === 'cron' ? editJob.schedule.expr : '';
       const parsed = parseCronExpr(cronExpr);
+      const agentKey = getAssistantSelectionFromJob(editJob);
       setFrequency(parsed.frequency);
       setTime(parsed.time);
       setWeekday(parsed.weekday);
       setCustomCronExpr(parsed.frequency === 'custom' ? cronExpr : '');
       setExecutionMode(editJob.target.execution_mode || 'existing');
+      setSelectedAssistantId(agentKey);
       setAdvancedOpen(
         Boolean(
           editJob.metadata.agent_config?.model_id ||
@@ -186,7 +186,7 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
       );
       form.setFieldsValue({
         name: editJob.name,
-        description: getDescriptionInitialValue(editJob),
+        assistant: agentKey,
         prompt: editJob.target.payload.text,
       });
       // Populate advanced settings from editJob
@@ -205,18 +205,48 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
       setConfigOptions(undefined);
       setWorkspace(undefined);
       setSelectedAssistantId(undefined);
+      setTeamOwnershipStatus('standalone');
     }
   }, [visible, editJob, form]);
+
+  useEffect(() => {
+    if (!visible || !editJob?.metadata.conversation_id) {
+      setTeamOwnershipStatus('standalone');
+      return;
+    }
+
+    let cancelled = false;
+    setTeamOwnershipStatus('checking');
+    ipcBridge.conversation.get
+      .invoke({ id: editJob.metadata.conversation_id })
+      .then((conversation) => {
+        if (cancelled) return;
+        const nextIsTeamOwned = Boolean(resolveTeamIdFromExtra(conversation.extra));
+        setTeamOwnershipStatus(nextIsTeamOwned ? 'team' : 'standalone');
+        if (nextIsTeamOwned) {
+          setExecutionMode('existing');
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setTeamOwnershipStatus('standalone');
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, editJob]);
 
   // Edit mode needs the assistant catalog to map a stored job to its
   // current assistant id. We isolate this in a separate effect so that
   // catalog refreshes never reach the form-reset path above.
   useEffect(() => {
     if (!visible || !editJob) return;
-    const agentKey = getAssistantSelectionFromJob(editJob, presetAssistants);
+    const agentKey = getAssistantSelectionFromJob(editJob);
     if (!agentKey) return;
     setSelectedAssistantId(agentKey);
-    form.setFieldValue('assistant', agentKey);
+    form.setFieldsValue({ assistant: agentKey });
   }, [visible, editJob, presetAssistants, form]);
 
   // Resolve backend from the selected assistant.
@@ -357,6 +387,12 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
     executionModeOptions.find((option) => option.value === execution_mode) ?? executionModeOptions[0];
   const showModelSelector = Boolean(resolvedBackend && (isGeminiMode || acpCachedModelInfo));
   const advancedFieldCount = Number(showModelSelector) + 1;
+  const isOriginalExistingConversationTask = isEditMode && editJob?.target.execution_mode === 'existing';
+  const isCheckingTeamOwnership = teamOwnershipStatus === 'checking';
+  const isTeamOwnedTask = teamOwnershipStatus === 'team';
+  const isExecutionModeLocked = isCheckingTeamOwnership || isTeamOwnedTask;
+  const canEditAgentConfig =
+    !isExecutionModeLocked && !isOriginalExistingConversationTask && (!isEditMode || execution_mode !== 'existing');
 
   const handleFrequencyChange = (value: FrequencyType) => {
     setFrequency(value);
@@ -365,13 +401,17 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
     }
   };
 
-  const handleAssistantChange = useCallback((value: string) => {
-    setSelectedAssistantId(value);
-    // Reset model and config_options when agent changes
-    setModelId(undefined);
-    setConfigOptions(undefined);
-    // Workspace remains unchanged (agent-agnostic)
-  }, []);
+  const handleAssistantChange = useCallback(
+    (value: string) => {
+      setSelectedAssistantId(value);
+      form.setFieldsValue({ assistant: value });
+      // Reset model and config_options when agent changes
+      setModelId(undefined);
+      setConfigOptions(undefined);
+      // Workspace remains unchanged (agent-agnostic)
+    },
+    [form]
+  );
 
   const handleWorkspaceClear = useCallback(() => {
     setWorkspace(undefined);
@@ -385,38 +425,49 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
       const scheduleExpr = scheduleInfo.expr;
       const scheduleDesc = scheduleInfo.description;
       const schedule = createCronSchedule(scheduleExpr, scheduleDesc);
+      const assistantValue = typeof values.assistant === 'string' ? values.assistant : selectedAssistantId;
+      const resolvedExecutionMode: ExecutionMode = isTeamOwnedTask ? 'existing' : execution_mode;
 
-      const { agent_config } = resolveCronAgentConfig({
-        agentValue: values.assistant,
-        presetAssistants,
-        selectedAionrsProvider: geminiCurrentModel
-          ? {
-              id: geminiCurrentModel.id as string | undefined,
-              name: geminiCurrentModel.name,
-            }
-          : undefined,
-        model_id,
-        config_options,
-        workspace,
-        localeKey,
-        getMode: resolveAutoApproveModeFromAgentMetadata,
-        aionrsModelRequiredMessage: t('cron.page.form.aionrsModelRequired'),
-      });
+      let agent_config: ICreateCronJobParams['agent_config'] | ICronJobUpdateParams['metadata']['agent_config'];
+      if (canEditAgentConfig) {
+        if (!assistantValue) {
+          throw new Error(t('cron.page.form.assistantRequired'));
+        }
+        agent_config = resolveCronAgentConfig({
+          agentValue: assistantValue,
+          presetAssistants,
+          selectedAionrsProvider: geminiCurrentModel
+            ? {
+                id: geminiCurrentModel.id as string | undefined,
+                name: geminiCurrentModel.name,
+              }
+            : undefined,
+          model_id,
+          config_options,
+          workspace,
+          localeKey,
+          getMode: resolveAutoApproveModeFromAgentMetadata,
+          aionrsModelRequiredMessage: t('cron.page.form.aionrsModelRequired'),
+        }).agent_config;
+      }
 
       if (isEditMode) {
+        const metadata: ICronJobUpdateParams['metadata'] = {
+          conversation_title: editJob!.metadata.conversation_title,
+        };
+        if (canEditAgentConfig) {
+          metadata.agent_config = agent_config;
+        }
+
         // Edit mode: update existing job
         const updates: ICronJobUpdateParams = {
           name: values.name,
-          description: values.description,
           schedule,
           target: {
             payload: { kind: 'message', text: values.prompt },
-            execution_mode,
+            execution_mode: resolvedExecutionMode,
           },
-          metadata: {
-            conversation_title: editJob!.metadata.conversation_title,
-            agent_config,
-          },
+          metadata,
           state: {
             max_retries: editJob!.state.max_retries,
           },
@@ -431,13 +482,12 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
         // Create mode
         const params: ICreateCronJobParams = {
           name: values.name,
-          description: values.description,
           schedule,
           prompt: values.prompt,
           conversation_id: _conversation_id ?? '',
           conversation_title,
           created_by: 'user',
-          execution_mode,
+          execution_mode: resolvedExecutionMode,
           agent_config,
         };
         await ipcBridge.cron.addJob.invoke(params);
@@ -475,21 +525,15 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
           </FormItem>
 
           <FormItem
-            label={t('cron.page.form.description')}
-            field='description'
-            rules={[{ required: true, message: t('cron.page.form.descriptionRequired') }]}
-          >
-            <Input placeholder={t('cron.page.form.descriptionPlaceholder')} />
-          </FormItem>
-
-          <FormItem
             label={t('cron.page.form.assistant')}
             field='assistant'
-            rules={[{ required: true, message: t('cron.page.form.assistantRequired') }]}
+            rules={canEditAgentConfig ? [{ required: true, message: t('cron.page.form.assistantRequired') }] : []}
           >
             <Select
               data-testid='cron-assistant-select'
+              value={selectedAssistantId}
               placeholder={t('cron.page.form.assistantPlaceholder')}
+              disabled={!canEditAgentConfig}
               onChange={handleAssistantChange}
               renderFormat={(_option, value) => {
                 const assistantId = value as unknown as string;
@@ -498,9 +542,6 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
                 const assistant = presetAssistants.find((item) => item.id === assistantId);
                 const name = resolveAssistantName(assistant, localeKey, assistantId);
                 const avatar = resolveAssistantAvatar(assistant?.avatar);
-                const logo = resolveAgentLogo(logos, {
-                  backend: assistantRuntimeKey(assistant),
-                });
 
                 return (
                   <div className='flex items-center gap-8px'>
@@ -508,8 +549,6 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
                       <img src={avatar.value} alt={name} className='w-16px h-16px object-contain' />
                     ) : avatar.kind === 'emoji' ? (
                       <span className='text-14px leading-16px'>{avatar.value}</span>
-                    ) : logo ? (
-                      <img src={logo} alt={name} className='w-16px h-16px object-contain' />
                     ) : (
                       <Robot size='16' />
                     )}
@@ -521,10 +560,6 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
               {presetAssistants.map((assistant) => {
                 const name = resolveAssistantName(assistant, localeKey, assistant.name);
                 const avatar = resolveAssistantAvatar(assistant.avatar);
-                const runtimeKey = assistantRuntimeKey(assistant);
-                const logo = resolveAgentLogo(logos, {
-                  backend: runtimeKey,
-                });
                 const disabled = isAionrsAssistant(assistant) && !hasAionrsProvider;
                 return (
                   <Option key={assistant.id} value={assistant.id} disabled={disabled}>
@@ -536,8 +571,6 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
                         <img src={avatar.value} alt={name} className='w-16px h-16px object-contain' />
                       ) : avatar.kind === 'emoji' ? (
                         <span className='text-14px leading-16px'>{avatar.value}</span>
-                      ) : logo ? (
-                        <img src={logo} alt={name} className='w-16px h-16px object-contain' />
                       ) : (
                         <Robot size='16' />
                       )}
@@ -550,11 +583,17 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
                 );
               })}
             </Select>
+            {!canEditAgentConfig && (
+              <p className='mb-0 mt-8px text-12px leading-18px text-t-secondary'>
+                {t('cron.page.form.assistantLockedExistingConversation')}
+              </p>
+            )}
           </FormItem>
 
           <FormItem label={t('cron.page.form.executionMode')}>
             <Radio.Group
               value={execution_mode}
+              disabled={isExecutionModeLocked}
               onChange={(value) => setExecutionMode(value as ExecutionMode)}
               className='flex flex-wrap items-center gap-20px'
             >
@@ -563,7 +602,7 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
                   <Radio
                     key={option.value}
                     value={option.value}
-                    className='m-0 min-w-0 text-14px text-t-secondary cursor-pointer'
+                    className={`m-0 min-w-0 text-14px text-t-secondary ${isExecutionModeLocked ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                   >
                     <span className='pl-4px text-14px font-medium text-t-primary'>{option.label}</span>
                   </Radio>
@@ -573,6 +612,11 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
             <div className='mt-10px rounded-12px border border-solid border-[var(--color-border-2)] bg-fill-2 px-14px py-12px'>
               <p className='m-0 text-12px leading-18px text-t-primary'>{selectedExecutionModeOption.description}</p>
             </div>
+            {isTeamOwnedTask && (
+              <p className='mb-0 mt-8px text-12px leading-18px text-t-secondary'>
+                {t('cron.page.form.teamTaskExecutionModeLockedReason')}
+              </p>
+            )}
           </FormItem>
 
           <FormItem
@@ -630,62 +674,64 @@ const CreateTaskDialog: React.FC<CreateTaskDialogProps> = ({
             </div>
           )}
 
-          <div className='mt-16px'>
-            <Button
-              type='text'
-              onClick={() => setAdvancedOpen((open) => !open)}
-              className='!h-auto !p-0 hover:!bg-transparent'
-            >
-              <span className='flex items-center gap-6px text-14px font-medium text-t-primary'>
-                <Down
-                  size='14'
-                  fill='currentColor'
-                  className={`shrink-0 transition-transform ${advancedOpen ? 'rotate-180' : ''}`}
-                />
-                <span>{t('cron.page.form.advancedSettings')}</span>
-              </span>
-            </Button>
+          {canEditAgentConfig && (
+            <div className='mt-16px'>
+              <Button
+                type='text'
+                onClick={() => setAdvancedOpen((open) => !open)}
+                className='!h-auto !p-0 hover:!bg-transparent'
+              >
+                <span className='flex items-center gap-6px text-14px font-medium text-t-primary'>
+                  <Down
+                    size='14'
+                    fill='currentColor'
+                    className={`shrink-0 transition-transform ${advancedOpen ? 'rotate-180' : ''}`}
+                  />
+                  <span>{t('cron.page.form.advancedSettings')}</span>
+                </span>
+              </Button>
 
-            {advancedOpen && (
-              <div className='mt-12px grid gap-x-16px gap-y-16px md:grid-cols-2'>
-                {showModelSelector && (
-                  <div className='min-w-0'>
+              {advancedOpen && (
+                <div className='mt-12px grid gap-x-16px gap-y-16px md:grid-cols-2'>
+                  {showModelSelector && (
+                    <div className='min-w-0'>
+                      <label className='mb-8px block text-14px font-medium text-t-primary'>
+                        {t('cron.page.form.model')}
+                      </label>
+                      <GuidModelSelector
+                        isGeminiMode={isGeminiMode}
+                        modelList={filteredProviders}
+                        current_model={geminiCurrentModel}
+                        setCurrentModel={handleGeminiModelSelect}
+                        currentAcpCachedModelInfo={acpCachedModelInfo}
+                        selectedAcpModel={model_id ?? null}
+                        setSelectedAcpModel={handleAcpModelSelect}
+                      />
+                    </div>
+                  )}
+
+                  <div className={advancedFieldCount === 1 ? 'md:col-span-2' : ''}>
                     <label className='mb-8px block text-14px font-medium text-t-primary'>
-                      {t('cron.page.form.model')}
+                      {t('cron.page.form.workspace')}
                     </label>
-                    <GuidModelSelector
-                      isGeminiMode={isGeminiMode}
-                      modelList={filteredProviders}
-                      current_model={geminiCurrentModel}
-                      setCurrentModel={handleGeminiModelSelect}
-                      currentAcpCachedModelInfo={acpCachedModelInfo}
-                      selectedAcpModel={model_id ?? null}
-                      setSelectedAcpModel={handleAcpModelSelect}
+                    <WorkspaceFolderSelect
+                      value={workspace}
+                      onChange={(next) => setWorkspace(next || undefined)}
+                      onClear={handleWorkspaceClear}
+                      placeholder={t('cron.page.form.selectFolder')}
+                      recentLabel={t('team.create.recentLabel', { defaultValue: 'Recent' })}
+                      chooseDifferentLabel={t('team.create.chooseDifferentFolder', {
+                        defaultValue: 'Choose a different folder',
+                      })}
+                      triggerTestId='cron-workspace-trigger'
+                      menuTestId='cron-workspace-menu'
+                      menuZIndex={10020}
                     />
                   </div>
-                )}
-
-                <div className={advancedFieldCount === 1 ? 'md:col-span-2' : ''}>
-                  <label className='mb-8px block text-14px font-medium text-t-primary'>
-                    {t('cron.page.form.workspace')}
-                  </label>
-                  <WorkspaceFolderSelect
-                    value={workspace}
-                    onChange={(next) => setWorkspace(next || undefined)}
-                    onClear={handleWorkspaceClear}
-                    placeholder={t('cron.page.form.selectFolder')}
-                    recentLabel={t('team.create.recentLabel', { defaultValue: 'Recent' })}
-                    chooseDifferentLabel={t('team.create.chooseDifferentFolder', {
-                      defaultValue: 'Choose a different folder',
-                    })}
-                    triggerTestId='cron-workspace-trigger'
-                    menuTestId='cron-workspace-menu'
-                    menuZIndex={10020}
-                  />
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </Form>
       </div>
     </ModalWrapper>

@@ -35,7 +35,8 @@ import {
 import { useConversationRuntimeView } from '@/renderer/pages/conversation/runtime/useConversationRuntimeView';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
 import { getConversationRuntimeWorkspaceErrorMessage } from '@/renderer/pages/conversation/utils/conversationCreateError';
-import { warmupConversation } from '@/renderer/pages/conversation/utils/warmupConversation';
+import { getChatSurfaceWidthClass } from '@/renderer/pages/conversation/utils/chatSurfaceWidth';
+import { ensureConversationRuntime } from '@/renderer/pages/conversation/utils/ensureConversationRuntime';
 import { usePreviewContext } from '@/renderer/pages/conversation/Preview';
 import { useTeamPermission } from '@/renderer/pages/team/hooks/TeamPermissionContext';
 import type { TeamSendBoxRuntime } from '@/renderer/pages/team/components/teamSendRuntime';
@@ -155,22 +156,26 @@ const AionrsSendBox: React.FC<{
 
   const handleContentChange = useCallback(
     (val: string) => {
-      if (val && teamPermission) teamPermission.warmupSession();
       setContent(val);
     },
-    [teamPermission, setContent]
+    [setContent]
   );
 
   const [agentWarmed, setAgentWarmed] = useState(false);
+  const prepareRuntimeConfig = useCallback(async () => {
+    if (teamPermission) {
+      await teamPermission.warmupSession();
+    }
+  }, [teamPermission]);
   const prepareRuntimeSync = useCallback(async () => {
     if (teamPermission) {
       await teamPermission.warmupSession();
     }
-    await warmupConversation(conversation_id);
+    await ensureConversationRuntime(conversation_id);
   }, [conversation_id, teamPermission]);
   const runtimeConfig = useAcpConfigOptions({
     conversation_id,
-    prepareRuntime: prepareRuntimeSync,
+    prepareRuntime: prepareRuntimeConfig,
     enabled: Boolean(conversation_id),
   });
   const runtimeMode = runtimeConfig.mode;
@@ -606,9 +611,10 @@ const AionrsSendBox: React.FC<{
     }
   };
   const effectiveHandleStop = teamRuntime?.onStop ?? handleStop;
+  const sendBoxWidthClass = getChatSurfaceWidthClass(Boolean(teamPermission));
 
   return (
-    <div className='w-[calc(100%-24px)] md:w-[calc(100%-clamp(80px,10vw,240px))] max-w-none mx-auto flex flex-col mt-auto mb-16px'>
+    <div className={`${sendBoxWidthClass} flex flex-col mt-auto mb-16px`}>
       <CommandQueuePanel
         items={queuedCommands}
         interactionLocked={isQueueInteractionLocked}
@@ -668,7 +674,7 @@ const AionrsSendBox: React.FC<{
               compactLabelPrefix={t('agentMode.permission')}
               hideCompactLabelPrefixOnMobile
               onModeChanged={propagateMode}
-              beforeRuntimeSync={prepareRuntimeSync}
+              beforeRuntimeSync={prepareRuntimeConfig}
             />
           </div>
         }

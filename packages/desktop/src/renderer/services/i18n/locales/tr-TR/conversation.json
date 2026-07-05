@@ -71,7 +71,8 @@
     "removeProjectTitle": "Projeyi kaldır",
     "removeProject": "Projeyi kaldır",
     "removeProjectConfirm": "\"{{name}}\" projesi kaldırılsın mı? Projedeki {{count}} konuşma da kaldırılacak.",
-    "newConversationInProject": "Bu projede yeni konuşma"
+    "newConversationInProject": "Bu projede yeni konuşma",
+    "deleting": "Siliniyor..."
   },
   "historySearch": {
     "tooltip": "Mesajları ara",
@@ -536,7 +537,8 @@
     "label": "Düşünüyor..."
   },
   "skills": {
-    "loaded": "Yüklenen Beceriler"
+    "loaded": "Yüklenen Beceriler",
+    "slashHint": "Beceri"
   },
   "mcp": {
     "loaded": "Yüklü MCP",

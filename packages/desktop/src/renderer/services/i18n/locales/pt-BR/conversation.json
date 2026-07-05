@@ -71,7 +71,8 @@
     "removeProjectTitle": "Remover projeto",
     "removeProject": "Remover projeto",
     "removeProjectConfirm": "Remover o projeto \"{{name}}\"? Suas {{count}} conversa(s) também serão removidas.",
-    "newConversationInProject": "Novo chat neste projeto"
+    "newConversationInProject": "Novo chat neste projeto",
+    "deleting": "Excluindo..."
   },
   "historySearch": {
     "tooltip": "Pesquisar mensagens",
@@ -537,7 +538,8 @@
     "label": "Pensando..."
   },
   "skills": {
-    "loaded": "Habilidades Carregadas"
+    "loaded": "Habilidades Carregadas",
+    "slashHint": "Habilidade"
   },
   "mcp": {
     "loaded": "MCP carregado",

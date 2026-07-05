@@ -56,9 +56,20 @@ vi.mock('@/common', () => ({
 }));
 
 vi.mock('@/renderer/components/chat/SendBox', () => ({
-  default: ({ onSend, rightTools }: { onSend: (message: string) => Promise<void>; rightTools?: React.ReactNode }) => (
+  default: ({
+    onSend,
+    onChange,
+    rightTools,
+  }: {
+    onSend: (message: string) => Promise<void>;
+    onChange?: (value: string) => void;
+    rightTools?: React.ReactNode;
+  }) => (
     <div>
       {rightTools}
+      <button type='button' onClick={() => onChange?.('hello')}>
+        change
+      </button>
       <button
         type='button'
         onClick={() => {
@@ -169,9 +180,6 @@ vi.mock('@/renderer/pages/conversation/Preview', () => ({
     setSendBoxHandler: setSendBoxHandlerMock,
   }),
 }));
-vi.mock('@/renderer/pages/conversation/utils/warmupConversation', () => ({
-  warmupConversation: vi.fn().mockResolvedValue(undefined),
-}));
 vi.mock('@/renderer/pages/team/hooks/TeamPermissionContext', () => ({
   useTeamPermission: useTeamPermissionMock,
 }));
@@ -266,7 +274,7 @@ describe('AcpSendBox', () => {
     });
   });
 
-  it('uses fluid golden-ratio side inset instead of a fixed max width', () => {
+  it('uses container-responsive fluid width instead of a fixed max width', () => {
     render(
       <AcpSendBox
         conversation_id='conv-1'
@@ -277,10 +285,67 @@ describe('AcpSendBox', () => {
     );
 
     const wrapper = screen.getByRole('button', { name: 'send' }).parentElement?.parentElement;
-    expect(wrapper?.className).toContain('w-[calc(100%-24px)]');
-    expect(wrapper?.className).toContain('md:w-[calc(100%-clamp(80px,10vw,240px))]');
-    expect(wrapper?.className).toContain('max-w-none');
+    expect(wrapper?.className).toContain('chat-surface-fluid');
+    expect(wrapper?.className).not.toContain('w-[calc(100%-24px)]');
+    expect(wrapper?.className).not.toContain('md:w-[calc(100%-clamp(80px,10vw,240px))]');
     expect(wrapper?.className).not.toContain('max-w-800px');
+  });
+
+  it('uses the full available width in team mode', () => {
+    useTeamPermissionMock.mockReturnValue({
+      isTeamMode: true,
+      isLeaderAgent: true,
+      leaderConversationId: 'conv-1',
+      allConversationIds: ['conv-1'],
+      propagateMode: vi.fn(),
+      warmupSession: vi.fn().mockResolvedValue(undefined),
+    });
+
+    render(
+      <AcpSendBox
+        conversation_id='conv-1'
+        backend='codex'
+        workspacePath='/tmp/workspace'
+        messageState={makeMessageState()}
+      />
+    );
+
+    const wrapper = screen.getByRole('button', { name: 'send' }).parentElement?.parentElement;
+    expect(wrapper?.className).toContain('w-full');
+    expect(wrapper?.className).toContain('max-w-full');
+    expect(wrapper?.className).not.toContain('w-[calc(100%-24px)]');
+    expect(wrapper?.className).not.toContain('md:w-[calc(100%-clamp(80px,10vw,240px))]');
+  });
+
+  it('does not warm up team session when draft content changes', async () => {
+    const warmupSession = vi.fn().mockResolvedValue(undefined);
+    useTeamPermissionMock.mockReturnValue({
+      isTeamMode: true,
+      isLeaderAgent: true,
+      leaderConversationId: 'conv-1',
+      allConversationIds: ['conv-1'],
+      propagateMode: vi.fn(),
+      warmupSession,
+    });
+
+    render(
+      <AcpSendBox
+        conversation_id='conv-1'
+        backend='codex'
+        workspacePath='/tmp/workspace'
+        messageState={makeMessageState()}
+      />
+    );
+    await waitFor(() => {
+      expect(warmupSession).toHaveBeenCalled();
+    });
+    warmupSession.mockClear();
+
+    await act(async () => {
+      screen.getByRole('button', { name: 'change' }).click();
+    });
+
+    expect(warmupSession).not.toHaveBeenCalled();
   });
 
   it('keeps ACP config options enabled on desktop without rendering a standalone thought selector', () => {

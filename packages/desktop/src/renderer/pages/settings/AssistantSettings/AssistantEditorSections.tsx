@@ -2,9 +2,9 @@ import { ipcBridge } from '@/common';
 import type { AssistantEditorViewModel, AssistantListItem } from './types';
 import { useManagedAgentRuntimeCatalog } from '@/renderer/hooks/agent/useManagedAgents';
 import { useModelProviderList } from '@/renderer/hooks/agent/useModelProviderList';
-import { buildAgentRuntimeModeState } from '@/renderer/utils/model/agentRuntimeCatalog';
+import { buildAgentRuntimeModeState, buildAgentRuntimeModelInfo } from '@/renderer/utils/model/agentRuntimeCatalog';
 import type { AgentModeOption } from '@/renderer/utils/model/agentTypes';
-import { Button, Select, Tag } from '@arco-design/web-react';
+import { Select, Tag } from '@arco-design/web-react';
 import { Info, Robot } from '@icon-park/react';
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -90,21 +90,6 @@ const AssistantEditorSections: React.FC<AssistantEditorSectionsProps> = ({ edito
       label: `${provider.name || provider.id} · ${modelName}`,
     }))
   );
-  const modelOptions = useMemo(() => {
-    if (editAgentRuntimeKey === 'aionrs') {
-      return providerModelOptions;
-    }
-
-    if (currentBackend && currentBackend.modelOptions.length > 0) {
-      return currentBackend.modelOptions.map((model: { value: string; label: string }) => ({
-        key: `${editAgent}-${model.value}`,
-        value: model.value,
-        label: model.label,
-      }));
-    }
-
-    return [];
-  }, [currentBackend, editAgent, editAgentRuntimeKey, providerModelOptions]);
   const currentAgentRuntimeCatalog = useMemo(
     () =>
       currentBackend
@@ -112,6 +97,35 @@ const AssistantEditorSections: React.FC<AssistantEditorSectionsProps> = ({ edito
         : null,
     [currentBackend, managedAgentRuntimeCatalog]
   );
+  const currentAgentRuntimeModelInfo = useMemo(
+    () => buildAgentRuntimeModelInfo(currentAgentRuntimeCatalog),
+    [currentAgentRuntimeCatalog]
+  );
+  const modelOptions = useMemo(() => {
+    if (editAgentRuntimeKey === 'aionrs') {
+      return providerModelOptions;
+    }
+
+    if (currentAgentRuntimeModelInfo && currentAgentRuntimeModelInfo.available_models.length > 0) {
+      return currentAgentRuntimeModelInfo.available_models.map((model) => ({
+        key: `${editAgent}-${model.id}`,
+        value: model.id,
+        label: model.label,
+        description: model.description,
+      }));
+    }
+
+    if (currentBackend && currentBackend.modelOptions.length > 0) {
+      return currentBackend.modelOptions.map((model: { value: string; label: string; description?: string }) => ({
+        key: `${editAgent}-${model.value}`,
+        value: model.value,
+        label: model.label,
+        description: model.description,
+      }));
+    }
+
+    return [];
+  }, [currentAgentRuntimeModelInfo, currentBackend, editAgent, editAgentRuntimeKey, providerModelOptions]);
   const permissionOptions = useMemo<AgentModeOption[]>(
     () =>
       buildAgentRuntimeModeState(currentAgentRuntimeCatalog).options.map((option) => ({
@@ -278,18 +292,24 @@ const AssistantEditorSections: React.FC<AssistantEditorSectionsProps> = ({ edito
                     'This is a builtin assistant. You can change Main Agent, Default Model, and Default Permission. To customize other fields, ',
                 })}
               </span>
-              <Button
-                type='text'
-                size='mini'
-                className='!px-0 !text-primary-6 hover:!text-primary-5'
+              <span
+                role='button'
+                tabIndex={0}
+                className='cursor-pointer text-13px leading-20px text-t-secondary underline underline-offset-2 hover:text-t-primary'
                 onClick={(event) => {
                   event.preventDefault();
                   handleDuplicate(activeAssistant);
                 }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    handleDuplicate(activeAssistant);
+                  }
+                }}
                 data-testid='link-duplicate-from-banner'
               >
                 {t('settings.assistantBuiltinReadonlyDuplicateLink', { defaultValue: 'duplicate it' })}
-              </Button>
+              </span>
               <span>{t('settings.assistantBuiltinReadonlyTipSuffix', { defaultValue: '.' })}</span>
             </div>
           </div>
@@ -354,7 +374,7 @@ const AssistantEditorSections: React.FC<AssistantEditorSectionsProps> = ({ edito
           <div className='text-14px font-500 text-t-primary'>
             {t('settings.assistantEngineSection', { defaultValue: 'Engine' })}
           </div>
-          <span className='rounded-6px border border-success-8 bg-success-8 px-8px py-2px text-10px font-600 text-white'>
+          <span className='rounded-6px border border-warning-8 bg-warning-8 px-8px py-2px text-10px font-600 text-white'>
             {t('settings.assistantOnlyNewConversation', { defaultValue: 'New conversations only' })}
           </span>
         </div>

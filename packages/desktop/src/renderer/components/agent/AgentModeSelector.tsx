@@ -8,7 +8,7 @@ import { classifyConfigSetError, useAcpConfigOptions } from '@/renderer/hooks/ag
 import type { AgentModeOption } from '@/renderer/utils/model/agentTypes';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { AgentLogoIcon } from './AgentBadge';
-import { Dropdown, Menu, Message } from '@arco-design/web-react';
+import { Dropdown, Menu, Message, Tooltip } from '@arco-design/web-react';
 import { Down } from '@icon-park/react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -31,6 +31,8 @@ export interface AgentModeSelectorProps {
   agentLogo?: string;
   /** Whether the logo is an emoji / logo 是否为 emoji */
   agentLogoIsEmoji?: boolean;
+  /** Whether the explicit assistant logo is intentionally empty. */
+  agentLogoIsFallback?: boolean;
   /** Conversation ID for mode switching / 用于切换模式的会话 ID */
   conversation_id?: string;
   /** Compact mode: only show mode label + dropdown, no logo/name / 紧凑模式：仅显示模式标签和下拉 */
@@ -73,6 +75,7 @@ const AgentModeSelector: React.FC<AgentModeSelectorProps> = ({
   agent_name,
   agentLogo,
   agentLogoIsEmoji,
+  agentLogoIsFallback,
   conversation_id,
   compact,
   showLogoInCompact = false,
@@ -191,6 +194,7 @@ const AgentModeSelector: React.FC<AgentModeSelectorProps> = ({
       agent_name={agent_name}
       agentLogo={agentLogo}
       agentLogoIsEmoji={agentLogoIsEmoji}
+      agentLogoIsFallback={agentLogoIsFallback}
     />
   );
 
@@ -211,8 +215,16 @@ const AgentModeSelector: React.FC<AgentModeSelectorProps> = ({
               data-mode-value={mode.value}
               data-testid={`aionrs-mode-option-${mode.value}`}
             >
-              {current_mode === mode.value && <span className='text-primary'>✓</span>}
-              <span className={current_mode !== mode.value ? 'ml-16px' : ''}>{getDisplayModeLabel(mode)}</span>
+              <span aria-hidden='true' className='w-16px shrink-0 text-primary'>
+                {current_mode === mode.value ? '✓' : ''}
+              </span>
+              {mode.description ? (
+                <Tooltip content={mode.description} position='right'>
+                  <span className='min-w-0 truncate'>{getDisplayModeLabel(mode)}</span>
+                </Tooltip>
+              ) : (
+                <span className='min-w-0 truncate'>{getDisplayModeLabel(mode)}</span>
+              )}
             </div>
           </Menu.Item>
         ))}

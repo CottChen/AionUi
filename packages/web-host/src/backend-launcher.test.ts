@@ -48,6 +48,15 @@ const APP_META: AppMetadata = {
 
 const APP_META_PACKAGED: AppMetadata = { ...APP_META, isPackaged: true };
 
+function makeBundledBackendPath(version = 'v0.1.42') {
+  const dir = mkdtempSync(join(tmpdir(), 'aioncore-bundled-'));
+  writeFileSync(join(dir, 'manifest.json'), JSON.stringify({ version }), 'utf-8');
+  return {
+    binaryPath: join(dir, process.platform === 'win32' ? 'aioncore.exe' : 'aioncore'),
+    cleanup: () => rmSync(dir, { recursive: true, force: true }),
+  };
+}
+
 function makeFakeServer(port = 54321) {
   const server = new EventEmitter() as EventEmitter & {
     listen: (p: number, h: string, cb: () => void) => void;
@@ -165,6 +174,19 @@ describe('buildSpawnArgs', () => {
     expect(args).toContain('--managed-resources-mode');
     expect(args).toContain('bundled');
     expect(args).not.toContain('--dump-prompts');
+  });
+
+  it('passes corrupted database recovery authorization only when requested', () => {
+    const args = buildSpawnArgs({
+      port: 1,
+      dbPath: '/d',
+      local: true,
+      appVersion: '0.0.1',
+      isPackaged: true,
+      recoverCorruptedDatabase: true,
+    });
+
+    expect(args).toContain('--recover-corrupted-database');
   });
 
   it('respects AIONUI_LOG_LEVEL override', () => {
@@ -315,41 +337,46 @@ describe('BackendLifecycleManager.start (success path)', () => {
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(new Response('ok', { status: 200 }) as unknown as Response);
 
-    const mgr = new BackendLifecycleManager(APP_META_PACKAGED, () => '/abs/path/aioncore');
-    const startPromise = mgr.start('/db/path', '/log/dir', {
-      cacheDir: '/c',
-      workDir: '/w',
-      logDir: '/l',
-    });
+    const backend = makeBundledBackendPath();
+    try {
+      const mgr = new BackendLifecycleManager(APP_META_PACKAGED, () => backend.binaryPath);
+      const startPromise = mgr.start('/db/path', '/log/dir', {
+        cacheDir: '/c',
+        workDir: '/w',
+        logDir: '/l',
+      });
 
-    await Promise.resolve();
-    child.stdout?.emit('data', Buffer.from('AIONCORE_LISTENING {"host":"127.0.0.1","port":55555}\n'));
+      await Promise.resolve();
+      child.stdout?.emit('data', Buffer.from('AIONCORE_LISTENING {"host":"127.0.0.1","port":55555}\n'));
 
-    const port = await startPromise;
+      const port = await startPromise;
 
-    expect(port).toBe(55555);
-    expect(mgr.port).toBe(55555);
-    expect(createServer).not.toHaveBeenCalled();
-    expect(fetchSpy).toHaveBeenCalledWith('http://127.0.0.1:55555/health');
-    expect(vi.mocked(spawn).mock.calls[0][1]).toEqual([
-      '--port',
-      '0',
-      '--data-dir',
-      '/db/path',
-      '--parent-pid',
-      String(process.pid),
-      '--log-level',
-      'info',
-      '--app-version',
-      '1.2.3',
-      '--managed-resources-mode',
-      'bundled',
-      '--log-dir',
-      '/log/dir',
-      '--work-dir',
-      '/w',
-      '--local',
-    ]);
+      expect(port).toBe(55555);
+      expect(mgr.port).toBe(55555);
+      expect(createServer).not.toHaveBeenCalled();
+      expect(fetchSpy).toHaveBeenCalledWith('http://127.0.0.1:55555/health');
+      expect(vi.mocked(spawn).mock.calls[0][1]).toEqual([
+        '--port',
+        '0',
+        '--data-dir',
+        '/db/path',
+        '--parent-pid',
+        String(process.pid),
+        '--log-level',
+        'info',
+        '--app-version',
+        '1.2.3',
+        '--managed-resources-mode',
+        'bundled',
+        '--log-dir',
+        '/log/dir',
+        '--work-dir',
+        '/w',
+        '--local',
+      ]);
+    } finally {
+      backend.cleanup();
+    }
 
     fetchSpy.mockRestore();
   });
@@ -363,7 +390,8 @@ describe('BackendLifecycleManager.start (success path)', () => {
       .mockResolvedValue(new Response('ok', { status: 200 }) as unknown as Response);
     const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
 
-    const resolveBackend = vi.fn(() => '/abs/path/aioncore');
+    const backend = makeBundledBackendPath();
+    const resolveBackend = vi.fn(() => backend.binaryPath);
     const mgr = new BackendLifecycleManager(APP_META_PACKAGED, resolveBackend);
 
     try {
@@ -384,7 +412,7 @@ describe('BackendLifecycleManager.start (success path)', () => {
       expect(spawn).toHaveBeenCalledTimes(1);
 
       const spawnCall = vi.mocked(spawn).mock.calls[0];
-      expect(spawnCall[0]).toBe('/abs/path/aioncore');
+      expect(spawnCall[0]).toBe(backend.binaryPath);
       expect(spawnCall[1]).toEqual([
         '--port',
         '0',
@@ -404,7 +432,8 @@ describe('BackendLifecycleManager.start (success path)', () => {
         '/w',
         '--local',
       ]);
-      const opts = spawnCall[2] as { env: NodeJS.ProcessEnv };
+      const opts = spawnCall[2] as { cwd?: string; env: NodeJS.ProcessEnv };
+      expect(opts.cwd).toBe('/w');
       expect(opts.env.AIONUI_CACHE_DIR).toBe('/c');
       expect(opts.env.AIONUI_WORK_DIR).toBe('/w');
       expect(opts.env.AIONUI_LOG_DIR).toBe('/l');
@@ -415,6 +444,7 @@ describe('BackendLifecycleManager.start (success path)', () => {
         expect.stringContaining('[aioncore] health ready on port 55555 after 1 attempts, elapsed_ms=')
       );
     } finally {
+      backend.cleanup();
       fetchSpy.mockRestore();
       infoSpy.mockRestore();
     }
@@ -492,6 +522,7 @@ describe('BackendLifecycleManager.start (health timeout)', () => {
 
   it('kills child and reports listen_timeout when aioncore never reports a port', async () => {
     vi.useFakeTimers();
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin');
     const child = makeFakeChild();
     vi.mocked(spawn).mockReturnValue(child as unknown as ChildProcess);
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true);
@@ -513,10 +544,12 @@ describe('BackendLifecycleManager.start (health timeout)', () => {
     expect(killSpy).toHaveBeenCalled();
 
     killSpy.mockRestore();
+    platformSpy.mockRestore();
   }, 15_000);
 
   it('kills child and throws when /health never responds OK within timeout', async () => {
     vi.useFakeTimers();
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin');
     vi.mocked(createServer).mockImplementation(
       () => makeFakeServer(33333) as unknown as ReturnType<typeof createServer>
     );
@@ -543,6 +576,7 @@ describe('BackendLifecycleManager.start (health timeout)', () => {
 
     fetchSpy.mockRestore();
     killSpy.mockRestore();
+    platformSpy.mockRestore();
     vi.useRealTimers();
   }, 15_000);
 
@@ -874,6 +908,7 @@ describe('BackendLifecycleManager.stop', () => {
   });
 
   it('sends SIGTERM then resolves when child emits exit', async () => {
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin');
     vi.mocked(createServer).mockImplementation(
       () => makeFakeServer(22222) as unknown as ReturnType<typeof createServer>
     );
@@ -902,9 +937,11 @@ describe('BackendLifecycleManager.stop', () => {
 
     fetchSpy.mockRestore();
     killSpy.mockRestore();
+    platformSpy.mockRestore();
   });
 
   it('escalates to SIGKILL when SIGTERM times out', async () => {
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin');
     vi.mocked(createServer).mockImplementation(
       () => makeFakeServer(22223) as unknown as ReturnType<typeof createServer>
     );
@@ -933,6 +970,7 @@ describe('BackendLifecycleManager.stop', () => {
 
     fetchSpy.mockRestore();
     killSpy.mockRestore();
+    platformSpy.mockRestore();
   }, 7_000);
 
   it('waits for Windows taskkill to finish before cleaning registered agent processes', async () => {
@@ -1088,6 +1126,36 @@ describe('BackendLifecycleManager crash restart', () => {
     });
 
     warnSpy.mockRestore();
+    fetchSpy.mockRestore();
+  }, 5_000);
+
+  it('does not reuse corrupted database recovery authorization during crash restart', async () => {
+    const child1 = makeFakeChild();
+    const child2 = makeFakeChild();
+    vi.mocked(spawn)
+      .mockReturnValueOnce(child1 as unknown as ChildProcess)
+      .mockReturnValueOnce(child2 as unknown as ChildProcess);
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('ok', { status: 200 }) as unknown as Response);
+
+    const mgr = new BackendLifecycleManager(APP_META_PACKAGED, () => '/x');
+    const startPromise = mgr.start('/db', undefined, undefined, undefined, undefined, {
+      recoverCorruptedDatabase: true,
+    });
+    await Promise.resolve();
+    emitListening(child1, 65303);
+    await startPromise;
+
+    (child1 as unknown as EventEmitter).emit('exit', 1, 'SIGABRT');
+    await new Promise((r) => setTimeout(r, 1_200));
+
+    const firstSpawnArgs = vi.mocked(spawn).mock.calls[0]?.[1] as string[];
+    const restartSpawnArgs = vi.mocked(spawn).mock.calls[1]?.[1] as string[];
+    expect(firstSpawnArgs).toContain('--recover-corrupted-database');
+    expect(restartSpawnArgs).not.toContain('--recover-corrupted-database');
+
     fetchSpy.mockRestore();
   }, 5_000);
 
