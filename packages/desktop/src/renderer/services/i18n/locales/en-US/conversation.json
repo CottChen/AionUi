@@ -424,7 +424,8 @@
       "workspace": "Project",
       "currentFolder": "Folder",
       "folderHintDesktop": "Right-click a folder to search within it",
-      "folderHintMobile": "Long-press a folder to search within it"
+      "folderHintMobile": "Long-press a folder to search within it",
+      "selectedFolder": "Current: {{folder}}"
     },
     "searchMode": {
       "all": "All",
