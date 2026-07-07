@@ -10,6 +10,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ipcBridge } from '@/common';
 import PDFViewer from '@/renderer/pages/conversation/Preview/components/viewers/PDFViewer';
 
+const pdfMocks = vi.hoisted(() => ({
+  destroyDocument: vi.fn(),
+  destroyTask: vi.fn(),
+  getDocument: vi.fn(),
+  getPage: vi.fn(),
+  render: vi.fn(),
+}));
+
 const platformState = {
   isElectron: false,
 };
@@ -32,6 +40,15 @@ vi.mock('@/renderer/utils/platform', () => ({
 vi.mock('@/renderer/components/media/WebviewHost', () => ({
   __esModule: true,
   default: ({ url }: { url: string }) => <div data-testid='webview-host' data-url={url} />,
+}));
+
+vi.mock('pdfjs-dist', () => ({
+  GlobalWorkerOptions: {},
+  getDocument: pdfMocks.getDocument,
+}));
+
+vi.mock('pdfjs-dist/build/pdf.worker.mjs?url', () => ({
+  default: 'pdf.worker.js',
 }));
 
 vi.mock('@/renderer/pages/conversation/Preview/context/PreviewToolbarExtrasContext', () => ({
@@ -57,29 +74,53 @@ describe('PDFViewer', () => {
   beforeEach(() => {
     platformState.isElectron = false;
     vi.mocked(ipcBridge.fs.readFileBuffer.invoke).mockReset();
-    Object.defineProperty(URL, 'createObjectURL', {
-      configurable: true,
-      value: vi.fn(() => 'blob:pdf-preview'),
+    pdfMocks.destroyDocument.mockReset();
+    pdfMocks.destroyTask.mockReset();
+    pdfMocks.getDocument.mockReset();
+    pdfMocks.getPage.mockReset();
+    pdfMocks.render.mockReset();
+    pdfMocks.getPage.mockImplementation(async () => ({
+      getViewport: ({ scale }: { scale: number }) => ({ width: 100 * scale, height: 150 * scale }),
+      render: pdfMocks.render,
+    }));
+    pdfMocks.render.mockReturnValue({ promise: Promise.resolve(), cancel: vi.fn() });
+    pdfMocks.getDocument.mockReturnValue({
+      promise: Promise.resolve({
+        numPages: 2,
+        getPage: pdfMocks.getPage,
+        destroy: pdfMocks.destroyDocument,
+      }),
+      destroy: pdfMocks.destroyTask,
     });
-    Object.defineProperty(URL, 'revokeObjectURL', {
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
       configurable: true,
-      value: vi.fn(),
+      value: 640,
+    });
+    Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+      configurable: true,
+      value: vi.fn(() => ({
+        setTransform: vi.fn(),
+      })),
     });
   });
 
-  it('renders PDF through iframe in WebUI mode without webview', async () => {
+  it('renders PDF through PDF.js canvases in WebUI mode without webview', async () => {
     vi.mocked(ipcBridge.fs.readFileBuffer.invoke).mockResolvedValue('JVBERi0xLjQ=');
 
     const { container } = render(<PDFViewer file_path='/workspace/report.pdf' workspace='/workspace' />);
 
     await waitFor(() => {
-      expect(screen.getByTitle('preview.pdf.title')).toHaveAttribute('src', 'blob:pdf-preview');
+      expect(pdfMocks.getDocument).toHaveBeenCalledWith({ data: expect.any(Uint8Array) });
+    });
+    await waitFor(() => {
+      expect(screen.getAllByTestId('pdf-page-canvas')).toHaveLength(2);
     });
     expect(ipcBridge.fs.readFileBuffer.invoke).toHaveBeenCalledWith({
       path: '/workspace/report.pdf',
       workspace: '/workspace',
     });
     expect(container.querySelector('webview')).toBeNull();
+    expect(container.querySelector('iframe')).toBeNull();
     expect(screen.queryByTestId('webview-host')).not.toBeInTheDocument();
   });
 
@@ -92,5 +133,6 @@ describe('PDFViewer', () => {
       expect(screen.getByTestId('webview-host')).toHaveAttribute('data-url', 'file:///workspace/report.pdf');
     });
     expect(ipcBridge.fs.readFileBuffer.invoke).not.toHaveBeenCalled();
+    expect(pdfMocks.getDocument).not.toHaveBeenCalled();
   });
 });

@@ -10,7 +10,7 @@ import { usePreviewToolbarExtras } from '../../context/PreviewToolbarExtrasConte
 import WebviewHost from '@/renderer/components/media/WebviewHost';
 import { isElectronDesktop } from '@/renderer/utils/platform';
 import { Button, Message } from '@arco-design/web-react';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 interface PDFPreviewProps {
@@ -28,35 +28,226 @@ interface PDFPreviewProps {
   workspace?: string;
 }
 
-const PDF_BLOB_TYPE = 'application/pdf';
+type BrowserPdfSource = { kind: 'url'; url: string } | { kind: 'data'; data: Uint8Array };
 
-const isReadyToRenderPdfSource = (source: string): boolean =>
-  source.startsWith('blob:') ||
-  source.startsWith('data:') ||
-  source.startsWith('http://') ||
-  source.startsWith('https://');
+type PdfViewport = {
+  width: number;
+  height: number;
+};
 
-const createPdfBlobUrlFromBase64 = (base64: string): string => {
-  const binary = atob(base64);
-  const chunkSize = 8192;
-  const chunks: ArrayBuffer[] = [];
-  for (let offset = 0; offset < binary.length; offset += chunkSize) {
-    const slice = binary.slice(offset, offset + chunkSize);
-    const buffer = new ArrayBuffer(slice.length);
-    const bytes = new Uint8Array(buffer);
-    for (let index = 0; index < slice.length; index += 1) {
-      bytes[index] = slice.charCodeAt(index);
-    }
-    chunks.push(buffer);
+type PdfRenderTask = {
+  promise: Promise<void>;
+  cancel?: () => void;
+};
+
+type PdfPageProxy = {
+  getViewport: (options: { scale: number }) => PdfViewport;
+  render: (options: { canvasContext: CanvasRenderingContext2D; viewport: PdfViewport }) => PdfRenderTask;
+};
+
+type PdfDocumentProxy = {
+  numPages: number;
+  getPage: (pageNumber: number) => Promise<PdfPageProxy>;
+  destroy?: () => Promise<void> | void;
+};
+
+type PdfLoadingTask = {
+  promise: Promise<PdfDocumentProxy>;
+  destroy?: () => Promise<void> | void;
+};
+
+type PdfJsModule = {
+  GlobalWorkerOptions: { workerSrc?: string };
+  getDocument: (source: { url: string } | { data: Uint8Array }) => PdfLoadingTask;
+};
+
+const isUrlPdfSource = (source: string): boolean =>
+  source.startsWith('blob:') || source.startsWith('http://') || source.startsWith('https://');
+
+const normalizeBase64PdfContent = (content: string): string => {
+  const commaIndex = content.indexOf(',');
+  if (content.startsWith('data:') && commaIndex >= 0) {
+    return content.slice(commaIndex + 1);
   }
-  return URL.createObjectURL(new Blob(chunks, { type: PDF_BLOB_TYPE }));
+  return content;
+};
+
+const createPdfBytesFromBase64 = (base64: string): Uint8Array => {
+  const binary = atob(normalizeBase64PdfContent(base64));
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+};
+
+const getPdfErrorMessage = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+
+const PdfCanvasPage: React.FC<{
+  pdfDocument: PdfDocumentProxy;
+  pageNumber: number;
+  title: string;
+  onError: (message: string) => void;
+}> = ({ pdfDocument, pageNumber, title, onError }) => {
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+
+    const updateWidth = () => setContainerWidth(wrapper.clientWidth);
+    updateWidth();
+
+    if (typeof ResizeObserver === 'undefined') {
+      return;
+    }
+
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(wrapper);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!containerWidth) return;
+
+    let cancelled = false;
+    let renderTask: PdfRenderTask | null = null;
+
+    const renderPage = async () => {
+      try {
+        const page = await pdfDocument.getPage(pageNumber);
+        if (cancelled) return;
+
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        const baseViewport = page.getViewport({ scale: 1 });
+        const availableWidth = Math.max(240, containerWidth - 24);
+        const cssScale = Math.min(2, Math.max(0.2, availableWidth / baseViewport.width));
+        const viewport = page.getViewport({ scale: cssScale });
+        const outputScale = Math.min(window.devicePixelRatio || 1, 2);
+        const context = canvas.getContext('2d');
+        if (!context) {
+          throw new Error('Canvas context unavailable');
+        }
+
+        canvas.width = Math.floor(viewport.width * outputScale);
+        canvas.height = Math.floor(viewport.height * outputScale);
+        canvas.style.width = `${Math.floor(viewport.width)}px`;
+        canvas.style.height = `${Math.floor(viewport.height)}px`;
+        context.setTransform(outputScale, 0, 0, outputScale, 0, 0);
+
+        renderTask = page.render({ canvasContext: context, viewport });
+        await renderTask.promise;
+      } catch (error) {
+        if (!cancelled) {
+          onError(getPdfErrorMessage(error));
+        }
+      }
+    };
+
+    void renderPage();
+
+    return () => {
+      cancelled = true;
+      renderTask?.cancel?.();
+    };
+  }, [containerWidth, onError, pageNumber, pdfDocument]);
+
+  return (
+    <div ref={wrapperRef} className='w-full flex justify-center py-8px'>
+      <canvas
+        ref={canvasRef}
+        className='max-w-full bg-bg-1 shadow-sm border border-border-1'
+        data-testid='pdf-page-canvas'
+        aria-label={`${title} ${pageNumber}`}
+      />
+    </div>
+  );
+};
+
+const PdfCanvasDocument: React.FC<{
+  source: BrowserPdfSource;
+  title: string;
+  loadingLabel: string;
+  onError: (message: string) => void;
+}> = ({ source, title, loadingLabel, onError }) => {
+  const [pdfDocument, setPdfDocument] = useState<PdfDocumentProxy | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    let loadedDocument: PdfDocumentProxy | null = null;
+    let loadingTask: PdfLoadingTask | null = null;
+
+    const loadDocument = async () => {
+      try {
+        const [pdfjsLib, pdfjsWorker] = await Promise.all([
+          import('pdfjs-dist') as Promise<PdfJsModule>,
+          import('pdfjs-dist/build/pdf.worker.mjs?url') as Promise<{ default: string }>,
+        ]);
+        pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker.default;
+        if (cancelled) return;
+
+        loadingTask = pdfjsLib.getDocument(source.kind === 'url' ? { url: source.url } : { data: source.data.slice() });
+        const nextDocument = await loadingTask.promise;
+        loadedDocument = nextDocument;
+        if (cancelled) {
+          void nextDocument.destroy?.();
+          return;
+        }
+        setPdfDocument(nextDocument);
+        setLoading(false);
+      } catch (error) {
+        if (!cancelled) {
+          onError(getPdfErrorMessage(error));
+          setLoading(false);
+        }
+      }
+    };
+
+    setLoading(true);
+    setPdfDocument(null);
+    void loadDocument();
+
+    return () => {
+      cancelled = true;
+      void loadingTask?.destroy?.();
+      void loadedDocument?.destroy?.();
+    };
+  }, [onError, source]);
+
+  if (loading || !pdfDocument) {
+    return (
+      <div className='flex items-center justify-center h-full'>
+        <div className='text-14px text-t-secondary'>{loadingLabel}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className='h-full w-full overflow-auto bg-bg-2 px-12px py-8px'>
+      {Array.from({ length: pdfDocument.numPages }, (_, pageIndex) => (
+        <PdfCanvasPage
+          key={pageIndex + 1}
+          pdfDocument={pdfDocument}
+          pageNumber={pageIndex + 1}
+          title={title}
+          onError={onError}
+        />
+      ))}
+    </div>
+  );
 };
 
 const PDFPreview: React.FC<PDFPreviewProps> = ({ file_path, content, hideToolbar = false, workspace }) => {
   const { t } = useTranslation();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [browserPdfSrc, setBrowserPdfSrc] = useState<string>('');
+  const [electronPdfSrc, setElectronPdfSrc] = useState<string>('');
+  const [browserPdfSource, setBrowserPdfSource] = useState<BrowserPdfSource | null>(null);
   const [messageApi, messageContextHolder] = Message.useMessage();
   const toolbarExtrasContext = usePreviewToolbarExtras();
   const usePortalToolbar = Boolean(toolbarExtrasContext) && !hideToolbar;
@@ -77,13 +268,13 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ file_path, content, hideToolbar
   }, [file_path, messageApi, t]);
 
   useEffect(() => {
-    let revokedUrl: string | null = null;
     let cancelled = false;
 
     const loadPdfSource = async () => {
       setLoading(true);
       setError(null);
-      setBrowserPdfSrc('');
+      setElectronPdfSrc('');
+      setBrowserPdfSource(null);
 
       if (!file_path && !content) {
         setError(t('preview.pdf.pathMissing'));
@@ -92,22 +283,22 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ file_path, content, hideToolbar
       }
 
       if (content) {
-        const nextSrc = isReadyToRenderPdfSource(content) ? content : createPdfBlobUrlFromBase64(content);
-        const shouldRevoke = !isReadyToRenderPdfSource(content);
-        if (cancelled) {
-          if (shouldRevoke) URL.revokeObjectURL(nextSrc);
-          return;
-        }
-        if (shouldRevoke) revokedUrl = nextSrc;
         if (!cancelled) {
-          setBrowserPdfSrc(nextSrc);
+          setBrowserPdfSource(
+            isUrlPdfSource(content)
+              ? { kind: 'url', url: content }
+              : {
+                  kind: 'data',
+                  data: createPdfBytesFromBase64(content),
+                }
+          );
           setLoading(false);
         }
         return;
       }
 
       if (isElectron) {
-        setBrowserPdfSrc(buildPdfSrc(file_path, content));
+        setElectronPdfSrc(buildPdfSrc(file_path, content));
         setLoading(false);
         return;
       }
@@ -118,14 +309,10 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ file_path, content, hideToolbar
           throw new Error(t('preview.pdf.pathMissing'));
         }
 
-        const blobUrl = createPdfBlobUrlFromBase64(base64);
-        if (cancelled) {
-          URL.revokeObjectURL(blobUrl);
-          return;
+        if (!cancelled) {
+          setBrowserPdfSource({ kind: 'data', data: createPdfBytesFromBase64(base64) });
+          setLoading(false);
         }
-        revokedUrl = blobUrl;
-        setBrowserPdfSrc(blobUrl);
-        setLoading(false);
       } catch (err) {
         if (!cancelled) {
           setError(`${t('preview.pdf.loadFailed')}: ${err instanceof Error ? err.message : String(err)}`);
@@ -138,20 +325,8 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ file_path, content, hideToolbar
 
     return () => {
       cancelled = true;
-      if (revokedUrl) {
-        URL.revokeObjectURL(revokedUrl);
-      }
     };
   }, [content, file_path, isElectron, t, workspace]);
-
-  const handleBrowserPdfLoad = useCallback(() => {
-    setLoading(false);
-  }, []);
-
-  const handleBrowserPdfError = useCallback(() => {
-    setError(t('preview.pdf.loadFailed'));
-    setLoading(false);
-  }, [t]);
 
   const handleElectronPdfError = useCallback(
     (_errorCode: number, errorDescription: string) => {
@@ -166,10 +341,18 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ file_path, content, hideToolbar
   }, []);
 
   useEffect(() => {
-    if (isElectron && browserPdfSrc) {
+    if (isElectron && electronPdfSrc) {
       setLoading(false);
     }
-  }, [browserPdfSrc, isElectron]);
+  }, [electronPdfSrc, isElectron]);
+
+  const handleBrowserPdfError = useCallback(
+    (message: string) => {
+      setError(`${t('preview.pdf.loadFailed')}: ${message}`);
+      setLoading(false);
+    },
+    [t]
+  );
 
   // 设置工具栏扩展（必须在所有条件返回之前调用）
   // Set toolbar extras (must be called before any conditional returns)
@@ -233,21 +416,23 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ file_path, content, hideToolbar
       <div className='flex-1 overflow-hidden bg-bg-1'>
         {isElectron && file_path ? (
           <WebviewHost
-            key={browserPdfSrc}
-            url={browserPdfSrc}
+            key={electronPdfSrc}
+            url={electronPdfSrc}
             className='bg-bg-1'
             onDidFinishLoad={handleElectronPdfLoad}
             onDidFailLoad={handleElectronPdfError}
           />
-        ) : (
-          <iframe
-            key={browserPdfSrc}
-            src={browserPdfSrc}
-            className='w-full h-full border-0 bg-bg-1'
+        ) : browserPdfSource ? (
+          <PdfCanvasDocument
+            source={browserPdfSource}
             title={t('preview.pdf.title')}
-            onLoad={handleBrowserPdfLoad}
+            loadingLabel={t('preview.loading')}
             onError={handleBrowserPdfError}
           />
+        ) : (
+          <div className='flex items-center justify-center h-full'>
+            <div className='text-14px text-t-secondary'>{t('preview.loading')}</div>
+          </div>
         )}
       </div>
     </div>
