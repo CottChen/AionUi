@@ -7,8 +7,10 @@
 import { ipcBridge } from '@/common';
 import { buildPdfSrc } from '../../previewUrls';
 import { usePreviewToolbarExtras } from '../../context/PreviewToolbarExtrasContext';
+import WebviewHost from '@/renderer/components/media/WebviewHost';
+import { isElectronDesktop } from '@/renderer/utils/platform';
 import { Button, Message } from '@arco-design/web-react';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 interface PDFPreviewProps {
@@ -23,21 +25,42 @@ interface PDFPreviewProps {
    */
   content?: string;
   hideToolbar?: boolean;
+  workspace?: string;
 }
 
-// Electron webview 元素的类型定义 / Type definition for Electron webview element
-interface ElectronWebView extends HTMLElement {
-  src: string;
-}
+const PDF_BLOB_TYPE = 'application/pdf';
 
-const PDFPreview: React.FC<PDFPreviewProps> = ({ file_path, content, hideToolbar = false }) => {
+const isReadyToRenderPdfSource = (source: string): boolean =>
+  source.startsWith('blob:') ||
+  source.startsWith('data:') ||
+  source.startsWith('http://') ||
+  source.startsWith('https://');
+
+const createPdfBlobUrlFromBase64 = (base64: string): string => {
+  const binary = atob(base64);
+  const chunkSize = 8192;
+  const chunks: ArrayBuffer[] = [];
+  for (let offset = 0; offset < binary.length; offset += chunkSize) {
+    const slice = binary.slice(offset, offset + chunkSize);
+    const buffer = new ArrayBuffer(slice.length);
+    const bytes = new Uint8Array(buffer);
+    for (let index = 0; index < slice.length; index += 1) {
+      bytes[index] = slice.charCodeAt(index);
+    }
+    chunks.push(buffer);
+  }
+  return URL.createObjectURL(new Blob(chunks, { type: PDF_BLOB_TYPE }));
+};
+
+const PDFPreview: React.FC<PDFPreviewProps> = ({ file_path, content, hideToolbar = false, workspace }) => {
   const { t } = useTranslation();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const webviewRef = useRef<ElectronWebView>(null);
+  const [browserPdfSrc, setBrowserPdfSrc] = useState<string>('');
   const [messageApi, messageContextHolder] = Message.useMessage();
   const toolbarExtrasContext = usePreviewToolbarExtras();
   const usePortalToolbar = Boolean(toolbarExtrasContext) && !hideToolbar;
+  const isElectron = useMemo(() => isElectronDesktop(), []);
 
   const handleOpenInSystem = useCallback(async () => {
     if (!file_path) {
@@ -48,15 +71,19 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ file_path, content, hideToolbar
     try {
       await ipcBridge.shell.openFile.invoke(file_path);
       messageApi.success(t('preview.openInSystemSuccess'));
-    } catch (err) {
+    } catch {
       messageApi.error(t('preview.openInSystemFailed'));
     }
   }, [file_path, messageApi, t]);
 
   useEffect(() => {
-    try {
+    let revokedUrl: string | null = null;
+    let cancelled = false;
+
+    const loadPdfSource = async () => {
       setLoading(true);
       setError(null);
+      setBrowserPdfSrc('');
 
       if (!file_path && !content) {
         setError(t('preview.pdf.pathMissing'));
@@ -64,33 +91,85 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ file_path, content, hideToolbar
         return;
       }
 
-      // webview 加载成功后隐藏 loading
-      // Hide loading after webview finishes loading
-      const webview = webviewRef.current;
-      if (webview) {
-        const handleLoad = () => {
+      if (content) {
+        const nextSrc = isReadyToRenderPdfSource(content) ? content : createPdfBlobUrlFromBase64(content);
+        const shouldRevoke = !isReadyToRenderPdfSource(content);
+        if (cancelled) {
+          if (shouldRevoke) URL.revokeObjectURL(nextSrc);
+          return;
+        }
+        if (shouldRevoke) revokedUrl = nextSrc;
+        if (!cancelled) {
+          setBrowserPdfSrc(nextSrc);
           setLoading(false);
-        };
-        const handleError = () => {
-          setError(t('preview.pdf.loadFailed'));
-          setLoading(false);
-        };
-
-        webview.addEventListener('did-finish-load', handleLoad);
-        webview.addEventListener('did-fail-load', handleError);
-
-        return () => {
-          webview.removeEventListener('did-finish-load', handleLoad);
-          webview.removeEventListener('did-fail-load', handleError);
-        };
-      } else {
-        setLoading(false);
+        }
+        return;
       }
-    } catch (err) {
-      setError(`${t('preview.pdf.loadFailed')}: ${err instanceof Error ? err.message : String(err)}`);
+
+      if (isElectron) {
+        setBrowserPdfSrc(buildPdfSrc(file_path, content));
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const base64 = await ipcBridge.fs.readFileBuffer.invoke({ path: file_path!, workspace });
+        if (!base64) {
+          throw new Error(t('preview.pdf.pathMissing'));
+        }
+
+        const blobUrl = createPdfBlobUrlFromBase64(base64);
+        if (cancelled) {
+          URL.revokeObjectURL(blobUrl);
+          return;
+        }
+        revokedUrl = blobUrl;
+        setBrowserPdfSrc(blobUrl);
+        setLoading(false);
+      } catch (err) {
+        if (!cancelled) {
+          setError(`${t('preview.pdf.loadFailed')}: ${err instanceof Error ? err.message : String(err)}`);
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadPdfSource();
+
+    return () => {
+      cancelled = true;
+      if (revokedUrl) {
+        URL.revokeObjectURL(revokedUrl);
+      }
+    };
+  }, [content, file_path, isElectron, t, workspace]);
+
+  const handleBrowserPdfLoad = useCallback(() => {
+    setLoading(false);
+  }, []);
+
+  const handleBrowserPdfError = useCallback(() => {
+    setError(t('preview.pdf.loadFailed'));
+    setLoading(false);
+  }, [t]);
+
+  const handleElectronPdfError = useCallback(
+    (_errorCode: number, errorDescription: string) => {
+      setError(`${t('preview.pdf.loadFailed')}: ${errorDescription}`);
+      setLoading(false);
+    },
+    [t]
+  );
+
+  const handleElectronPdfLoad = useCallback(() => {
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (isElectron && browserPdfSrc) {
       setLoading(false);
     }
-  }, [file_path, content, t]);
+  }, [browserPdfSrc, isElectron]);
 
   // 设置工具栏扩展（必须在所有条件返回之前调用）
   // Set toolbar extras (must be called before any conditional returns)
@@ -107,10 +186,6 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ file_path, content, hideToolbar
     });
     return () => toolbarExtrasContext.setExtras(null);
   }, [usePortalToolbar, toolbarExtrasContext, t, loading, error]);
-
-  // 使用 Electron webview 加载本地 PDF 文件
-  // Use Electron webview to load local PDF files
-  const pdfSrc = buildPdfSrc(file_path, content);
 
   if (error) {
     return (
@@ -156,14 +231,24 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ file_path, content, hideToolbar
       )}
       {/* PDF 内容区域 / PDF content area */}
       <div className='flex-1 overflow-hidden bg-bg-1'>
-        {/* key 确保文件路径改变时 webview 重新挂载 / key ensures webview remounts when file path changes */}
-        <webview
-          key={pdfSrc}
-          ref={webviewRef}
-          src={pdfSrc}
-          className='w-full h-full'
-          style={{ display: 'inline-flex' }}
-        />
+        {isElectron && file_path ? (
+          <WebviewHost
+            key={browserPdfSrc}
+            url={browserPdfSrc}
+            className='bg-bg-1'
+            onDidFinishLoad={handleElectronPdfLoad}
+            onDidFailLoad={handleElectronPdfError}
+          />
+        ) : (
+          <iframe
+            key={browserPdfSrc}
+            src={browserPdfSrc}
+            className='w-full h-full border-0 bg-bg-1'
+            title={t('preview.pdf.title')}
+            onLoad={handleBrowserPdfLoad}
+            onError={handleBrowserPdfError}
+          />
+        )}
       </div>
     </div>
   );
