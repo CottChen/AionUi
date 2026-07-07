@@ -293,7 +293,7 @@ describe('SkillsHubSettings', () => {
     render(<SkillsHubSettings withWrapper={false} />);
 
     await waitFor(() => expect(screen.getByTestId('skill-import-history-page')).toBeInTheDocument());
-    expect(screen.getByText('Repair: create the zip again and import it')).toBeInTheDocument();
+    expect(await screen.findByText('Repair: create the zip again and import it')).toBeInTheDocument();
     expect(screen.queryByText('Repair: update the skill files and import again')).not.toBeInTheDocument();
   });
 
