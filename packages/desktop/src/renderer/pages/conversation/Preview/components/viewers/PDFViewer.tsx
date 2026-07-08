@@ -86,12 +86,40 @@ const getPdfErrorMessage = (error: unknown): string => (error instanceof Error ?
 const PdfCanvasPage: React.FC<{
   pdfDocument: PdfDocumentProxy;
   pageNumber: number;
+  scrollRootRef: React.RefObject<HTMLDivElement | null>;
   title: string;
   onError: (message: string) => void;
-}> = ({ pdfDocument, pageNumber, title, onError }) => {
+}> = ({ pdfDocument, pageNumber, scrollRootRef, title, onError }) => {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
+  const [shouldRender, setShouldRender] = useState(false);
+  const [canvasSize, setCanvasSize] = useState<PdfViewport | null>(null);
+
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+
+    if (typeof IntersectionObserver === 'undefined') {
+      setShouldRender(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        const nextShouldRender = entry?.isIntersecting ?? false;
+        setShouldRender((currentShouldRender) =>
+          currentShouldRender === nextShouldRender ? currentShouldRender : nextShouldRender
+        );
+      },
+      {
+        root: scrollRootRef.current,
+        rootMargin: '900px 0px',
+      }
+    );
+    observer.observe(wrapper);
+    return () => observer.disconnect();
+  }, [scrollRootRef]);
 
   useEffect(() => {
     const wrapper = wrapperRef.current;
@@ -110,7 +138,7 @@ const PdfCanvasPage: React.FC<{
   }, []);
 
   useEffect(() => {
-    if (!containerWidth) return;
+    if (!shouldRender || !containerWidth) return;
 
     let cancelled = false;
     let renderTask: PdfRenderTask | null = null;
@@ -137,6 +165,12 @@ const PdfCanvasPage: React.FC<{
         canvas.height = Math.floor(viewport.height * outputScale);
         canvas.style.width = `${Math.floor(viewport.width)}px`;
         canvas.style.height = `${Math.floor(viewport.height)}px`;
+        const nextCanvasSize = { width: Math.floor(viewport.width), height: Math.floor(viewport.height) };
+        setCanvasSize((currentCanvasSize) =>
+          currentCanvasSize?.width === nextCanvasSize.width && currentCanvasSize.height === nextCanvasSize.height
+            ? currentCanvasSize
+            : nextCanvasSize
+        );
         context.setTransform(outputScale, 0, 0, outputScale, 0, 0);
 
         renderTask = page.render({ canvasContext: context, viewport });
@@ -154,16 +188,27 @@ const PdfCanvasPage: React.FC<{
       cancelled = true;
       renderTask?.cancel?.();
     };
-  }, [containerWidth, onError, pageNumber, pdfDocument]);
+  }, [containerWidth, onError, pageNumber, pdfDocument, shouldRender]);
+
+  const placeholderHeight = canvasSize ? `${canvasSize.height}px` : '320px';
+  const placeholderWidth = canvasSize ? `${canvasSize.width}px` : '100%';
 
   return (
     <div ref={wrapperRef} className='w-full flex justify-center py-8px'>
-      <canvas
-        ref={canvasRef}
-        className='max-w-full bg-bg-1 shadow-sm border border-border-1'
-        data-testid='pdf-page-canvas'
-        aria-label={`${title} ${pageNumber}`}
-      />
+      {shouldRender ? (
+        <canvas
+          ref={canvasRef}
+          className='max-w-full bg-bg-1 shadow-sm border border-border-1'
+          data-testid='pdf-page-canvas'
+          aria-label={`${title} ${pageNumber}`}
+        />
+      ) : (
+        <div
+          className='max-w-full bg-bg-1 border border-border-1'
+          style={{ width: placeholderWidth, height: placeholderHeight }}
+          aria-hidden='true'
+        />
+      )}
     </div>
   );
 };
@@ -176,6 +221,7 @@ const PdfCanvasDocument: React.FC<{
 }> = ({ source, title, loadingLabel, onError }) => {
   const [pdfDocument, setPdfDocument] = useState<PdfDocumentProxy | null>(null);
   const [loading, setLoading] = useState(true);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -228,12 +274,13 @@ const PdfCanvasDocument: React.FC<{
   }
 
   return (
-    <div className='h-full w-full overflow-auto bg-bg-2 px-12px py-8px'>
+    <div ref={scrollContainerRef} className='h-full w-full overflow-auto bg-bg-2 px-12px py-8px'>
       {Array.from({ length: pdfDocument.numPages }, (_, pageIndex) => (
         <PdfCanvasPage
           key={pageIndex + 1}
           pdfDocument={pdfDocument}
           pageNumber={pageIndex + 1}
+          scrollRootRef={scrollContainerRef}
           title={title}
           onError={onError}
         />

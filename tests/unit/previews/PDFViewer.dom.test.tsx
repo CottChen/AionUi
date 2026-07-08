@@ -5,8 +5,8 @@
  */
 
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ipcBridge } from '@/common';
 import PDFViewer from '@/renderer/pages/conversation/Preview/components/viewers/PDFViewer';
 
@@ -18,8 +18,17 @@ const pdfMocks = vi.hoisted(() => ({
   render: vi.fn(),
 }));
 
+const i18nMock = vi.hoisted(() => ({
+  t: (key: string) => key,
+}));
+
 const platformState = {
   isElectron: false,
+};
+
+type MockIntersectionObserver = IntersectionObserver & {
+  callback: IntersectionObserverCallback;
+  observe: ReturnType<typeof vi.fn>;
 };
 
 vi.mock('@/common', () => ({
@@ -56,7 +65,7 @@ vi.mock('@/renderer/pages/conversation/Preview/context/PreviewToolbarExtrasConte
 }));
 
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({ t: i18nMock.t }),
 }));
 
 vi.mock('@arco-design/web-react', () => ({
@@ -104,7 +113,12 @@ describe('PDFViewer', () => {
     });
   });
 
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('renders PDF through PDF.js canvases in WebUI mode without webview', async () => {
+    vi.stubGlobal('IntersectionObserver', undefined);
     vi.mocked(ipcBridge.fs.readFileBuffer.invoke).mockResolvedValue('JVBERi0xLjQ=');
 
     const { container } = render(<PDFViewer file_path='/workspace/report.pdf' workspace='/workspace' />);
@@ -122,6 +136,52 @@ describe('PDFViewer', () => {
     expect(container.querySelector('webview')).toBeNull();
     expect(container.querySelector('iframe')).toBeNull();
     expect(screen.queryByTestId('webview-host')).not.toBeInTheDocument();
+  });
+
+  it('renders browser PDF pages lazily as they enter the viewport', async () => {
+    const observers: MockIntersectionObserver[] = [];
+    const MockedIntersectionObserver = vi.fn(function (
+      this: MockIntersectionObserver,
+      callback: IntersectionObserverCallback
+    ) {
+      Object.assign(this, {
+        callback,
+        observe: vi.fn(),
+        unobserve: vi.fn(),
+        disconnect: vi.fn(),
+        takeRecords: vi.fn(() => []),
+        root: null,
+        rootMargin: '',
+        thresholds: [],
+      });
+      observers.push(this);
+    });
+    vi.stubGlobal('IntersectionObserver', MockedIntersectionObserver);
+    vi.mocked(ipcBridge.fs.readFileBuffer.invoke).mockResolvedValue('JVBERi0xLjQ=');
+
+    render(<PDFViewer file_path='/workspace/report.pdf' workspace='/workspace' />);
+
+    await waitFor(() => {
+      expect(pdfMocks.getDocument).toHaveBeenCalledWith({ data: expect.any(Uint8Array) });
+    });
+    await waitFor(() => {
+      expect(MockedIntersectionObserver).toHaveBeenCalledTimes(2);
+    });
+    expect(screen.queryAllByTestId('pdf-page-canvas')).toHaveLength(0);
+    expect(pdfMocks.getPage).not.toHaveBeenCalled();
+
+    act(() => {
+      observers[0].callback(
+        [{ isIntersecting: true, target: observers[0].observe.mock.calls[0][0] } as IntersectionObserverEntry],
+        observers[0]
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId('pdf-page-canvas')).toHaveLength(1);
+    });
+    expect(pdfMocks.getPage).toHaveBeenCalledTimes(1);
+    expect(pdfMocks.getPage).toHaveBeenCalledWith(1);
   });
 
   it('keeps Electron desktop rendering on WebviewHost', async () => {
