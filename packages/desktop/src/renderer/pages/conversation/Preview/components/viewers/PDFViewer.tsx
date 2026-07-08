@@ -185,8 +185,8 @@ const PdfCanvasDocument: React.FC<{
     const loadDocument = async () => {
       try {
         const [pdfjsLib, pdfjsWorker] = await Promise.all([
-          import('pdfjs-dist') as Promise<PdfJsModule>,
-          import('pdfjs-dist/build/pdf.worker.mjs?url') as Promise<{ default: string }>,
+          import('pdfjs-dist/legacy/build/pdf.mjs') as Promise<PdfJsModule>,
+          import('pdfjs-dist/legacy/build/pdf.worker.mjs?url') as Promise<{ default: string }>,
         ]);
         pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker.default;
         if (cancelled) return;
