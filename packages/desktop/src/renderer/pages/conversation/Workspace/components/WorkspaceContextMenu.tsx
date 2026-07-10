@@ -5,6 +5,7 @@
  */
 
 import type { IDirOrFile } from '@/common/adapter/ipcBridge';
+import { isElectronDesktop } from '@/renderer/utils/platform';
 import React from 'react';
 import type { TFunction } from 'i18next';
 import { isPreviewSupportedExt } from '../utils/filePreview';
@@ -51,6 +52,7 @@ const WorkspaceContextMenu: React.FC<WorkspaceContextMenuProps> = ({
   const isFile = !!node.isFile;
   const isRoot = !node.relativePath || node.relativePath === '';
   const isPreviewSupported = isFile && !!node.name && isPreviewSupportedExt(node.name);
+  const showSystemFileActions = isElectronDesktop();
 
   return (
     <div
@@ -72,26 +74,30 @@ const WorkspaceContextMenu: React.FC<WorkspaceContextMenuProps> = ({
         >
           {t('conversation.workspace.contextMenu.addToChat')}
         </button>
-        <button
-          type='button'
-          className={MENU_BUTTON_BASE}
-          onClick={() => {
-            void handleOpenNode(node);
-            closeContextMenu();
-          }}
-        >
-          {t('conversation.workspace.contextMenu.open')}
-        </button>
-        <button
-          type='button'
-          className={MENU_BUTTON_BASE}
-          onClick={() => {
-            void handleRevealNode(node);
-            closeContextMenu();
-          }}
-        >
-          {t('conversation.workspace.contextMenu.openLocation')}
-        </button>
+        {showSystemFileActions && (
+          <>
+            <button
+              type='button'
+              className={MENU_BUTTON_BASE}
+              onClick={() => {
+                void handleOpenNode(node);
+                closeContextMenu();
+              }}
+            >
+              {t('conversation.workspace.contextMenu.open')}
+            </button>
+            <button
+              type='button'
+              className={MENU_BUTTON_BASE}
+              onClick={() => {
+                void handleRevealNode(node);
+                closeContextMenu();
+              }}
+            >
+              {t('conversation.workspace.contextMenu.openLocation')}
+            </button>
+          </>
+        )}
         {isFile && isPreviewSupported && (
           <button
             type='button'

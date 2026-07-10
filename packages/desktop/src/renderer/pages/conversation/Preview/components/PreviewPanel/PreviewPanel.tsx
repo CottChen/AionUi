@@ -9,6 +9,7 @@ import { downloadFileFromPath, downloadTextContent } from '@/renderer/utils/file
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { toLocalFileHref } from '@/renderer/components/Markdown/markdownUtils';
 import { dispatchWorkspaceRevealFileEvent } from '@/renderer/utils/workspace/workspaceEvents';
+import { isElectronDesktop } from '@/renderer/utils/platform';
 import { PreviewToolbarExtrasProvider, type PreviewToolbarExtras } from '../../context/PreviewToolbarExtrasContext';
 import { usePreviewContext } from '../../context/PreviewContext';
 import { useResizableSplit } from '@/renderer/hooks/ui/useResizableSplit';
@@ -279,7 +280,7 @@ const PreviewPanel: React.FC = () => {
 
   // 对所有有 file_path 的文件显示"在系统中打开"按钮（统一在工具栏显示）
   // Show "Open in System" button for all files with file_path (unified in toolbar)
-  const showOpenInSystemButton = Boolean(metadata?.file_path);
+  const showOpenInSystemButton = isElectronDesktop() && Boolean(metadata?.file_path);
   const showRevealInWorkspaceButton = Boolean(metadata?.file_path && metadata?.workspace);
 
   // 下载文件到本地 / Download file to local system

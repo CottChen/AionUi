@@ -299,6 +299,7 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ file_path, content, hideToolbar
   const toolbarExtrasContext = usePreviewToolbarExtras();
   const usePortalToolbar = Boolean(toolbarExtrasContext) && !hideToolbar;
   const isElectron = useMemo(() => isElectronDesktop(), []);
+  const showOpenInSystemButton = isElectron && Boolean(file_path);
 
   const handleOpenInSystem = useCallback(async () => {
     if (!file_path) {
@@ -447,7 +448,7 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ file_path, content, hideToolbar
             <span className='text-13px text-t-secondary'>📄 {t('preview.pdf.title')}</span>
             <span className='text-11px text-t-tertiary'>{t('preview.readOnlyLabel')}</span>
           </div>
-          {file_path && (
+          {showOpenInSystemButton && (
             <Button size='mini' type='text' onClick={handleOpenInSystem} title={t('preview.openInSystemApp')}>
               <svg width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2'>
                 <path d='M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6' />

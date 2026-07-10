@@ -1295,10 +1295,10 @@ const SendBox: React.FC<{
   ) : null;
 
   // On mobile compact mode, the parent supplies the action sheet — collapse
-  // tools/rightTools into the `+` launcher and skip the inline speech button.
+  // tools/rightTools into the `+` launcher while keeping speech input visible.
   const renderedTools = isMobileCompact ? mobilePlusButton : tools;
   const renderedRightTools = isMobileCompact ? null : rightTools;
-  const renderedSpeechButton = isMobileCompact ? null : (
+  const renderedSpeechButton = (
     <SpeechInputButton
       disabled={disabled || isLoading || loading || isUploading}
       onLiveTranscript={handleLiveTranscript}
