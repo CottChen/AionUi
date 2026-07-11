@@ -141,7 +141,7 @@ const MarkdownView: React.FC<MarkdownViewProps> = React.memo(
             const src = resolveLocalFileLinkPath(imgProps.src || '') || decodeURIComponent(imgProps.src || '');
             return <LocalImageView src={src} alt={imgProps.alt || ''} className={imgProps.className} />;
           }
-          return <img {...imgProps} />;
+          return <img {...imgProps} alt={imgProps.alt || ''} />;
         },
       }),
       [codeStyle, hiddenCodeCopyButton, handleLinkClick, onLocalFileLink]
