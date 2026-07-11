@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  *
  * Regression coverage for the Guid action row responsive split:
- * mobile keeps core actions visible and marks long config labels for compact
- * styling; desktop keeps the same inline config controls without the marker.
+ * mobile keeps core actions visible and moves config controls into the action
+ * sheet; desktop keeps the same inline config controls.
  */
 
 import React from 'react';
@@ -45,8 +45,16 @@ vi.mock('@arco-design/web-react', () => ({
   Button: ({
     children,
     icon,
+    loading: _loading,
+    shape: _shape,
+    type: _type,
     ...props
-  }: React.ButtonHTMLAttributes<HTMLButtonElement> & { icon?: React.ReactNode }) => (
+  }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+    icon?: React.ReactNode;
+    loading?: boolean;
+    shape?: string;
+    type?: string;
+  }) => (
     <button type='button' {...props}>
       {icon}
       {children}
@@ -81,6 +89,7 @@ vi.mock('@arco-design/web-react', () => ({
 vi.mock('@icon-park/react', () => ({
   ArrowUp: () => <span data-testid='icon-arrow-up' />,
   Brain: () => <span data-testid='icon-brain' />,
+  FolderUpload: () => <span data-testid='icon-folder-upload' />,
   Lightning: () => <span data-testid='icon-lightning' />,
   Plus: () => <span data-testid='icon-plus' />,
   Shield: () => <span data-testid='icon-shield' />,
@@ -125,12 +134,13 @@ const renderActionRow = (isMobile: boolean) =>
   );
 
 describe('GuidActionRow responsive config controls', () => {
-  it('marks inline config controls for compact mobile styling', () => {
+  it('moves config controls out of the inline mobile row', () => {
     renderActionRow(true);
 
-    expect(screen.getByTestId('inline-model-selector')).toBeInTheDocument();
-    expect(screen.getByTestId('inline-agent-mode')).toBeInTheDocument();
-    expect(screen.getByTestId('inline-model-selector').parentElement).toHaveAttribute('data-mobile', 'true');
+    expect(screen.getByTestId('file-upload-btn')).toBeInTheDocument();
+    expect(screen.getByTestId('guid-send-btn')).toBeInTheDocument();
+    expect(screen.queryByTestId('inline-model-selector')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('inline-agent-mode')).not.toBeInTheDocument();
   });
 
   it('keeps inline model and permission controls on desktop', () => {
