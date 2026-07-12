@@ -102,6 +102,12 @@ export type AssistantEditorViewModel = {
       value: string;
       setValue: (value: string) => void;
     };
+    workspace: {
+      mode: 'auto' | 'fixed';
+      setMode: (value: 'auto' | 'fixed') => void;
+      value: string;
+      setValue: (value: string) => void;
+    };
     skills: {
       mode: 'auto' | 'fixed';
       setMode: (value: 'auto' | 'fixed') => void;

@@ -20,6 +20,7 @@ type OfficialAssistantsGridProps = {
   onDuplicate: (assistant: AssistantListItem) => void;
   onToggleEnabled: (assistant: AssistantListItem, checked: boolean) => void;
   onStartChat: (assistant: AssistantListItem) => void;
+  canManageDefinitions: boolean;
 };
 
 const FILTER_OPTIONS: AssistantEnabledFilter[] = ['all', 'enabled', 'disabled'];
@@ -36,6 +37,7 @@ const OfficialAssistantsGrid: React.FC<OfficialAssistantsGridProps> = ({
   onDuplicate,
   onToggleEnabled,
   onStartChat,
+  canManageDefinitions,
 }) => {
   const { t } = useTranslation();
   const [filter, setFilter] = useState<AssistantEnabledFilter>('all');
@@ -93,7 +95,7 @@ const OfficialAssistantsGrid: React.FC<OfficialAssistantsGridProps> = ({
       <div className='grid grid-cols-1 gap-14px sm:grid-cols-2 lg:grid-cols-3'>
         {officialAssistants.map((assistant) => {
           const enabled = assistant.enabled !== false;
-          const actionMenu = (
+          const actionMenu = canManageDefinitions ? (
             <Menu
               onClickMenuItem={(key) => {
                 if (key === 'settings') onOpenSettings(assistant);
@@ -111,14 +113,16 @@ const OfficialAssistantsGrid: React.FC<OfficialAssistantsGridProps> = ({
                 </span>
               </Menu.Item>
             </Menu>
-          );
+          ) : null;
 
           return (
             <div
               key={assistant.id}
               data-testid={`official-card-${assistant.id}`}
               className='group flex cursor-pointer flex-col rounded-14px border border-solid border-transparent bg-base p-16px transition-all duration-180 hover:border-border-2'
-              onClick={() => onOpenSettings(assistant)}
+              onClick={() => {
+                if (canManageDefinitions) onOpenSettings(assistant);
+              }}
             >
               {/* Header row: avatar on the left, enable switch on the right. */}
               <div className='flex items-start justify-between'>
@@ -159,16 +163,23 @@ const OfficialAssistantsGrid: React.FC<OfficialAssistantsGridProps> = ({
                       {t('settings.assistantGoChat', { defaultValue: 'Chat' })}
                     </Button>
                   ) : null}
-                  <Dropdown droplist={actionMenu} trigger='click' position='br' getPopupContainer={() => document.body}>
-                    <Button
-                      type='text'
-                      size='small'
-                      icon={<MoreOne theme='outline' size='16' fill='currentColor' />}
-                      aria-label={t('common.more', { defaultValue: 'More' })}
-                      className='!flex !h-32px !w-36px !items-center !justify-center !rounded-9px !p-0 !text-t-tertiary hover:!bg-fill-2 hover:!text-t-primary'
-                      data-testid={`btn-assistant-more-${assistant.id}`}
-                    />
-                  </Dropdown>
+                  {actionMenu && (
+                    <Dropdown
+                      droplist={actionMenu}
+                      trigger='click'
+                      position='br'
+                      getPopupContainer={() => document.body}
+                    >
+                      <Button
+                        type='text'
+                        size='small'
+                        icon={<MoreOne theme='outline' size='16' fill='currentColor' />}
+                        aria-label={t('common.more', { defaultValue: 'More' })}
+                        className='!flex !h-32px !w-36px !items-center !justify-center !rounded-9px !p-0 !text-t-tertiary hover:!bg-fill-2 hover:!text-t-primary'
+                        data-testid={`btn-assistant-more-${assistant.id}`}
+                      />
+                    </Dropdown>
+                  )}
                 </div>
               </div>
             </div>

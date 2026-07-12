@@ -35,6 +35,12 @@ vi.mock('@/renderer/hooks/assistant', () => ({
   useAssistantEditor: (params: unknown) => useAssistantEditorMock(params),
 }));
 
+vi.mock('@/renderer/hooks/context/AuthContext', () => ({
+  useAuth: () => ({
+    user: { id: 'system_default_user', username: 'admin', isAdmin: true },
+  }),
+}));
+
 vi.mock('@/renderer/pages/settings/components/SettingsPageWrapper', () => ({
   default: ({ children }: { children: React.ReactNode }) => <div data-testid='settings-wrapper'>{children}</div>,
 }));
@@ -99,6 +105,14 @@ describe('AssistantSettings', () => {
       setDefaultPermissionMode: vi.fn(),
       defaultPermissionValue: '',
       setDefaultPermissionValue: vi.fn(),
+      defaultThoughtLevelMode: 'auto',
+      setDefaultThoughtLevelMode: vi.fn(),
+      defaultThoughtLevelValue: '',
+      setDefaultThoughtLevelValue: vi.fn(),
+      defaultWorkspaceMode: 'auto',
+      setDefaultWorkspaceMode: vi.fn(),
+      defaultWorkspaceValue: '',
+      setDefaultWorkspaceValue: vi.fn(),
       defaultSkillsMode: 'fixed',
       setDefaultSkillsMode: vi.fn(),
       defaultMcpMode: 'auto',

@@ -3,6 +3,7 @@ import { isElectronDesktop, resolveExtensionAssetUrl } from '@/renderer/utils/pl
 import { type IExtensionSettingsTab } from '@/common/adapter/ipcBridge';
 import { useExtI18n } from '@/renderer/hooks/system/useExtI18n';
 import { useExtensionSettingsTabs } from '@/renderer/hooks/system/useExtensionSettingsTabs';
+import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import {
   Cat,
   Communication,
@@ -75,6 +76,8 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
   const { t } = useTranslation();
   const { pathname } = useLocation();
   const isDesktop = isElectronDesktop();
+  const { user } = useAuth();
+  const canEditGlobalSettings = isDesktop || user?.isAdmin === true;
 
   const extensionTabs = useExtensionSettingsTabs();
   const { resolveExtTabName } = useExtI18n();
@@ -114,14 +117,17 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
     };
 
     // Start with ordered builtin IDs, hiding desktop-only tabs in browser mode
-    const result: SiderItem[] = BUILTIN_TAB_IDS.filter((id) => isDesktop || id !== 'pet').map((id) => builtinMap[id]);
+    const visibleBuiltinIds = canEditGlobalSettings
+      ? BUILTIN_TAB_IDS.filter((id) => isDesktop || id !== 'pet')
+      : (['appearance', 'webui'] as const);
+    const result: SiderItem[] = visibleBuiltinIds.map((id) => builtinMap[id]);
 
     // Extension tabs with position anchoring
     const beforeMap = new Map<string, IExtensionSettingsTab[]>();
     const afterMap = new Map<string, IExtensionSettingsTab[]>();
     const unanchored: IExtensionSettingsTab[] = [];
 
-    for (const tab of extensionTabs) {
+    for (const tab of canEditGlobalSettings ? extensionTabs : []) {
       if (!tab.position) {
         unanchored.push(tab);
         continue;
@@ -188,7 +194,7 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
     }
 
     return { menus: result, groupHeaderAt: headerAt };
-  }, [t, isDesktop, extensionTabs, resolveExtTabName]);
+  }, [t, canEditGlobalSettings, isDesktop, extensionTabs, resolveExtTabName]);
 
   const siderTooltipProps = getSiderTooltipProps(tooltipEnabled);
   return (

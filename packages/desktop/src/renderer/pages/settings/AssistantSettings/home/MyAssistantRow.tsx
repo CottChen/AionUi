@@ -22,6 +22,7 @@ type MyAssistantRowProps = {
   onDelete: (assistant: AssistantListItem) => void;
   onToggleEnabled: (assistant: AssistantListItem, checked: boolean) => void;
   onStartChat: (assistant: AssistantListItem) => void;
+  canManageDefinitions: boolean;
 };
 
 /**
@@ -36,10 +37,11 @@ const MyAssistantRow: React.FC<MyAssistantRowProps> = ({
   onDelete,
   onToggleEnabled,
   onStartChat,
+  canManageDefinitions,
 }) => {
   const { t } = useTranslation();
   const enabled = assistant.enabled !== false;
-  const canDelete = assistant.source === 'user';
+  const canDelete = canManageDefinitions && assistant.source === 'user';
   const { attributes, listeners, setActivatorNodeRef, setNodeRef, transform, transition, isDragging } = useSortable({
     id: assistant.id,
     disabled: !draggable,
@@ -58,9 +60,11 @@ const MyAssistantRow: React.FC<MyAssistantRowProps> = ({
         if (key === 'delete') onDelete(assistant);
       }}
     >
-      <Menu.Item key='edit'>
-        <span data-testid={`menu-edit-${assistant.id}`}>{t('common.settings', { defaultValue: 'Settings' })}</span>
-      </Menu.Item>
+      {canManageDefinitions ? (
+        <Menu.Item key='edit'>
+          <span data-testid={`menu-edit-${assistant.id}`}>{t('common.settings', { defaultValue: 'Settings' })}</span>
+        </Menu.Item>
+      ) : null}
       {canDelete ? (
         <Menu.Item key='delete'>
           <span data-testid={`menu-delete-${assistant.id}`} className='text-[rgb(var(--danger-6))]'>
@@ -77,7 +81,9 @@ const MyAssistantRow: React.FC<MyAssistantRowProps> = ({
       style={style}
       data-testid={`assistant-card-${assistant.id}`}
       className='group flex cursor-pointer items-center justify-between gap-12px rounded-12px border border-solid border-transparent bg-base px-14px py-12px transition-all duration-180 hover:border-border-2'
-      onClick={() => onOpenDetail(assistant)}
+      onClick={() => {
+        if (canManageDefinitions) onOpenDetail(assistant);
+      }}
     >
       <div className='flex min-w-0 flex-1 items-center gap-12px'>
         <Button
@@ -153,16 +159,18 @@ const MyAssistantRow: React.FC<MyAssistantRowProps> = ({
           checked={enabled}
           onChange={(checked) => onToggleEnabled(assistant, checked)}
         />
-        <Dropdown droplist={actionMenu} trigger='click' position='br' getPopupContainer={() => document.body}>
-          <Button
-            type='text'
-            size='small'
-            icon={<MoreOne theme='outline' size='16' fill='currentColor' />}
-            aria-label={t('common.more', { defaultValue: 'More' })}
-            className='!flex !h-30px !w-30px !items-center !justify-center !rounded-8px !p-0 !text-t-tertiary hover:!bg-fill-2 hover:!text-t-primary'
-            data-testid={`btn-assistant-more-${assistant.id}`}
-          />
-        </Dropdown>
+        {canManageDefinitions && (
+          <Dropdown droplist={actionMenu} trigger='click' position='br' getPopupContainer={() => document.body}>
+            <Button
+              type='text'
+              size='small'
+              icon={<MoreOne theme='outline' size='16' fill='currentColor' />}
+              aria-label={t('common.more', { defaultValue: 'More' })}
+              className='!flex !h-30px !w-30px !items-center !justify-center !rounded-8px !p-0 !text-t-tertiary hover:!bg-fill-2 hover:!text-t-primary'
+              data-testid={`btn-assistant-more-${assistant.id}`}
+            />
+          </Dropdown>
+        )}
       </div>
     </div>
   );

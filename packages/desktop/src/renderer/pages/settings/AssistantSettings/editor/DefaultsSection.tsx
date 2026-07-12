@@ -1,7 +1,8 @@
 import type { BuiltinAutoSkill, SkillInfo } from '../types';
 import type { IMcpServer } from '@/common/config/storage';
+import WorkspaceFolderSelect from '@/renderer/components/workspace/WorkspaceFolderSelect';
 import { Button, Select, Tooltip } from '@arco-design/web-react';
-import { Brain, Lightning, LinkCloud, Shield, Toolkit } from '@icon-park/react';
+import { Brain, FolderOpen, Lightning, LinkCloud, Shield, Toolkit } from '@icon-park/react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -38,6 +39,10 @@ type DefaultsSectionProps = {
   setDefaultThoughtLevelMode: (value: 'auto' | 'fixed') => void;
   defaultThoughtLevelValue: string;
   setDefaultThoughtLevelValue: (value: string) => void;
+  defaultWorkspaceMode: 'auto' | 'fixed';
+  setDefaultWorkspaceMode: (value: 'auto' | 'fixed') => void;
+  defaultWorkspaceValue: string;
+  setDefaultWorkspaceValue: (value: string) => void;
   defaultSkillsMode: 'auto' | 'fixed';
   setDefaultSkillsMode: (value: 'auto' | 'fixed') => void;
   defaultMcpMode: 'auto' | 'fixed';
@@ -74,6 +79,10 @@ const DefaultsSection: React.FC<DefaultsSectionProps> = ({
   setDefaultThoughtLevelMode,
   defaultThoughtLevelValue,
   setDefaultThoughtLevelValue,
+  defaultWorkspaceMode,
+  setDefaultWorkspaceMode,
+  defaultWorkspaceValue,
+  setDefaultWorkspaceValue,
   defaultSkillsMode,
   setDefaultSkillsMode,
   defaultMcpMode,
@@ -96,6 +105,7 @@ const DefaultsSection: React.FC<DefaultsSectionProps> = ({
   const navigate = useNavigate();
   const canEditDefaultModelAndPermission = !isReadOnlyAssistant || isBuiltin;
   const canEditDefaultSkillsAndMcps = !isReadOnlyAssistant;
+  const canEditDefaultWorkspace = !isReadOnlyAssistant || isBuiltin;
   const hasFixedThoughtLevelValue =
     defaultThoughtLevelMode === 'fixed' &&
     defaultThoughtLevelValue &&
@@ -246,6 +256,41 @@ const DefaultsSection: React.FC<DefaultsSectionProps> = ({
             </Select>
           </ConfigRow>
         ) : null}
+
+        <ConfigRow
+          icon={<FolderOpen theme='outline' size='14' />}
+          label={t('settings.assistantDefaultWorkspaceLabel', { defaultValue: 'Project Folder' })}
+          hint={t('settings.assistantDefaultWorkspaceHint', {
+            defaultValue: 'Used when a new conversation starts without a manually selected project.',
+          })}
+        >
+          {canEditDefaultWorkspace ? (
+            <WorkspaceFolderSelect
+              value={defaultWorkspaceMode === 'fixed' ? defaultWorkspaceValue : ''}
+              onChange={(value) => {
+                setDefaultWorkspaceMode(value ? 'fixed' : 'auto');
+                setDefaultWorkspaceValue(value);
+              }}
+              onClear={() => {
+                setDefaultWorkspaceMode('auto');
+                setDefaultWorkspaceValue('');
+              }}
+              placeholder={t('settings.assistantDefaultWorkspaceAuto', { defaultValue: 'Use temporary project' })}
+              recentLabel={t('guid.workspace.recentProjects', { defaultValue: 'Recent projects' })}
+              chooseDifferentLabel={t('guid.workspace.chooseDifferent', { defaultValue: 'Choose another folder' })}
+              triggerTestId='select-assistant-default-workspace'
+              menuTestId='assistant-default-workspace-menu'
+            />
+          ) : (
+            <ReadonlySelectionField
+              value={
+                defaultWorkspaceMode === 'fixed' && defaultWorkspaceValue
+                  ? defaultWorkspaceValue
+                  : t('settings.assistantDefaultWorkspaceAuto', { defaultValue: 'Use temporary project' })
+              }
+            />
+          )}
+        </ConfigRow>
 
         {showSkills ? (
           <ConfigRow

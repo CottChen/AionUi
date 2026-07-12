@@ -13,6 +13,7 @@ import { startSystemThemeWatcher } from '@/renderer/utils/theme/systemThemeWatch
 import { BUILTIN_THEMES } from '@renderer/theme/builtinThemes';
 import { LIGHT_THEME_ID } from '@/common/theme/constants';
 import type { Theme } from '@/common/theme/types';
+import { addEventListener } from '@/renderer/utils/emitter';
 import { useCallback, useEffect, useState } from 'react';
 
 const APPEARANCE_CACHE_KEY = '__aionui_theme';
@@ -80,10 +81,22 @@ const useTheme = (): [Theme | null, (activeId: string) => Promise<void>, string 
       }
     });
     const offSystemWatch = startSystemThemeWatcher();
+    const offAuthUserChanged = addEventListener('auth.user.changed', () => {
+      initialPromise = initActiveTheme();
+      initialPromise
+        .then((t) => {
+          if (mounted) {
+            setActive(t);
+            setActiveId(getPersistedActiveId());
+          }
+        })
+        .catch((e) => console.error('init theme failed', e));
+    });
     return () => {
       mounted = false;
       off?.();
       offSystemWatch();
+      offAuthUserChanged();
     };
   }, []);
 

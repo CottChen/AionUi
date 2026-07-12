@@ -4,6 +4,7 @@ export type ResolvedGuidAssistantDefaults = {
   modelId?: string;
   permissionMode?: string;
   thoughtLevel?: string;
+  workspace?: string;
   skillIds: string[];
   disabledBuiltinSkillIds: string[];
   mcpIds: string[];
@@ -17,6 +18,7 @@ export const resolveGuidAssistantDefaults = (
       modelId: undefined,
       permissionMode: undefined,
       thoughtLevel: undefined,
+      workspace: undefined,
       skillIds: [],
       disabledBuiltinSkillIds: [],
       mcpIds: [],
@@ -45,6 +47,9 @@ export const resolveGuidAssistantDefaults = (
         ? detail.preferences.last_thought_level_value
         : undefined;
 
+  const workspaceDefault = detail.defaults.workspace ?? { mode: 'auto' };
+  const workspace = workspaceDefault.mode === 'fixed' ? workspaceDefault.value : undefined;
+
   const skillIds =
     detail.defaults.skills.mode === 'fixed'
       ? (detail.defaults.skills.value ?? [])
@@ -70,6 +75,7 @@ export const resolveGuidAssistantDefaults = (
     modelId: modelId || undefined,
     permissionMode: permissionMode || undefined,
     thoughtLevel: thoughtLevel || undefined,
+    workspace: workspace || undefined,
     skillIds,
     disabledBuiltinSkillIds,
     mcpIds,

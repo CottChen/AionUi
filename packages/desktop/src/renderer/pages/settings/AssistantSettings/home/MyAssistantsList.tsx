@@ -26,6 +26,7 @@ type MyAssistantsListProps = {
   onStartChat: (assistant: AssistantListItem) => void;
   /** Switch to the Official tab (to duplicate an official assistant). */
   onGoOfficial: () => void;
+  canManageDefinitions: boolean;
 };
 
 const FILTER_OPTIONS: AssistantEnabledFilter[] = ['all', 'enabled', 'disabled'];
@@ -39,6 +40,7 @@ const MyAssistantsList: React.FC<MyAssistantsListProps> = ({
   onReorder,
   onStartChat,
   onGoOfficial,
+  canManageDefinitions,
 }) => {
   const { t } = useTranslation();
   const talkToButler = useTalkToButler();
@@ -109,6 +111,7 @@ const MyAssistantsList: React.FC<MyAssistantsListProps> = ({
                   onDelete={onDelete}
                   onToggleEnabled={onToggleEnabled}
                   onStartChat={onStartChat}
+                  canManageDefinitions={canManageDefinitions}
                 />
               ))}
             </div>
@@ -121,7 +124,7 @@ const MyAssistantsList: React.FC<MyAssistantsListProps> = ({
   // The "created by me" group shows a guiding empty state when the user has
   // no custom assistants yet (only in the unfiltered view — a filtered empty
   // just means "no matches", not "none exist").
-  const createdEmpty = createdAssistants.length === 0 && filter === 'all';
+  const createdEmpty = canManageDefinitions && createdAssistants.length === 0 && filter === 'all';
 
   const renderCreatedEmpty = () => (
     <div
@@ -225,6 +228,7 @@ const MyAssistantsList: React.FC<MyAssistantsListProps> = ({
                     onDelete={onDelete}
                     onToggleEnabled={onToggleEnabled}
                     onStartChat={onStartChat}
+                    canManageDefinitions={canManageDefinitions}
                   />
                 ))}
               </div>

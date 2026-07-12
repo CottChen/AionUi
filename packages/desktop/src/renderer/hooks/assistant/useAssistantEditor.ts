@@ -85,6 +85,8 @@ export const useAssistantEditor = ({
   const [defaultPermissionValue, setDefaultPermissionValue] = useState('');
   const [defaultThoughtLevelMode, setDefaultThoughtLevelMode] = useState<AssistantScalarDefaultMode>('auto');
   const [defaultThoughtLevelValue, setDefaultThoughtLevelValue] = useState('');
+  const [defaultWorkspaceMode, setDefaultWorkspaceMode] = useState<AssistantScalarDefaultMode>('auto');
+  const [defaultWorkspaceValue, setDefaultWorkspaceValue] = useState('');
   const [defaultSkillsMode, setDefaultSkillsMode] = useState<AssistantSkillsDefaultMode>('fixed');
   const [defaultMcpMode, setDefaultMcpMode] = useState<AssistantMcpDefaultMode>('auto');
   const [availableMcpServers, setAvailableMcpServers] = useState<IMcpServer[]>([]);
@@ -191,6 +193,8 @@ export const useAssistantEditor = ({
     setDefaultPermissionValue('');
     setDefaultThoughtLevelMode('auto');
     setDefaultThoughtLevelValue('');
+    setDefaultWorkspaceMode('auto');
+    setDefaultWorkspaceValue('');
     setDefaultSkillsMode('fixed');
     setDefaultMcpMode('auto');
     setSelectedMcpIds([]);
@@ -254,6 +258,8 @@ export const useAssistantEditor = ({
       setDefaultPermissionValue(detail.defaults.permission.value || '');
       setDefaultThoughtLevelMode(detail.defaults.thought_level.mode === 'fixed' ? 'fixed' : 'auto');
       setDefaultThoughtLevelValue(detail.defaults.thought_level.value || '');
+      setDefaultWorkspaceMode(detail.defaults.workspace?.mode === 'fixed' ? 'fixed' : 'auto');
+      setDefaultWorkspaceValue(detail.defaults.workspace?.value || '');
       setDefaultSkillsMode(detail.defaults.skills.mode === 'auto' ? 'auto' : 'fixed');
       setDefaultMcpMode(detail.defaults.mcps.mode === 'fixed' ? 'fixed' : 'auto');
       setSelectedMcpIds(detail.defaults.mcps.value ?? []);
@@ -327,6 +333,8 @@ export const useAssistantEditor = ({
       setDefaultPermissionValue(detail.defaults.permission.value || '');
       setDefaultThoughtLevelMode(detail.defaults.thought_level.mode === 'fixed' ? 'fixed' : 'auto');
       setDefaultThoughtLevelValue(detail.defaults.thought_level.value || '');
+      setDefaultWorkspaceMode(detail.defaults.workspace?.mode === 'fixed' ? 'fixed' : 'auto');
+      setDefaultWorkspaceValue(detail.defaults.workspace?.value || '');
       setDefaultSkillsMode(detail.defaults.skills.mode === 'auto' ? 'auto' : 'fixed');
       setDefaultMcpMode(detail.defaults.mcps.mode === 'fixed' ? 'fixed' : 'auto');
       setSelectedMcpIds(detail.defaults.mcps.value ?? []);
@@ -398,6 +406,15 @@ export const useAssistantEditor = ({
         return;
       }
 
+      if (defaultWorkspaceMode === 'fixed' && !defaultWorkspaceValue.trim()) {
+        message.error(
+          t('settings.assistantDefaultWorkspaceRequired', {
+            defaultValue: 'Please choose a default project folder when using a fixed value.',
+          })
+        );
+        return;
+      }
+
       if (pendingSkills.length > 0) {
         const skillsToImport = pendingSkills.filter(
           (pending) => !availableSkills.some((available) => available.name === pending.name)
@@ -438,6 +455,10 @@ export const useAssistantEditor = ({
           defaultThoughtLevelMode === 'fixed'
             ? { mode: 'fixed', value: defaultThoughtLevelValue.trim() }
             : { mode: defaultThoughtLevelMode },
+        workspace:
+          defaultWorkspaceMode === 'fixed'
+            ? { mode: 'fixed', value: defaultWorkspaceValue.trim() }
+            : { mode: defaultWorkspaceMode },
         skills: { mode: defaultSkillsMode, value: selectedSkills },
         mcps: { mode: defaultMcpMode, value: selectedMcpIds },
       };
@@ -481,6 +502,10 @@ export const useAssistantEditor = ({
                 defaultThoughtLevelMode === 'fixed'
                   ? { mode: 'fixed', value: defaultThoughtLevelValue.trim() }
                   : { mode: defaultThoughtLevelMode },
+              workspace:
+                defaultWorkspaceMode === 'fixed'
+                  ? { mode: 'fixed', value: defaultWorkspaceValue.trim() }
+                  : { mode: defaultWorkspaceMode },
             },
           };
         } else if (isGeneratedAssistant(activeAssistant)) {
@@ -613,6 +638,10 @@ export const useAssistantEditor = ({
     setDefaultThoughtLevelMode,
     defaultThoughtLevelValue,
     setDefaultThoughtLevelValue,
+    defaultWorkspaceMode,
+    setDefaultWorkspaceMode,
+    defaultWorkspaceValue,
+    setDefaultWorkspaceValue,
     defaultSkillsMode,
     setDefaultSkillsMode,
     defaultMcpMode,

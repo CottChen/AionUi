@@ -787,10 +787,14 @@ const WebuiModalContent: React.FC = () => {
                 </Button>
               </div>
             </div>
-            <h2 className='text-20px font-500 text-t-primary m-0'>Channels</h2>
-            <Suspense fallback={<div className='text-13px text-t-secondary'>{t('common.loading')}</div>}>
-              <ChannelModalContentLazy />
-            </Suspense>
+            {canManageUsers && (
+              <>
+                <h2 className='text-20px font-500 text-t-primary m-0'>Channels</h2>
+                <Suspense fallback={<div className='text-13px text-t-secondary'>{t('common.loading')}</div>}>
+                  <ChannelModalContentLazy />
+                </Suspense>
+              </>
+            )}
           </div>
         </AionScrollArea>
         {changeOwnPasswordModal}

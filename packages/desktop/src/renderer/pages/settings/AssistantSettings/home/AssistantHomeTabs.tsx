@@ -24,6 +24,7 @@ type AssistantHomeTabsProps = {
   onToggleEnabled: (assistant: AssistantListItem, checked: boolean) => void;
   onReorder: (activeId: string, overId: string) => void | Promise<void>;
   onStartChat: (assistant: AssistantListItem) => void;
+  canManageDefinitions: boolean;
   /** Tab to show on mount (e.g. return to Official after editing a builtin). */
   initialTab?: 'mine' | 'official';
   /** Notified whenever the active tab changes, so the parent can remember it. */
@@ -43,6 +44,7 @@ const AssistantHomeTabs: React.FC<AssistantHomeTabsProps> = ({
   onToggleEnabled,
   onReorder,
   onStartChat,
+  canManageDefinitions,
   initialTab = 'mine',
   onTabChange,
 }) => {
@@ -102,17 +104,19 @@ const AssistantHomeTabs: React.FC<AssistantHomeTabsProps> = ({
             >
               {t('settings.assistants', { defaultValue: 'Assistants' })}
             </h1>
-            <TalkToButlerButton
-              className='shrink-0'
-              label={t('settings.createAssistant', { defaultValue: 'Create Assistant' })}
-              chatLabel={t('settings.talkToButler.createViaChat', { defaultValue: 'Create via chat' })}
-              onManual={onCreate}
-              manualLabel={t('settings.talkToButler.createManually', { defaultValue: 'Create manually' })}
-              prompt={t('settings.talkToButler.prompt.createAssistant', {
-                defaultValue: 'Help me create a new assistant and walk me through setting it up.',
-              })}
-              data-testid='btn-create-assistant'
-            />
+            {canManageDefinitions && (
+              <TalkToButlerButton
+                className='shrink-0'
+                label={t('settings.createAssistant', { defaultValue: 'Create Assistant' })}
+                chatLabel={t('settings.talkToButler.createViaChat', { defaultValue: 'Create via chat' })}
+                onManual={onCreate}
+                manualLabel={t('settings.talkToButler.createManually', { defaultValue: 'Create manually' })}
+                prompt={t('settings.talkToButler.prompt.createAssistant', {
+                  defaultValue: 'Help me create a new assistant and walk me through setting it up.',
+                })}
+                data-testid='btn-create-assistant'
+              />
+            )}
           </div>
           <p
             className={classNames(
@@ -147,6 +151,7 @@ const AssistantHomeTabs: React.FC<AssistantHomeTabsProps> = ({
               onReorder={onReorder}
               onStartChat={onStartChat}
               onGoOfficial={() => selectTab('official')}
+              canManageDefinitions={canManageDefinitions}
             />
           ) : (
             <OfficialAssistantsGrid
@@ -156,6 +161,7 @@ const AssistantHomeTabs: React.FC<AssistantHomeTabsProps> = ({
               onDuplicate={onDuplicate}
               onToggleEnabled={onToggleEnabled}
               onStartChat={onStartChat}
+              canManageDefinitions={canManageDefinitions}
             />
           )}
         </div>

@@ -11,6 +11,8 @@
     "optional": "Optional",
     "clearWorkspace": "Clear",
     "specifyWorkspace": "Select project folder",
+    "recentProjects": "Recent projects",
+    "chooseDifferent": "Choose another folder",
     "searchPlaceholder": "Search projects…",
     "noProject": "No Project"
   }

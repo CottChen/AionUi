@@ -3,6 +3,7 @@ import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-d
 import AppLoader from '@renderer/components/layout/AppLoader';
 import { useAuth } from '@renderer/hooks/context/AuthContext';
 import { TEAM_MODE_ENABLED } from '@/common/config/constants';
+import { isElectronDesktop } from '@/renderer/utils/platform';
 const Conversation = React.lazy(() => import('@renderer/pages/conversation'));
 const Guid = React.lazy(() => import('@renderer/pages/guid'));
 const AgentSettings = React.lazy(() => import('@renderer/pages/settings/AgentSettings'));
@@ -52,6 +53,23 @@ const ProtectedLayout: React.FC<{ layout: React.ReactElement }> = ({ layout }) =
   return React.cloneElement(layout);
 };
 
+const AdminSettingsRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
+  const canEditGlobalSettings = isElectronDesktop() || user?.isAdmin === true;
+
+  if (!canEditGlobalSettings) {
+    return <Navigate to='/settings/appearance' replace />;
+  }
+
+  return <>{children}</>;
+};
+
+const SettingsIndexRedirect: React.FC = () => {
+  const { user } = useAuth();
+  const canEditGlobalSettings = isElectronDesktop() || user?.isAdmin === true;
+  return <Navigate to={canEditGlobalSettings ? '/settings/agent' : '/settings/appearance'} replace />;
+};
+
 const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
   const { status } = useAuth();
 
@@ -70,17 +88,35 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
             path='/team/:id'
             element={TEAM_MODE_ENABLED ? withRouteFallback(TeamIndex) : <Navigate to='/guid' replace />}
           />
-          <Route path='/settings/model' element={withRouteFallback(ModeSettings)} />
+          <Route
+            path='/settings/model'
+            element={<AdminSettingsRoute>{withRouteFallback(ModeSettings)}</AdminSettingsRoute>}
+          />
           <Route path='/assistants' element={withRouteFallback(AssistantSettings)} />
           {/* Assistants moved out of Settings to a top-level entry; keep a redirect
               so old deep links / back-nav still land on the new page. */}
           <Route path='/settings/assistants' element={<Navigate to='/assistants' replace />} />
-          <Route path='/settings/agent' element={withRouteFallback(AgentSettings)} />
-          <Route path='/settings/agent/:id/repair' element={withRouteFallback(AgentRepairPage)} />
+          <Route
+            path='/settings/agent'
+            element={<AdminSettingsRoute>{withRouteFallback(AgentSettings)}</AdminSettingsRoute>}
+          />
+          <Route
+            path='/settings/agent/:id/repair'
+            element={<AdminSettingsRoute>{withRouteFallback(AgentRepairPage)}</AdminSettingsRoute>}
+          />
           {/* Skills and Tools are top-level settings entries. */}
-          <Route path='/settings/skills' element={withRouteFallback(SkillsSettings)} />
-          <Route path='/settings/skills/import-history' element={withRouteFallback(SkillsSettings)} />
-          <Route path='/settings/tools' element={withRouteFallback(ToolsSettings)} />
+          <Route
+            path='/settings/skills'
+            element={<AdminSettingsRoute>{withRouteFallback(SkillsSettings)}</AdminSettingsRoute>}
+          />
+          <Route
+            path='/settings/skills/import-history'
+            element={<AdminSettingsRoute>{withRouteFallback(SkillsSettings)}</AdminSettingsRoute>}
+          />
+          <Route
+            path='/settings/tools'
+            element={<AdminSettingsRoute>{withRouteFallback(ToolsSettings)}</AdminSettingsRoute>}
+          />
           {/* Legacy routes — the previous combined "Capabilities" page is now two pages. */}
           <Route path='/settings/capabilities' element={<CapabilitiesRedirect />} />
           <Route
@@ -91,11 +127,23 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
           <Route path='/settings/appearance' element={withRouteFallback(AppearanceSettings)} />
           <Route path='/settings/display' element={<Navigate to='/settings/appearance' replace />} />
           <Route path='/settings/webui' element={withRouteFallback(WebuiSettings)} />
-          <Route path='/settings/pet' element={withRouteFallback(PetSettings)} />
-          <Route path='/settings/system' element={withRouteFallback(SystemSettings)} />
-          <Route path='/settings/about' element={withRouteFallback(SystemSettings)} />
-          <Route path='/settings/ext/:tabId' element={withRouteFallback(ExtensionSettingsPage)} />
-          <Route path='/settings' element={<Navigate to='/settings/agent' replace />} />
+          <Route
+            path='/settings/pet'
+            element={<AdminSettingsRoute>{withRouteFallback(PetSettings)}</AdminSettingsRoute>}
+          />
+          <Route
+            path='/settings/system'
+            element={<AdminSettingsRoute>{withRouteFallback(SystemSettings)}</AdminSettingsRoute>}
+          />
+          <Route
+            path='/settings/about'
+            element={<AdminSettingsRoute>{withRouteFallback(SystemSettings)}</AdminSettingsRoute>}
+          />
+          <Route
+            path='/settings/ext/:tabId'
+            element={<AdminSettingsRoute>{withRouteFallback(ExtensionSettingsPage)}</AdminSettingsRoute>}
+          />
+          <Route path='/settings' element={<SettingsIndexRedirect />} />
           <Route path='/test/components' element={withRouteFallback(ComponentsShowcase)} />
           <Route path='/scheduled' element={withRouteFallback(ScheduledTasksPage)} />
           <Route path='/scheduled/:job_id' element={withRouteFallback(TaskDetailPage)} />

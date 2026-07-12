@@ -11,6 +11,8 @@
     "optional": "可选",
     "clearWorkspace": "清除",
     "specifyWorkspace": "选择项目文件夹",
+    "recentProjects": "最近项目",
+    "chooseDifferent": "选择其他文件夹",
     "searchPlaceholder": "搜索项目…",
     "noProject": "不使用项目"
   }

@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { emitter } from '@/renderer/utils/emitter';
+import { configService } from '@/common/config/configService';
 // M6: CSRF removed with legacy webserver — stub functions for compatibility, re-implement in M7
 const withCsrfToken = <T extends Record<string, unknown>>(data: T): T => data;
 const hasValidCsrfToken = (): boolean => true;
@@ -225,6 +226,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       });
       setStatus('authenticated');
       setReady(true);
+      configService.reset();
       emitter.emit('auth.user.changed');
 
       // Re-enable WebSocket reconnection after successful login (WebUI mode only)
@@ -281,6 +283,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     } finally {
       setUser(null);
       setStatus('unauthenticated');
+      configService.reset();
       // Clear cache on logout for security
       clearAuthCache();
       emitter.emit('auth.user.changed');

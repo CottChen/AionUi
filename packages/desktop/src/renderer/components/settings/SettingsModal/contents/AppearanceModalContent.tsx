@@ -13,6 +13,8 @@ import AionScrollArea from '@/renderer/components/base/AionScrollArea';
 import { FONT_SIZE_KEYS, FONT_SIZE_SPECS, FONT_SIZE_STEP, type FontSizeKey } from '@/common/config/fontSizes';
 import { useThemeContext } from '@renderer/hooks/context/ThemeContext';
 import { useSettingsViewMode } from '../settingsViewContext';
+import { useAuth } from '@/renderer/hooks/context/AuthContext';
+import { isElectronDesktop } from '@/renderer/utils/platform';
 
 /** Map each configurable font-size region to its row label i18n key. */
 const FONT_SIZE_LABEL_KEY: Record<FontSizeKey, string> = {
@@ -52,6 +54,8 @@ const AppearanceModalContent: React.FC = () => {
   const viewMode = useSettingsViewMode();
   const isPageMode = viewMode === 'page';
   const { fontSizes, setFontSize } = useThemeContext();
+  const { user } = useAuth();
+  const canEditGlobalSettings = isElectronDesktop() || user?.isAdmin === true;
 
   return (
     <div className='flex flex-col h-full w-full'>
@@ -64,33 +68,37 @@ const AppearanceModalContent: React.FC = () => {
             <CssThemeSettings />
           </div>
 
-          {/* 字体大小 / Font sizes */}
-          <div className='px-16px md:px-24px lg:px-28px py-14px md:py-16px bg-2 rd-16px'>
-            <div className='w-full flex flex-col divide-y divide-border-2'>
-              {FONT_SIZE_KEYS.map((key) => (
-                <PreferenceRow key={key} label={t(FONT_SIZE_LABEL_KEY[key])}>
-                  <FontSizeStepper
-                    value={fontSizes[key]}
-                    min={FONT_SIZE_SPECS[key].min}
-                    max={FONT_SIZE_SPECS[key].max}
-                    step={FONT_SIZE_STEP}
-                    defaultValue={FONT_SIZE_SPECS[key].default}
-                    resetLabel={t('settings.fontSizeStepperReset')}
-                    onChange={(px) => void setFontSize(key, px)}
-                  />
-                </PreferenceRow>
-              ))}
-            </div>
-          </div>
+          {canEditGlobalSettings && (
+            <>
+              {/* 字体大小 / Font sizes */}
+              <div className='px-16px md:px-24px lg:px-28px py-14px md:py-16px bg-2 rd-16px'>
+                <div className='w-full flex flex-col divide-y divide-border-2'>
+                  {FONT_SIZE_KEYS.map((key) => (
+                    <PreferenceRow key={key} label={t(FONT_SIZE_LABEL_KEY[key])}>
+                      <FontSizeStepper
+                        value={fontSizes[key]}
+                        min={FONT_SIZE_SPECS[key].min}
+                        max={FONT_SIZE_SPECS[key].max}
+                        step={FONT_SIZE_STEP}
+                        defaultValue={FONT_SIZE_SPECS[key].default}
+                        resetLabel={t('settings.fontSizeStepperReset')}
+                        onChange={(px) => void setFontSize(key, px)}
+                      />
+                    </PreferenceRow>
+                  ))}
+                </div>
+              </div>
 
-          {/* 缩放控制 / Scale Control */}
-          <div className='px-16px md:px-24px lg:px-28px py-14px md:py-16px bg-2 rd-16px'>
-            <div className='w-full flex flex-col divide-y divide-border-2'>
-              <PreferenceRow label={t('settings.scale')}>
-                <ScaleControl />
-              </PreferenceRow>
-            </div>
-          </div>
+              {/* 缩放控制 / Scale Control */}
+              <div className='px-16px md:px-24px lg:px-28px py-14px md:py-16px bg-2 rd-16px'>
+                <div className='w-full flex flex-col divide-y divide-border-2'>
+                  <PreferenceRow label={t('settings.scale')}>
+                    <ScaleControl />
+                  </PreferenceRow>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </AionScrollArea>
     </div>

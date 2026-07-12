@@ -26,6 +26,8 @@ import AssistantHomeTabs from './home/AssistantHomeTabs';
 import DeleteAssistantModal from './DeleteAssistantModal';
 import SkillConfirmModals from './SkillConfirmModals';
 import type { AssistantEditorViewModel, AssistantListItem } from './types';
+import { useAuth } from '@/renderer/hooks/context/AuthContext';
+import { isElectronDesktop } from '@/renderer/utils/platform';
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -39,7 +41,9 @@ const AssistantSettings: React.FC = () => {
   const [message, messageContext] = Message.useMessage({ maxCount: 10 });
   const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const navigationState = (location.state as AssistantNavigationState | null) ?? null;
+  const canManageDefinitions = isElectronDesktop() || user?.isAdmin === true;
 
   // Which home tab to show when returning from the editor. Editing an official
   // assistant should land back on the Official tab; everything else on Mine.
@@ -139,6 +143,12 @@ const AssistantSettings: React.FC = () => {
         value: editor.defaultThoughtLevelValue,
         setValue: editor.setDefaultThoughtLevelValue,
       },
+      workspace: {
+        mode: editor.defaultWorkspaceMode,
+        setMode: editor.setDefaultWorkspaceMode,
+        value: editor.defaultWorkspaceValue,
+        setValue: editor.setDefaultWorkspaceValue,
+      },
       skills: {
         mode: editor.defaultSkillsMode,
         setMode: editor.setDefaultSkillsMode,
@@ -176,6 +186,7 @@ const AssistantSettings: React.FC = () => {
   };
 
   useEffect(() => {
+    if (!canManageDefinitions) return;
     if (hasConsumedNavigationIntentRef.current) return;
     const openAssistantFromRoute =
       navigationState?.openAssistantEditor && navigationState.openAssistantId ? navigationState.openAssistantId : null;
@@ -207,7 +218,7 @@ const AssistantSettings: React.FC = () => {
       console.error('[AssistantManagement] Failed to clear assistant open intent:', error);
     }
     void editor.handleEdit(targetAssistant);
-  }, [assistants, editor, navigationState]);
+  }, [assistants, canManageDefinitions, editor, navigationState]);
 
   return (
     <div className='h-full w-full overflow-hidden bg-bg-0'>
@@ -250,6 +261,7 @@ const AssistantSettings: React.FC = () => {
               onToggleEnabled={(assistant, checked) => void editor.handleToggleEnabled(assistant, checked)}
               onReorder={(activeId, overId) => void reorderAssistants(activeId, overId)}
               onStartChat={handleStartChat}
+              canManageDefinitions={canManageDefinitions}
             />
           )}
 

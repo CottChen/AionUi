@@ -96,6 +96,7 @@ export interface AssistantDefaults {
   model: AssistantDefaultScalar;
   permission: AssistantDefaultScalar;
   thought_level: AssistantDefaultScalar;
+  workspace: AssistantDefaultScalar;
   skills: AssistantDefaultList;
   mcps: AssistantDefaultList;
 }
@@ -104,6 +105,7 @@ export interface AssistantDefaultsRequest {
   model?: AssistantDefaultScalar;
   permission?: AssistantDefaultScalar;
   thought_level?: AssistantDefaultScalar;
+  workspace?: AssistantDefaultScalar;
   skills?: AssistantDefaultList;
   mcps?: AssistantDefaultList;
 }

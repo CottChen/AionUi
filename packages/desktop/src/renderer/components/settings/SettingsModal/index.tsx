@@ -9,6 +9,7 @@ import AionScrollArea from '@/renderer/components/base/AionScrollArea';
 import { iconColors } from '@/renderer/styles/colors';
 import { isElectronDesktop, resolveExtensionAssetUrl } from '@/renderer/utils/platform';
 import { type IExtensionSettingsTab } from '@/common/adapter/ipcBridge';
+import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { useExtI18n } from '@/renderer/hooks/system/useExtI18n';
 import { useExtensionSettingsTabs } from '@/renderer/hooks/system/useExtensionSettingsTabs';
 import { Tabs } from '@arco-design/web-react';
@@ -17,6 +18,7 @@ import classNames from 'classnames';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import AboutModalContent from './contents/AboutModalContent';
+import AppearanceModalContent from './contents/AppearanceModalContent';
 import AgentModalContent from './contents/AgentModalContent';
 import ExtensionSettingsTabContent from './contents/ExtensionSettingsTabContent';
 import ModelModalContent from './contents/ModelModalContent';
@@ -55,7 +57,7 @@ const RESIZE_DEBOUNCE_DELAY = 150;
 /**
  * 内置设置标签页类型 / Built-in settings tab type
  */
-export type BuiltinSettingTab = 'model' | 'agent' | 'tools' | 'webui' | 'system' | 'about';
+export type BuiltinSettingTab = 'model' | 'agent' | 'tools' | 'appearance' | 'webui' | 'system' | 'about';
 
 /**
  * 设置标签页类型（内置 + 扩展）/ Settings tab type (built-in + extension)
@@ -138,6 +140,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onCancel, defaul
   const [isMobile, setIsMobile] = useState(false);
   const resizeTimerRef = useRef<number | undefined>(undefined);
   const extensionTabs = useExtensionSettingsTabs();
+  const { user } = useAuth();
 
   /**
    * 处理窗口尺寸变化，更新移动端状态
@@ -171,6 +174,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onCancel, defaul
 
   // 检测是否在 Electron 桌面环境 / Check if running in Electron desktop environment
   const isDesktop = isElectronDesktop();
+  const canEditGlobalSettings = isDesktop || user?.isAdmin === true;
 
   const { resolveExtTabName } = useExtI18n();
 
@@ -189,20 +193,28 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onCancel, defaul
     type MenuItem = { key: string; label: string; icon: React.ReactNode };
 
     // Modal built-in tabs (subset — no display/agent route pages)
-    const builtinItems: MenuItem[] = [
-      {
-        key: 'model',
-        label: t('settings.model'),
-        icon: <LinkCloud theme='outline' size='20' fill={iconColors.secondary} />,
-      },
-      {
-        key: 'tools',
-        label: t('settings.tools'),
-        icon: <Toolkit theme='outline' size='20' fill={iconColors.secondary} />,
-      },
-    ];
+    const builtinItems: MenuItem[] = canEditGlobalSettings
+      ? [
+          {
+            key: 'model',
+            label: t('settings.model'),
+            icon: <LinkCloud theme='outline' size='20' fill={iconColors.secondary} />,
+          },
+          {
+            key: 'tools',
+            label: t('settings.tools'),
+            icon: <Toolkit theme='outline' size='20' fill={iconColors.secondary} />,
+          },
+        ]
+      : [
+          {
+            key: 'appearance',
+            label: t('settings.appearancePanel'),
+            icon: <Computer theme='outline' size='20' fill={iconColors.secondary} />,
+          },
+        ];
 
-    if (isDesktop) {
+    if (isDesktop || !canEditGlobalSettings) {
       builtinItems.push({
         key: 'webui',
         label: t('settings.webui'),
@@ -210,21 +222,32 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onCancel, defaul
       });
     }
 
-    builtinItems.push(
-      {
-        key: 'system',
-        label: t('settings.system'),
-        icon: <Computer theme='outline' size='20' fill={iconColors.secondary} />,
-      },
-      { key: 'about', label: t('settings.about'), icon: <Info theme='outline' size='20' fill={iconColors.secondary} /> }
-    );
+    if (canEditGlobalSettings) {
+      builtinItems.push(
+        {
+          key: 'appearance',
+          label: t('settings.appearancePanel'),
+          icon: <Computer theme='outline' size='20' fill={iconColors.secondary} />,
+        },
+        {
+          key: 'system',
+          label: t('settings.system'),
+          icon: <Computer theme='outline' size='20' fill={iconColors.secondary} />,
+        },
+        {
+          key: 'about',
+          label: t('settings.about'),
+          icon: <Info theme='outline' size='20' fill={iconColors.secondary} />,
+        }
+      );
+    }
 
     // Extension tabs — position anchoring
     const beforeMap = new Map<string, IExtensionSettingsTab[]>();
     const afterMap = new Map<string, IExtensionSettingsTab[]>();
     const unanchored: IExtensionSettingsTab[] = [];
 
-    for (const tab of extensionTabs) {
+    for (const tab of canEditGlobalSettings ? extensionTabs : []) {
       if (!tab.position) {
         unanchored.push(tab);
         continue;
@@ -274,21 +297,31 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onCancel, defaul
     }
 
     return builtinItems;
-  }, [t, isDesktop, extensionTabs, resolveExtTabName]);
+  }, [t, canEditGlobalSettings, isDesktop, extensionTabs, resolveExtTabName]);
+
+  useEffect(() => {
+    if (menuItems.some((item) => item.key === activeTab)) {
+      return;
+    }
+    setActiveTab(menuItems[0]?.key ?? 'appearance');
+  }, [activeTab, menuItems]);
+  const effectiveActiveTab = menuItems.some((item) => item.key === activeTab)
+    ? activeTab
+    : (menuItems[0]?.key ?? 'appearance');
 
   // Track which extension tabs have been visited (lazy mount + keep-alive)
   const [mountedExtTabs, setMountedExtTabs] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    if (extensionTabMap.has(activeTab)) {
+    if (extensionTabMap.has(effectiveActiveTab)) {
       setMountedExtTabs((prev) => {
-        if (prev.has(activeTab)) return prev;
+        if (prev.has(effectiveActiveTab)) return prev;
         const next = new Set(prev);
-        next.add(activeTab);
+        next.add(effectiveActiveTab);
         return next;
       });
     }
-  }, [activeTab, extensionTabMap]);
+  }, [effectiveActiveTab, extensionTabMap]);
 
   // Reset mounted tabs when modal closes to free memory
   useEffect(() => {
@@ -299,13 +332,15 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onCancel, defaul
 
   // Render built-in tab content (conditional)
   const renderBuiltinContent = () => {
-    switch (activeTab) {
+    switch (effectiveActiveTab) {
       case 'model':
         return <ModelModalContent />;
       case 'agent':
         return <AgentModalContent />;
       case 'tools':
         return <ToolsModalContent />;
+      case 'appearance':
+        return <AppearanceModalContent />;
       case 'webui':
         return <WebuiModalContent />;
       case 'system':
@@ -314,7 +349,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onCancel, defaul
         return <AboutModalContent />;
       default:
         // If no built-in match and not an extension tab, return null
-        if (!extensionTabMap.has(activeTab)) return null;
+        if (!extensionTabMap.has(effectiveActiveTab)) return null;
         return null;
     }
   };
@@ -324,7 +359,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onCancel, defaul
     return Array.from(mountedExtTabs).map((tabKey) => {
       const extTab = extensionTabMap.get(tabKey);
       if (!extTab) return null;
-      const isActive = activeTab === tabKey;
+      const isActive = effectiveActiveTab === tabKey;
       return (
         <div key={tabKey} className='w-full h-full' style={{ display: isActive ? 'block' : 'none' }}>
           <ExtensionSettingsTabContent tabId={extTab.id} url={extTab.url} extensionName={extTab.extensionName} />
@@ -345,7 +380,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onCancel, defaul
   const mobileMenu = (
     <div className='mt-16px mb-20px overflow-x-auto'>
       <Tabs
-        activeTab={activeTab}
+        activeTab={effectiveActiveTab}
         onChange={handleTabChange}
         type='line'
         size='default'
@@ -368,8 +403,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onCancel, defaul
             className={classNames(
               'flex items-center px-14px py-10px rd-8px cursor-pointer transition-all duration-150 select-none',
               {
-                'bg-aou-2 text-t-primary': activeTab === item.key,
-                'text-t-secondary hover:bg-fill-1': activeTab !== item.key,
+                'bg-aou-2 text-t-primary': effectiveActiveTab === item.key,
+                'text-t-secondary hover:bg-fill-1': effectiveActiveTab !== item.key,
               }
             )}
             onClick={() => setActiveTab(item.key)}
