@@ -183,6 +183,19 @@ linux:
       Categories: Office;Utility;
       MimeType: x-scheme-handler/aionui;
 
+deb:
+  depends:
+    - libgtk-3-0
+    - libnotify4
+    - libnss3
+    - libxss1
+    - libxtst6
+    - xdg-utils
+    - libatspi2.0-0
+    - libuuid1
+    - libsecret-1-0
+    - libasound2
+
 npmRebuild: false
 buildDependenciesFromSource: false
 nodeGypRebuild: false
