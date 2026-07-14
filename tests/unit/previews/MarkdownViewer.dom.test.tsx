@@ -107,6 +107,7 @@ vi.mock('@icon-park/react', () => ({
 
 import MarkdownViewer from '@/renderer/pages/conversation/Preview/components/viewers/MarkdownViewer';
 import { ipcBridge } from '@/common';
+import { WORKSPACE_REVEAL_FILE_EVENT } from '@/renderer/utils/workspace/workspaceEvents';
 
 const fileMetadata = (path: string) => ({
   name: path.split(/[\\/]/).pop() || path,
@@ -162,7 +163,7 @@ describe('MarkdownViewer', () => {
           language: 'jpg',
           editable: false,
         }),
-        { replace: true }
+        { replace: false }
       );
     });
     expect(ipcBridge.fs.getImageBase64.invoke).toHaveBeenCalledWith({ path: filePath, workspace: undefined });
@@ -192,7 +193,7 @@ describe('MarkdownViewer', () => {
           targetColumn: undefined,
           truncated: false,
         }),
-        { replace: true }
+        { replace: false }
       );
     });
 
@@ -224,9 +225,82 @@ describe('MarkdownViewer', () => {
           targetColumn: undefined,
           truncated: false,
         }),
-        { replace: true }
+        { replace: false }
       );
     });
+  });
+
+  it('opens workspace-relative file links from markdown previews in a new preview tab', async () => {
+    const filePath = '/Users/demo/project/src/foo.ts';
+    vi.mocked(ipcBridge.fs.getFileMetadata.invoke).mockResolvedValue(fileMetadata(filePath));
+    vi.mocked(ipcBridge.fs.readFile.invoke).mockResolvedValue('export const foo = 1;\n');
+
+    render(
+      <MarkdownViewer
+        content='[foo](../src/foo.ts#L12)'
+        file_path='/Users/demo/project/docs/README.md'
+        workspace='/Users/demo/project'
+      />
+    );
+
+    expect(screen.queryByRole('link', { name: /foo/ })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /foo\s+L12/ }));
+
+    await waitFor(() => {
+      expect(previewMocks.openPreview).toHaveBeenCalledWith(
+        'export const foo = 1;\n',
+        'code',
+        expect.objectContaining({
+          file_name: 'foo.ts',
+          file_path: filePath,
+          workspace: '/Users/demo/project',
+          language: 'ts',
+          targetLine: 12,
+          targetColumn: undefined,
+          truncated: false,
+        }),
+        { replace: false }
+      );
+    });
+
+    expect(ipcBridge.fs.getFileMetadata.invoke).toHaveBeenCalledWith({
+      path: filePath,
+      workspace: '/Users/demo/project',
+    });
+  });
+
+  it('reveals workspace-relative directory links in the workspace tree instead of opening preview tabs', async () => {
+    const directoryPath = '/Users/demo/project/docs';
+    const revealEvents: Array<{ workspace?: string; filePath: string }> = [];
+    const handleReveal = (event: Event) => {
+      revealEvents.push((event as CustomEvent<{ workspace?: string; filePath: string }>).detail);
+    };
+    window.addEventListener(WORKSPACE_REVEAL_FILE_EVENT, handleReveal);
+    vi.mocked(ipcBridge.fs.getFileMetadata.invoke).mockResolvedValue({
+      ...fileMetadata(directoryPath),
+      type: 'directory',
+      isDirectory: true,
+    });
+
+    try {
+      render(
+        <MarkdownViewer
+          content='[docs](docs)'
+          file_path='/Users/demo/project/README.md'
+          workspace='/Users/demo/project'
+        />
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: 'docs' }));
+
+      await waitFor(() => {
+        expect(revealEvents).toEqual([{ workspace: '/Users/demo/project', filePath: directoryPath }]);
+      });
+      expect(previewMocks.openPreview).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener(WORKSPACE_REVEAL_FILE_EVENT, handleReveal);
+    }
   });
 
   it('keeps remote links as browser anchors', () => {

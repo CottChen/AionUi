@@ -206,7 +206,7 @@ const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({
   const internalContainerRef = useRef<HTMLDivElement>(null);
   const containerRef = externalContainerRef || internalContainerRef; // 使用外部 ref 或内部 ref / Use external ref or internal ref
   const currentTheme = useThemeDetection();
-  const handleLocalFileLink = useLocalFilePreview(workspace);
+  const handleLocalFileLink = useLocalFilePreview(workspace, { replace: false });
 
   // 使用滚动同步 Hooks / Use scroll sync hooks
   useContainerScroll(containerRef, externalOnScroll);
@@ -272,7 +272,11 @@ const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({
               rehypePlugins={[defaultRehypePlugins.raw, defaultRehypePlugins.sanitize, defaultRehypePlugins.katex]}
               components={{
                 a({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) {
-                  const localFileReference = resolveLocalFileLinkReference(typeof href === 'string' ? href : '');
+                  const localFileReference = resolveLocalFileLinkReference(
+                    typeof href === 'string' ? href : '',
+                    undefined,
+                    { baseDir, allowedRootDir: workspace ?? baseDir }
+                  );
                   if (localFileReference) {
                     return (
                       <LocalFileLink reference={localFileReference} onOpen={handleLocalFileLink}>

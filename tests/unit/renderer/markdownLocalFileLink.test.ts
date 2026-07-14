@@ -137,6 +137,55 @@ describe('resolveLocalFileLinkPath', () => {
     expect(resolveLocalFileLinkReference('/Users/demo/file.ts#L10-l20')).toBeNull();
   });
 
+  it('resolves workspace-relative links only when a base directory is provided', () => {
+    expect(resolveLocalFileLinkReference('docs/foo.ts#L12')).toBeNull();
+
+    expect(resolveLocalFileLinkReference('docs/foo.ts#L12', undefined, { baseDir: '/Users/demo/project' })).toEqual({
+      filePath: '/Users/demo/project/docs/foo.ts',
+      rawReference: '/Users/demo/project/docs/foo.ts#L12',
+      line: 12,
+    });
+
+    expect(resolveLocalFileLinkReference('./docs/foo.ts:12:3', undefined, { baseDir: '/Users/demo/project' })).toEqual({
+      filePath: '/Users/demo/project/docs/foo.ts',
+      rawReference: '/Users/demo/project/docs/foo.ts:12:3',
+      line: 12,
+      column: 3,
+    });
+  });
+
+  it('resolves dot-segment relative links only when they stay within the allowed root', () => {
+    expect(
+      resolveLocalFileLinkReference('../src/foo.ts#L7', undefined, {
+        baseDir: '/Users/demo/project/docs',
+        allowedRootDir: '/Users/demo/project',
+      })
+    ).toEqual({
+      filePath: '/Users/demo/project/src/foo.ts',
+      rawReference: '/Users/demo/project/src/foo.ts#L7',
+      line: 7,
+    });
+
+    expect(
+      resolveLocalFileLinkReference('../../outside.ts#L1', undefined, {
+        baseDir: '/Users/demo/project/docs',
+        allowedRootDir: '/Users/demo/project',
+      })
+    ).toBeNull();
+  });
+
+  it('resolves relative directory links even when the target has no file extension', () => {
+    expect(
+      resolveLocalFileLinkReference('docs', undefined, {
+        baseDir: '/workspace/demo',
+        allowedRootDir: '/workspace/demo',
+      })
+    ).toEqual({
+      filePath: '/workspace/demo/docs',
+      rawReference: '/workspace/demo/docs',
+    });
+  });
+
   it('does not treat normal web links or app routes as local files', () => {
     expect(resolveLocalFileLinkPath('https://aionui.com/docs')).toBeNull();
     expect(resolveLocalFileLinkPath('/settings')).toBeNull();

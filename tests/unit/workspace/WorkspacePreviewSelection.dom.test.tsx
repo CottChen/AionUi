@@ -5,9 +5,11 @@
  */
 
 import type { IDirOrFile } from '@/common/adapter/ipcBridge';
+import { ipcBridge } from '@/common';
 import ChatWorkspace from '@/renderer/pages/conversation/Workspace';
+import { WORKSPACE_REVEAL_FILE_EVENT } from '@/renderer/utils/workspace/workspaceEvents';
 import type { NodeInstance } from '@arco-design/web-react/es/Tree/interface';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -18,6 +20,8 @@ type TreeProps = {
 const mocks = vi.hoisted(() => ({
   ensureNodeSelected: vi.fn(),
   handlePreviewFile: vi.fn(),
+  setExpandedKeys: vi.fn(),
+  setFiles: vi.fn(),
   writeRendererLogInvoke: vi.fn(),
 }));
 let latestTreeProps: TreeProps | null = null;
@@ -27,6 +31,13 @@ const selectedFile: IDirOrFile = {
   relativePath: 'financial-wechat-miniapp.html',
   fullPath: '/workspace/financial-wechat-miniapp.html',
   isFile: true,
+};
+
+const selectedDirectory: IDirOrFile = {
+  name: 'docs',
+  relativePath: 'docs',
+  fullPath: '/workspace/docs',
+  isFile: false,
 };
 
 vi.mock('react-i18next', () => ({
@@ -91,9 +102,9 @@ vi.mock('@/renderer/pages/conversation/Workspace/hooks/useWorkspaceTree', () => 
     selected: [selectedFile.relativePath],
     selectedKeysRef: { current: [selectedFile.relativePath] },
     selectedNodeRef: { current: null },
-    setFiles: vi.fn(),
+    setFiles: mocks.setFiles,
     setLoading: vi.fn(),
-    setExpandedKeys: vi.fn(),
+    setExpandedKeys: mocks.setExpandedKeys,
     setSelected: vi.fn(),
     setTreeKey: vi.fn(),
     refreshWorkspace: vi.fn(),
@@ -151,6 +162,8 @@ vi.mock('@/renderer/pages/conversation/Workspace/hooks/useWorkspaceSearch', () =
   useWorkspaceSearch: () => ({
     showSearch: false,
     searchText: '',
+    clearSearch: vi.fn(),
+    selectSearchFolder: vi.fn(),
     setShowSearch: vi.fn(),
     setSearchText: vi.fn(),
   }),
@@ -249,5 +262,33 @@ describe('ChatWorkspace preview selection', () => {
       },
     });
     expect(mocks.handlePreviewFile).toHaveBeenCalledWith(selectedFile);
+  });
+
+  it('selects a workspace directory when a reveal event targets a directory', async () => {
+    vi.mocked(ipcBridge.conversation.getWorkspace.invoke).mockResolvedValue([
+      {
+        name: 'workspace',
+        relativePath: '',
+        fullPath: '/workspace',
+        isFile: false,
+        children: [selectedDirectory],
+      },
+    ]);
+
+    render(<ChatWorkspace conversation_id='conversation-1' workspace='/workspace' />);
+
+    window.dispatchEvent(
+      new CustomEvent(WORKSPACE_REVEAL_FILE_EVENT, {
+        detail: { workspace: '/workspace', filePath: '/workspace/docs' },
+      })
+    );
+
+    await waitFor(() => {
+      expect(mocks.ensureNodeSelected).toHaveBeenCalledWith(selectedDirectory);
+    });
+
+    expect(mocks.setExpandedKeys).toHaveBeenCalledWith(expect.arrayContaining(['', 'docs']));
+    expect(mocks.setFiles).toHaveBeenCalled();
+    expect(mocks.handlePreviewFile).not.toHaveBeenCalled();
   });
 });

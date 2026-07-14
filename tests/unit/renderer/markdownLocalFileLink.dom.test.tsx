@@ -172,6 +172,70 @@ describe('MarkdownView local file links', () => {
     expect(copyTextMock).toHaveBeenCalledWith('/Users/demo/project/user.js#L1-L260');
   });
 
+  it('resolves relative file links against the provided local file base directory', () => {
+    const onLocalFileLink = vi.fn();
+
+    render(
+      <MarkdownView localFileBaseDir='/Users/demo/project' onLocalFileLink={onLocalFileLink}>
+        {'[foo](docs/foo.ts#L12)'}
+      </MarkdownView>
+    );
+
+    expect(screen.queryByRole('link', { name: /foo/ })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /foo\s+L12/ }));
+    expect(onLocalFileLink).toHaveBeenCalledWith(
+      '/Users/demo/project/docs/foo.ts',
+      expect.objectContaining({
+        filePath: '/Users/demo/project/docs/foo.ts',
+        rawReference: '/Users/demo/project/docs/foo.ts#L12',
+        line: 12,
+      })
+    );
+  });
+
+  it('supports parent-relative links that stay under the local file root directory', () => {
+    const onLocalFileLink = vi.fn();
+
+    render(
+      <MarkdownView
+        localFileBaseDir='/Users/demo/project/docs'
+        localFileRootDir='/Users/demo/project'
+        onLocalFileLink={onLocalFileLink}
+      >
+        {'[foo](../src/foo.ts#L12)'}
+      </MarkdownView>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /foo\s+L12/ }));
+    expect(onLocalFileLink).toHaveBeenCalledWith(
+      '/Users/demo/project/src/foo.ts',
+      expect.objectContaining({
+        filePath: '/Users/demo/project/src/foo.ts',
+        rawReference: '/Users/demo/project/src/foo.ts#L12',
+        line: 12,
+      })
+    );
+  });
+
+  it('keeps parent-relative links as anchors when they escape the local file root directory', () => {
+    render(
+      <MarkdownView localFileBaseDir='/Users/demo/project/docs' localFileRootDir='/Users/demo/project'>
+        {'[outside](../../outside.ts#L1)'}
+      </MarkdownView>
+    );
+
+    const link = screen.getByRole('link', { name: 'outside' });
+    expect(link).toHaveAttribute('href', '../../outside.ts#L1');
+  });
+
+  it('keeps relative links as browser anchors when no local file base directory is provided', () => {
+    render(<MarkdownView>{'[foo](docs/foo.ts#L12)'}</MarkdownView>);
+
+    const link = screen.getByRole('link', { name: 'foo' });
+    expect(link).toHaveAttribute('href', 'docs/foo.ts#L12');
+  });
+
   it('does not render a no-op open button when no local file handler is provided', () => {
     render(<MarkdownView>{'[report.xlsx](/C:/Users/Administrator/AppData/Roaming/AionUi/report.xlsx)'}</MarkdownView>);
 

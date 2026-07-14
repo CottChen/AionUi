@@ -11,6 +11,7 @@ import type { IMessageText } from '@/common/chat/chatLib';
 import { ipcBridge } from '@/common';
 import { ConversationProvider } from '@/renderer/hooks/context/ConversationContext';
 import MessageText from '@/renderer/pages/conversation/Messages/components/MessageText';
+import { WORKSPACE_REVEAL_FILE_EVENT } from '@/renderer/utils/workspace/workspaceEvents';
 import {
   LARGE_TEXT_PREVIEW_MAX_LENGTH,
   LARGE_TEXT_PREVIEW_THRESHOLD,
@@ -70,9 +71,11 @@ vi.mock('@/renderer/components/Markdown', () => ({
   __esModule: true,
   default: ({
     children,
+    localFileBaseDir,
     onLocalFileLink,
   }: {
     children?: React.ReactNode;
+    localFileBaseDir?: string;
     onLocalFileLink?: (
       path: string,
       reference?: {
@@ -84,7 +87,7 @@ vi.mock('@/renderer/components/Markdown', () => ({
       }
     ) => void | Promise<void>;
   }) => (
-    <div>
+    <div data-local-file-base-dir={localFileBaseDir} data-testid='markdown-view'>
       {children}
       {onLocalFileLink && (
         <button
@@ -229,6 +232,28 @@ describe('MessageText attachment paths', () => {
     const content = screen.getByTestId('message-text-content');
     expect(content.parentElement?.className).toContain('min-w-0');
     expect(content.parentElement?.className).not.toContain('max-w-780px');
+  });
+
+  it('passes the current workspace as the markdown local file base directory', () => {
+    const message: IMessageText = {
+      id: 'msg-relative-link',
+      msg_id: 'msg-relative-link',
+      conversation_id: 'conv-1',
+      type: 'text',
+      position: 'left',
+      createdAt: Date.now(),
+      content: {
+        content: '[foo](docs/foo.ts#L12)',
+      },
+    };
+
+    render(
+      <ConversationProvider value={{ conversationId: 'conv-1', workspace: '/workspace/demo', type: 'acp' }}>
+        <MessageText message={message} />
+      </ConversationProvider>
+    );
+
+    expect(screen.getByTestId('markdown-view')).toHaveAttribute('data-local-file-base-dir', '/workspace/demo');
   });
 
   it('keeps absolute attachment paths unchanged before previewing', () => {
@@ -377,6 +402,35 @@ describe('MessageText attachment paths', () => {
         { replace: true }
       );
     });
+  });
+
+  it('reveals local markdown directory links in the workspace tree instead of opening preview tabs', async () => {
+    const directoryPath = '/workspace/demo/docs';
+    const revealEvents: Array<{ workspace?: string; filePath: string }> = [];
+    const handleReveal = (event: Event) => {
+      revealEvents.push((event as CustomEvent<{ workspace?: string; filePath: string }>).detail);
+    };
+    window.addEventListener(WORKSPACE_REVEAL_FILE_EVENT, handleReveal);
+    localFileLinkMocks.payload = { path: directoryPath, reference: undefined };
+    vi.mocked(ipcBridge.fs.getFileMetadata.invoke).mockResolvedValue({
+      ...fileMetadata(directoryPath),
+      type: 'directory',
+      isDirectory: true,
+    });
+
+    try {
+      renderMessageWithLocalLink('[docs](docs)');
+
+      fireEvent.click(screen.getByRole('button', { name: 'open local file' }));
+
+      await waitFor(() => {
+        expect(revealEvents).toEqual([{ workspace: '/workspace/demo', filePath: directoryPath }]);
+      });
+      expect(previewMocks.openPreview).not.toHaveBeenCalled();
+      expect(ipcBridge.fs.readFile.invoke).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener(WORKSPACE_REVEAL_FILE_EVENT, handleReveal);
+    }
   });
 
   it('opens hash range local markdown links with only the start line in preview metadata', async () => {

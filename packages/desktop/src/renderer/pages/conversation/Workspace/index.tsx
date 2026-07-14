@@ -269,7 +269,7 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
     [openPreview, workspace]
   );
 
-  const revealFileInWorkspace = useCallback(
+  const revealNodeInWorkspace = useCallback(
     async (filePath: string) => {
       const relativePath = absoluteToRelativePath(filePath, workspace).replace(/\\/g, '/');
       if (!relativePath || relativePath === '.' || relativePath.startsWith('..') || relativePath === filePath) {
@@ -333,16 +333,19 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
 
       expanded.add(parentRelativePath);
       const siblings = await loadChildren(parentRelativePath, parentFullPath);
-      const fileNode = siblings.find((child) => child.isFile && child.relativePath === relativePath);
-      if (!fileNode) {
+      const targetNode = siblings.find((child) => child.relativePath === relativePath);
+      if (!targetNode) {
         messageApi.warning(t('conversation.workspace.revealInWorkspace.notFound'));
         return;
+      }
+      if (!targetNode.isFile) {
+        expanded.add(targetNode.relativePath);
       }
 
       treeHook.setFiles(nextFiles);
       treeHook.setExpandedKeys([...expanded]);
-      treeHook.ensureNodeSelected(fileNode);
-      window.requestAnimationFrame(() => scrollSelectedWorkspaceNodeIntoView(fileNode.name));
+      treeHook.ensureNodeSelected(targetNode);
+      window.requestAnimationFrame(() => scrollSelectedWorkspaceNodeIntoView(targetNode.name));
     },
     [
       conversation_id,
@@ -361,14 +364,14 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
       const detail = (event as CustomEvent<WorkspaceRevealFileDetail>).detail;
       if (!detail?.filePath) return;
       if (detail.workspace && normalizeWorkspacePath(detail.workspace) !== normalizeWorkspacePath(workspace)) return;
-      void revealFileInWorkspace(detail.filePath);
+      void revealNodeInWorkspace(detail.filePath);
     };
 
     window.addEventListener(WORKSPACE_REVEAL_FILE_EVENT, handleRevealFile);
     return () => {
       window.removeEventListener(WORKSPACE_REVEAL_FILE_EVENT, handleRevealFile);
     };
-  }, [revealFileInWorkspace, workspace]);
+  }, [revealNodeInWorkspace, workspace]);
 
   // Auto-refresh changes when switching to changes tab
   useEffect(() => {

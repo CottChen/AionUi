@@ -13,6 +13,7 @@ import {
 } from '@/renderer/pages/conversation/Preview/constants';
 import { getContentTypeByExtension } from '@/renderer/pages/conversation/Preview/fileUtils';
 import { usePreviewContext } from '@/renderer/pages/conversation/Preview/context/PreviewContext';
+import { dispatchWorkspaceRevealFileEvent } from '@/renderer/utils/workspace/workspaceEvents';
 import { useCallback } from 'react';
 
 const getFileNameFromPath = (file_path: string): string => {
@@ -28,8 +29,17 @@ const getPreviewLanguage = (file_name: string): string => {
 const shouldReadPreviewContent = (contentType: PreviewContentType): boolean =>
   !['pdf', 'word', 'excel', 'ppt'].includes(contentType);
 
-export const useLocalFilePreview = (workspace?: string) => {
+const isDirectoryMetadata = (metadata: { type?: string; isDirectory?: boolean }): boolean => {
+  return metadata.isDirectory === true || metadata.type === 'directory';
+};
+
+type UseLocalFilePreviewOptions = {
+  replace?: boolean;
+};
+
+export const useLocalFilePreview = (workspace?: string, options?: UseLocalFilePreviewOptions) => {
   const { openPreview } = usePreviewContext();
+  const replacePreviewTab = options?.replace ?? true;
 
   return useCallback(
     async (file_path: string, reference?: LocalFileLinkReference) => {
@@ -43,6 +53,11 @@ export const useLocalFilePreview = (workspace?: string) => {
       try {
         const metadata = await ipcBridge.fs.getFileMetadata.invoke({ path: file_path, workspace });
         if (metadata == null) throw null;
+
+        if (isDirectoryMetadata(metadata)) {
+          dispatchWorkspaceRevealFileEvent({ workspace, filePath: file_path });
+          return;
+        }
 
         if (contentType === 'image') {
           const imageContent = await ipcBridge.fs.getImageBase64.invoke({ path: file_path, workspace });
@@ -74,7 +89,7 @@ export const useLocalFilePreview = (workspace?: string) => {
             targetRevealKey,
             editable: contentType === 'markdown' || contentType === 'image' || isLargeTextTruncated ? false : undefined,
           },
-          { replace: true }
+          { replace: replacePreviewTab }
         );
       } catch {
         openPreview(
@@ -92,10 +107,10 @@ export const useLocalFilePreview = (workspace?: string) => {
             editable: false,
             missingFile: true,
           },
-          { replace: true }
+          { replace: replacePreviewTab }
         );
       }
     },
-    [openPreview, workspace]
+    [openPreview, replacePreviewTab, workspace]
   );
 };
