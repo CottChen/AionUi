@@ -194,6 +194,49 @@ describe('MarkdownView local file links', () => {
     );
   });
 
+  it('resolves relative markdown links without line numbers against the local file base directory', () => {
+    const onLocalFileLink = vi.fn();
+
+    render(
+      <MarkdownView localFileBaseDir='/Users/demo/project' onLocalFileLink={onLocalFileLink}>
+        {'[系统架构](architecture/ARCHITECTURE.md)'}
+      </MarkdownView>
+    );
+
+    expect(screen.queryByRole('link', { name: '系统架构' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '系统架构' }));
+    expect(onLocalFileLink).toHaveBeenCalledWith(
+      '/Users/demo/project/architecture/ARCHITECTURE.md',
+      expect.objectContaining({
+        filePath: '/Users/demo/project/architecture/ARCHITECTURE.md',
+        rawReference: '/Users/demo/project/architecture/ARCHITECTURE.md',
+      })
+    );
+  });
+
+  it('opens angle-bracket references without treating markdown punctuation as part of the path', () => {
+    const onLocalFileLink = vi.fn();
+
+    render(
+      <MarkdownView localFileBaseDir='/home/ecs-user/projects/ainda-kb' onLocalFileLink={onLocalFileLink}>
+        {
+          '来源：[说明书](</home/ecs-user/projects/ainda-kb/sources/A/processed/爱宁达-吡美莫司乳膏说明书-20260101.md:39>)'
+        }
+      </MarkdownView>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /说明书\s+L39/ }));
+    expect(onLocalFileLink).toHaveBeenCalledWith(
+      '/home/ecs-user/projects/ainda-kb/sources/A/processed/爱宁达-吡美莫司乳膏说明书-20260101.md',
+      expect.objectContaining({
+        filePath: '/home/ecs-user/projects/ainda-kb/sources/A/processed/爱宁达-吡美莫司乳膏说明书-20260101.md',
+        rawReference: '/home/ecs-user/projects/ainda-kb/sources/A/processed/爱宁达-吡美莫司乳膏说明书-20260101.md:39',
+        line: 39,
+      })
+    );
+  });
+
   it('supports parent-relative links that stay under the local file root directory', () => {
     const onLocalFileLink = vi.fn();
 

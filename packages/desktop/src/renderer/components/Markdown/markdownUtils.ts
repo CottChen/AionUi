@@ -43,6 +43,32 @@ const safeDecodeURIComponent = (value: string): string => {
   }
 };
 
+const stripLocalFileReferenceWrappers = (value: string): string => {
+  let normalized = value.trim();
+
+  for (let index = 0; index < 3; index += 1) {
+    const innerParenthesized =
+      (normalized.startsWith('(') && normalized.endsWith(')')) ||
+      (normalized.startsWith('（') && normalized.endsWith('）'));
+    if (innerParenthesized) {
+      const inner = normalized.slice(1, -1).trim();
+      if (inner.startsWith('<') && inner.endsWith('>')) {
+        normalized = inner;
+        continue;
+      }
+    }
+
+    if (normalized.startsWith('<') && normalized.endsWith('>')) {
+      normalized = normalized.slice(1, -1).trim();
+      continue;
+    }
+
+    break;
+  }
+
+  return normalized;
+};
+
 export type LocalFileLinkReference = {
   filePath: string;
   rawReference: string;
@@ -257,7 +283,7 @@ export const resolveLocalFileLinkReference = (
   resolvedHref?: string,
   options?: ResolveLocalFileLinkOptions
 ): LocalFileLinkReference | null => {
-  const href = safeDecodeURIComponent((rawHref || resolvedHref || '').trim());
+  const href = stripLocalFileReferenceWrappers(safeDecodeURIComponent((rawHref || resolvedHref || '').trim()));
   if (!href) return null;
 
   const candidate = normalizeLocalFileHrefToPath(href, options);

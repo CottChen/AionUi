@@ -126,6 +126,26 @@ describe('resolveLocalFileLinkPath', () => {
     });
   });
 
+  it('unwraps angle-bracket local references wrapped in markdown punctuation', () => {
+    expect(resolveLocalFileLinkReference('(</Users/demo/project/docs/架构说明.md:39>)')).toEqual({
+      filePath: '/Users/demo/project/docs/架构说明.md',
+      rawReference: '/Users/demo/project/docs/架构说明.md:39',
+      line: 39,
+    });
+
+    expect(
+      resolveLocalFileLinkReference(
+        '(</home/ecs-user/projects/ainda-kb/sources/A/processed/爱宁达-吡美莫司乳膏说明书-20260101.md:39>)',
+        undefined,
+        { baseDir: '/home/ecs-user/projects/ainda-kb' }
+      )
+    ).toEqual({
+      filePath: '/home/ecs-user/projects/ainda-kb/sources/A/processed/爱宁达-吡美莫司乳膏说明书-20260101.md',
+      rawReference: '/home/ecs-user/projects/ainda-kb/sources/A/processed/爱宁达-吡美莫司乳膏说明书-20260101.md:39',
+      line: 39,
+    });
+  });
+
   it('rejects unsupported hash line formats and remote hash links', () => {
     expect(resolveLocalFileLinkReference('user.ts')).toBeNull();
     expect(resolveLocalFileLinkReference('./user.ts')).toBeNull();
@@ -151,6 +171,15 @@ describe('resolveLocalFileLinkPath', () => {
       rawReference: '/Users/demo/project/docs/foo.ts:12:3',
       line: 12,
       column: 3,
+    });
+
+    expect(
+      resolveLocalFileLinkReference('architecture/ARCHITECTURE.md', undefined, {
+        baseDir: '/Users/demo/project',
+      })
+    ).toEqual({
+      filePath: '/Users/demo/project/architecture/ARCHITECTURE.md',
+      rawReference: '/Users/demo/project/architecture/ARCHITECTURE.md',
     });
   });
 

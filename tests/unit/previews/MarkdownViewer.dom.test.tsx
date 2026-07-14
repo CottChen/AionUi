@@ -270,6 +270,41 @@ describe('MarkdownViewer', () => {
     });
   });
 
+  it('opens workspace-relative markdown links without line numbers from markdown previews', async () => {
+    const filePath = '/Users/demo/project/docs/architecture/ARCHITECTURE.md';
+    vi.mocked(ipcBridge.fs.getFileMetadata.invoke).mockResolvedValue(fileMetadata(filePath));
+    vi.mocked(ipcBridge.fs.readFile.invoke).mockResolvedValue('# Architecture\n');
+
+    render(
+      <MarkdownViewer
+        content='[系统架构](architecture/ARCHITECTURE.md)'
+        file_path='/Users/demo/project/docs/README.md'
+        workspace='/Users/demo/project'
+      />
+    );
+
+    expect(screen.queryByRole('link', { name: '系统架构' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '系统架构' }));
+
+    await waitFor(() => {
+      expect(previewMocks.openPreview).toHaveBeenCalledWith(
+        '# Architecture\n',
+        'markdown',
+        expect.objectContaining({
+          file_name: 'ARCHITECTURE.md',
+          file_path: filePath,
+          workspace: '/Users/demo/project',
+          language: 'md',
+          targetLine: undefined,
+          targetColumn: undefined,
+          editable: false,
+        }),
+        { replace: false }
+      );
+    });
+  });
+
   it('reveals workspace-relative directory links in the workspace tree instead of opening preview tabs', async () => {
     const directoryPath = '/Users/demo/project/docs';
     const revealEvents: Array<{ workspace?: string; filePath: string }> = [];
