@@ -598,8 +598,8 @@ describe('MessageText attachment paths', () => {
     localFileLinkMocks.payload = { path: directoryPath, reference: undefined };
     vi.mocked(ipcBridge.fs.getFileMetadata.invoke).mockResolvedValue({
       ...fileMetadata(directoryPath),
-      type: 'directory',
-      isDirectory: true,
+      type: 'inode/directory',
+      is_directory: true,
     });
 
     try {

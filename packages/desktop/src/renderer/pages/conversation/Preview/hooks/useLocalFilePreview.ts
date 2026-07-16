@@ -14,6 +14,7 @@ import {
 import { getContentTypeByExtension } from '@/renderer/pages/conversation/Preview/fileUtils';
 import { usePreviewContext } from '@/renderer/pages/conversation/Preview/context/PreviewContext';
 import { dispatchWorkspaceRevealFileEvent } from '@/renderer/utils/workspace/workspaceEvents';
+import { isDirectoryMetadata } from '@/renderer/utils/file/fileMetadata';
 import { useCallback } from 'react';
 
 const getFileNameFromPath = (file_path: string): string => {
@@ -28,10 +29,6 @@ const getPreviewLanguage = (file_name: string): string => {
 
 const shouldReadPreviewContent = (contentType: PreviewContentType): boolean =>
   !['pdf', 'word', 'excel', 'ppt'].includes(contentType);
-
-const isDirectoryMetadata = (metadata: { type?: string; isDirectory?: boolean }): boolean => {
-  return metadata.isDirectory === true || metadata.type === 'directory';
-};
 
 type UseLocalFilePreviewOptions = {
   replace?: boolean;

@@ -9,6 +9,7 @@ import type { DragEvent } from 'react';
 import type { TFunction } from 'i18next';
 import { ipcBridge } from '@/common';
 import { FileService } from '@/renderer/services/FileService';
+import { isDirectoryMetadata } from '@/renderer/utils/file/fileMetadata';
 import type { MessageApi } from '../types';
 
 interface UseWorkspaceDragImportOptions {
@@ -106,7 +107,7 @@ export function useWorkspaceDragImport({
       try {
         const metadata = await ipcBridge.fs.getFileMetadata.invoke({ path: item.path });
         const itemName = metadata.name || item.name || getBaseName(item.path);
-        const kind = metadata.isDirectory ? 'directory' : 'file';
+        const kind = isDirectoryMetadata(metadata) ? 'directory' : 'file';
         unique.set(item.path, { path: item.path, name: itemName, kind });
       } catch (error) {
         console.warn('[WorkspaceDragImport] Failed to inspect dropped path:', item.path, error);

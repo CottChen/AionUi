@@ -314,8 +314,8 @@ describe('MarkdownViewer', () => {
     window.addEventListener(WORKSPACE_REVEAL_FILE_EVENT, handleReveal);
     vi.mocked(ipcBridge.fs.getFileMetadata.invoke).mockResolvedValue({
       ...fileMetadata(directoryPath),
-      type: 'directory',
-      isDirectory: true,
+      type: 'inode/directory',
+      is_directory: true,
     });
 
     try {
