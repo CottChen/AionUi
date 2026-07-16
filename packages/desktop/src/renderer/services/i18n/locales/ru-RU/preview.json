@@ -140,5 +140,6 @@
     "startFailed": "Не удалось запустить предпросмотр PPT",
     "installHint": "Установите OfficeCLI со страницы официальных выпусков iOfficeAI/OfficeCLI"
   },
-  "revealInWorkspace": "Показать на панели файлов"
+  "revealInWorkspace": "Показать на панели файлов",
+  "frontmatterMetadata": "Метаданные"
 }

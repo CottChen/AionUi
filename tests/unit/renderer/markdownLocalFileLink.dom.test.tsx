@@ -215,6 +215,27 @@ describe('MarkdownView local file links', () => {
     );
   });
 
+  it('resolves wiki links against the local file base directory', () => {
+    const onLocalFileLink = vi.fn();
+
+    render(
+      <MarkdownView localFileBaseDir='/Users/demo/project' onLocalFileLink={onLocalFileLink}>
+        {'[[2020-8fe4e0ee|中国特应性皮炎诊疗指南]]'}
+      </MarkdownView>
+    );
+
+    expect(screen.queryByRole('link', { name: '中国特应性皮炎诊疗指南' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '中国特应性皮炎诊疗指南' }));
+    expect(onLocalFileLink).toHaveBeenCalledWith(
+      '/Users/demo/project/2020-8fe4e0ee',
+      expect.objectContaining({
+        filePath: '/Users/demo/project/2020-8fe4e0ee',
+        rawReference: '/Users/demo/project/2020-8fe4e0ee',
+      })
+    );
+  });
+
   it('opens angle-bracket references without treating markdown punctuation as part of the path', () => {
     const onLocalFileLink = vi.fn();
 

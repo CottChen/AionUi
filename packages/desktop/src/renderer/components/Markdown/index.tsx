@@ -26,6 +26,7 @@ import LocalFileLink from './LocalFileLink';
 import ShadowView from './ShadowView';
 import { resolveLocalFileLinkPath, resolveLocalFileLinkReference } from './markdownUtils';
 import type { LocalFileLinkReference } from './markdownUtils';
+import { transformMarkdownWikiLinks } from './markdownPreprocess';
 
 const REMARK_PLUGINS = [remarkGfm, remarkMath, remarkBreaks];
 
@@ -66,6 +67,7 @@ const MarkdownView: React.FC<MarkdownViewProps> = React.memo(
       if (typeof childrenProp === 'string') {
         let text = childrenProp;
         text = convertLatexDelimiters(text);
+        text = transformMarkdownWikiLinks(text);
         return text;
       }
       return childrenProp;

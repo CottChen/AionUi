@@ -30,6 +30,16 @@ const getPreviewLanguage = (file_name: string): string => {
 const shouldReadPreviewContent = (contentType: PreviewContentType): boolean =>
   !['pdf', 'word', 'excel', 'ppt'].includes(contentType);
 
+const hasFileExtension = (file_path: string): boolean => {
+  const fileName = getFileNameFromPath(file_path.replace(/[\\/]+$/, ''));
+  return /\.[^./\\]+$/.test(fileName);
+};
+
+const getMarkdownFallbackPath = (file_path: string): string | null => {
+  if (!file_path || /[\\/]$/.test(file_path) || hasFileExtension(file_path)) return null;
+  return `${file_path}.md`;
+};
+
 type UseLocalFilePreviewOptions = {
   replace?: boolean;
 };
@@ -40,28 +50,39 @@ export const useLocalFilePreview = (workspace?: string, options?: UseLocalFilePr
 
   return useCallback(
     async (file_path: string, reference?: LocalFileLinkReference) => {
-      const fileName = getFileNameFromPath(file_path);
-      const contentType = getContentTypeByExtension(fileName);
       const targetRevealKey =
         reference?.line == null ? undefined : `${file_path}:${reference.line}:${reference.column ?? ''}:${Date.now()}`;
+      let previewFilePath = file_path;
       let content = '';
       let isLargeTextTruncated = false;
 
       try {
-        const metadata = await ipcBridge.fs.getFileMetadata.invoke({ path: file_path, workspace });
+        let metadata = await ipcBridge.fs.getFileMetadata.invoke({ path: previewFilePath, workspace });
+        if (metadata == null) {
+          const fallbackPath = getMarkdownFallbackPath(previewFilePath);
+          if (fallbackPath) {
+            const fallbackMetadata = await ipcBridge.fs.getFileMetadata.invoke({ path: fallbackPath, workspace });
+            if (fallbackMetadata != null) {
+              previewFilePath = fallbackPath;
+              metadata = fallbackMetadata;
+            }
+          }
+        }
         if (metadata == null) throw null;
 
         if (isDirectoryMetadata(metadata)) {
-          dispatchWorkspaceRevealFileEvent({ workspace, filePath: file_path });
+          dispatchWorkspaceRevealFileEvent({ workspace, filePath: previewFilePath });
           return;
         }
 
+        const fileName = getFileNameFromPath(previewFilePath);
+        const contentType = getContentTypeByExtension(fileName);
         if (contentType === 'image') {
-          const imageContent = await ipcBridge.fs.getImageBase64.invoke({ path: file_path, workspace });
+          const imageContent = await ipcBridge.fs.getImageBase64.invoke({ path: previewFilePath, workspace });
           if (imageContent == null) throw null;
           content = imageContent;
         } else if (shouldReadPreviewContent(contentType)) {
-          const textContent = await ipcBridge.fs.readFile.invoke({ path: file_path, workspace });
+          const textContent = await ipcBridge.fs.readFile.invoke({ path: previewFilePath, workspace });
           if (textContent == null) throw null;
           content = textContent;
 
@@ -77,7 +98,7 @@ export const useLocalFilePreview = (workspace?: string, options?: UseLocalFilePr
           {
             title: fileName,
             file_name: fileName,
-            file_path,
+            file_path: previewFilePath,
             workspace,
             language: getPreviewLanguage(fileName),
             truncated: isLargeTextTruncated,
@@ -89,6 +110,8 @@ export const useLocalFilePreview = (workspace?: string, options?: UseLocalFilePr
           { replace: replacePreviewTab }
         );
       } catch {
+        const fileName = getFileNameFromPath(file_path);
+        const contentType = getContentTypeByExtension(fileName);
         openPreview(
           '',
           contentType,

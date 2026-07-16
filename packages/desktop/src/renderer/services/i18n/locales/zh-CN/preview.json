@@ -140,5 +140,6 @@
     "startFailed": "启动 PPT 预览失败",
     "installHint": "请从官方 iOfficeAI/OfficeCLI releases 页面安装 OfficeCLI"
   },
-  "revealInWorkspace": "定位到文件栏"
+  "revealInWorkspace": "定位到文件栏",
+  "frontmatterMetadata": "元数据"
 }

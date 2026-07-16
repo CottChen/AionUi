@@ -140,5 +140,6 @@
     "startFailed": "PPT-Vorschau konnte nicht gestartet werden",
     "installHint": "Installiere OfficeCLI über die offizielle iOfficeAI/OfficeCLI releases-Seite"
   },
-  "revealInWorkspace": "Im Dateibereich anzeigen"
+  "revealInWorkspace": "Im Dateibereich anzeigen",
+  "frontmatterMetadata": "Metadaten"
 }

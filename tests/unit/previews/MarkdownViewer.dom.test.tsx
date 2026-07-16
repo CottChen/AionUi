@@ -98,6 +98,31 @@ vi.mock('@arco-design/web-react', () => ({
   Message: {
     error: vi.fn(),
   },
+  Collapse: Object.assign(
+    ({ children, defaultActiveKey = [] }: { children?: React.ReactNode; defaultActiveKey?: string[] }) => {
+      const activeKeys = new Set(defaultActiveKey);
+      return (
+        <div data-testid='collapse'>
+          {React.Children.map(children, (child) => {
+            if (!React.isValidElement<{ name: string; header: React.ReactNode; children?: React.ReactNode }>(child)) {
+              return child;
+            }
+            const { name, header, children: itemChildren } = child.props;
+            const expanded = activeKeys.has(name);
+            return (
+              <section data-testid={`collapse-item-${name}`} data-expanded={expanded}>
+                <div>{header}</div>
+                {expanded && <div>{itemChildren}</div>}
+              </section>
+            );
+          })}
+        </div>
+      );
+    },
+    {
+      Item: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+    }
+  ),
   Tooltip: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
 }));
 
@@ -303,6 +328,62 @@ describe('MarkdownViewer', () => {
         { replace: false }
       );
     });
+  });
+
+  it('opens wiki links in markdown previews and falls back to markdown files by stem', async () => {
+    const stemPath = '/Users/demo/project/docs/2020-8fe4e0ee';
+    const markdownPath = `${stemPath}.md`;
+    vi.mocked(ipcBridge.fs.getFileMetadata.invoke)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(fileMetadata(markdownPath));
+    vi.mocked(ipcBridge.fs.readFile.invoke).mockResolvedValue('# Guide\n');
+
+    render(
+      <MarkdownViewer
+        content='[[2020-8fe4e0ee|中国特应性皮炎诊疗指南]]'
+        file_path='/Users/demo/project/docs/README.md'
+        workspace='/Users/demo/project'
+      />
+    );
+
+    expect(screen.queryByRole('link', { name: '中国特应性皮炎诊疗指南' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '中国特应性皮炎诊疗指南' }));
+
+    await waitFor(() => {
+      expect(previewMocks.openPreview).toHaveBeenCalledWith(
+        '# Guide\n',
+        'markdown',
+        expect.objectContaining({
+          file_name: '2020-8fe4e0ee.md',
+          file_path: markdownPath,
+          workspace: '/Users/demo/project',
+          language: 'md',
+        }),
+        { replace: false }
+      );
+    });
+    expect(ipcBridge.fs.getFileMetadata.invoke).toHaveBeenNthCalledWith(1, {
+      path: stemPath,
+      workspace: '/Users/demo/project',
+    });
+    expect(ipcBridge.fs.getFileMetadata.invoke).toHaveBeenNthCalledWith(2, {
+      path: markdownPath,
+      workspace: '/Users/demo/project',
+    });
+  });
+
+  it('renders leading YAML frontmatter as a collapsed metadata section', () => {
+    const { container } = render(
+      <MarkdownViewer content={'---\nschema_version: ainda-kb/source/v1\ntype: source\n---\n# Body'} />
+    );
+
+    const metadataPanel = container.querySelector('[data-testid="collapse-item-frontmatter"]');
+    expect(metadataPanel).not.toBeNull();
+    expect(metadataPanel).toHaveAttribute('data-expanded', 'false');
+    expect(screen.getByText('preview.frontmatterMetadata')).toBeInTheDocument();
+    expect(screen.queryByText('schema_version: ainda-kb/source/v1')).not.toBeInTheDocument();
+    expect(screen.getByText('Body')).toBeInTheDocument();
   });
 
   it('reveals workspace-relative directory links in the workspace tree instead of opening preview tabs', async () => {

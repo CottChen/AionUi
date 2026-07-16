@@ -1069,6 +1069,7 @@ export type I18nKey =
   | 'preview.excel.watch.loading'
   | 'preview.excel.watch.startFailed'
   | 'preview.exitEdit'
+  | 'preview.frontmatterMetadata'
   | 'preview.history'
   | 'preview.historyLoadFailed'
   | 'preview.historyLoaded'

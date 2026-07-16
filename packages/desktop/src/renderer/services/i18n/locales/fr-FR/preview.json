@@ -139,5 +139,6 @@
     "installing": "Installation du composant d'aperçu...",
     "startFailed": "Échec du démarrage de l'aperçu PPT",
     "installHint": "Assurez-vous qu'officecli est installé : npm run postinstall"
-  }
+  },
+  "frontmatterMetadata": "Métadonnées"
 }

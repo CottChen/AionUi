@@ -8,9 +8,15 @@ import { joinPath } from '@/common/chat/chatLib';
 import { ipcBridge } from '@/common';
 import LocalFileLink from '@/renderer/components/Markdown/LocalFileLink';
 import { resolveLocalFileLinkReference } from '@/renderer/components/Markdown/markdownUtils';
+import {
+  splitMarkdownFrontmatter,
+  transformMarkdownWikiLinks,
+} from '@/renderer/components/Markdown/markdownPreprocess';
 import { useTextSelection } from '@/renderer/hooks/ui/useTextSelection';
+import { Collapse } from '@arco-design/web-react';
 import 'katex/dist/katex.min.css';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import remarkBreaks from 'remark-breaks';
 import { Streamdown, defaultRehypePlugins, defaultRemarkPlugins } from 'streamdown';
 import MarkdownEditor from '../editors/MarkdownEditor';
@@ -203,6 +209,7 @@ const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({
   targetColumn,
   targetRevealKey,
 }) => {
+  const { t } = useTranslation();
   const internalContainerRef = useRef<HTMLDivElement>(null);
   const containerRef = externalContainerRef || internalContainerRef; // 使用外部 ref 或内部 ref / Use external ref or internal ref
   const currentTheme = useThemeDetection();
@@ -217,9 +224,15 @@ const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({
 
   // 预览源：转换 LaTeX 分隔符并重写外部媒体 URL / Preview source: convert LaTeX delimiters and rewrite external media URLs
   const previewSource = useMemo(
-    () => convertLatexDelimiters(normalizeLocalFileSchemeLinks(rewriteExternalMediaUrls(content))),
+    () =>
+      transformMarkdownWikiLinks(
+        convertLatexDelimiters(normalizeLocalFileSchemeLinks(rewriteExternalMediaUrls(content)))
+      ),
     [content]
   );
+
+  const previewFrontmatter = useMemo(() => splitMarkdownFrontmatter(previewSource), [previewSource]);
+  const renderedPreviewSource = previewFrontmatter?.body ?? previewSource;
 
   // 监听文本选择 / Monitor text selection
   const { selectedText, selectionPosition, clearSelection } = useTextSelection(containerRef);
@@ -263,6 +276,18 @@ const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({
               boxSizing: 'border-box',
             }}
           >
+            {previewFrontmatter && (
+              <Collapse bordered={false} className='mb-20px bg-fill-1 rd-6px' defaultActiveKey={[]}>
+                <Collapse.Item
+                  name='frontmatter'
+                  header={<span className='text-13px text-t-secondary'>{t('preview.frontmatterMetadata')}</span>}
+                >
+                  <pre className='mt-0 mb-0 overflow-auto text-12px leading-18px'>
+                    <code>{previewFrontmatter.metadata}</code>
+                  </pre>
+                </Collapse.Item>
+              </Collapse>
+            )}
             <Streamdown
               mode='static'
               shikiTheme={getMarkdownShikiThemes()}
@@ -295,7 +320,7 @@ const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({
                 },
               }}
             >
-              {previewSource}
+              {renderedPreviewSource}
             </Streamdown>
           </div>
         )}

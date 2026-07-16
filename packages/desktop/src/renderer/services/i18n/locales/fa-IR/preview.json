@@ -140,5 +140,6 @@
     "startFailed": "شروع پیش‌نمایش PPT ناموفق بود",
     "installHint": "OfficeCLI را از صفحه انتشارات رسمی iOfficeAI/OfficeCli نصب کنید"
   },
-  "revealInWorkspace": "نمایش در پنل فایل‌ها"
+  "revealInWorkspace": "نمایش در پنل فایل‌ها",
+  "frontmatterMetadata": "فراداده"
 }

@@ -140,5 +140,6 @@
     "startFailed": "PPTプレビューの起動に失敗しました",
     "installHint": "公式 iOfficeAI/OfficeCLI releases ページから OfficeCLI をインストールしてください"
   },
-  "revealInWorkspace": "ファイル欄で表示"
+  "revealInWorkspace": "ファイル欄で表示",
+  "frontmatterMetadata": "メタデータ"
 }

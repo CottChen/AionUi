@@ -140,5 +140,6 @@
     "startFailed": "Не вдалося запустити перегляд PPT",
     "installHint": "Встановіть OfficeCLI зі сторінки офіційних релізів iOfficeAI/OfficeCLI"
   },
-  "revealInWorkspace": "Показати на панелі файлів"
+  "revealInWorkspace": "Показати на панелі файлів",
+  "frontmatterMetadata": "Метадані"
 }

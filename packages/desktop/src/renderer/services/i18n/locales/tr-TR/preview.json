@@ -140,5 +140,6 @@
     "startFailed": "PPT önizlemesi başlatılamadı",
     "installHint": "OfficeCLI'yi resmi iOfficeAI/OfficeCLI releases sayfasından yükleyin"
   },
-  "revealInWorkspace": "Dosya panelinde göster"
+  "revealInWorkspace": "Dosya panelinde göster",
+  "frontmatterMetadata": "Meta veri"
 }
