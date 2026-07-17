@@ -66,5 +66,16 @@
   },
   "atFile.hint": "Введите текст для поиска файлов",
   "atFile.menuLabel": "Упоминания файлов",
-  "atFile.loading": "Загрузка..."
+  "atFile.loading": "Загрузка...",
+  "rating": {
+    "like": "Like",
+    "dislike": "Dislike",
+    "likeTitle": "Rate this answer",
+    "dislikeTitle": "Rate this answer",
+    "score": "Score",
+    "comment": "Comment",
+    "commentPlaceholder": "Optional note for this rating",
+    "submitSuccess": "Rating submitted",
+    "submitFailed": "Failed to submit rating"
+  }
 }

@@ -66,5 +66,16 @@
     "yesAlwaysAllowTool": "بله، همیشه اجازه ابزار «{{toolName}}» از سرور «{{serverName}}» بده",
     "yesAlwaysAllowServer": "بله، همیشه اجازه تمام ابزارها از سرور «{{serverName}}» بده",
     "no": "خیر (esc)"
+  },
+  "rating": {
+    "like": "Like",
+    "dislike": "Dislike",
+    "likeTitle": "Rate this answer",
+    "dislikeTitle": "Rate this answer",
+    "score": "Score",
+    "comment": "Comment",
+    "commentPlaceholder": "Optional note for this rating",
+    "submitSuccess": "Rating submitted",
+    "submitFailed": "Failed to submit rating"
   }
 }

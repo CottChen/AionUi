@@ -1246,5 +1246,7 @@
     }
   },
   "providerIdConflict": "L'ID du fournisseur existe déjà. Veuillez réessayer.",
-  "autoInjectedSkillsHint": "Chargé automatiquement dans chaque conversation – pas besoin de les activer ; l'agent décide quand les utiliser."
+  "autoInjectedSkillsHint": "Chargé automatiquement dans chaque conversation – pas besoin de les activer ; l'agent décide quand les utiliser.",
+  "conversationRating": "Conversation Rating",
+  "conversationRatingDesc": "Show like and dislike actions at the end of each AI reply and save question/answer snapshots."
 }

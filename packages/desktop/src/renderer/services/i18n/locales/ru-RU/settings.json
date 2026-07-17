@@ -1272,5 +1272,7 @@
     }
   },
   "providerIdConflict": "Provider ID уже существует. Повторите попытку.",
-  "autoInjectedSkillsHint": "Автоматически загружаются в каждый диалог — включать не нужно; агент сам решает, когда их использовать."
+  "autoInjectedSkillsHint": "Автоматически загружаются в каждый диалог — включать не нужно; агент сам решает, когда их использовать.",
+  "conversationRating": "Conversation Rating",
+  "conversationRatingDesc": "Show like and dislike actions at the end of each AI reply and save question/answer snapshots."
 }

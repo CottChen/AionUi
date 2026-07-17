@@ -5,8 +5,15 @@
  */
 
 import type { IConversationArtifact } from '@/common/adapter/ipcBridge';
-import type { IMessageAcpToolCall, IMessageToolCall, IMessageToolGroup, TMessage } from '@/common/chat/chatLib';
+import type {
+  IMessageAcpToolCall,
+  IMessageText,
+  IMessageToolCall,
+  IMessageToolGroup,
+  TMessage,
+} from '@/common/chat/chatLib';
 import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
+import { useConfig } from '@/renderer/hooks/config/useConfig';
 import { useConversationRuntimeView } from '@/renderer/pages/conversation/runtime/useConversationRuntimeView';
 import { getChatSurfaceWidthClass } from '@/renderer/pages/conversation/utils/chatSurfaceWidth';
 import { useTeamPermission } from '@/renderer/pages/team/hooks/TeamPermissionContext';
@@ -43,6 +50,7 @@ import MessageToolGroupSummary from './components/MessageToolGroupSummary';
 import MessageCronTrigger from './components/MessageCronTrigger';
 import MessageSkillSuggest from './components/MessageSkillSuggest';
 import MessageText from './components/MessageText';
+import type { MessageRatingContext } from './components/MessageRatingActions';
 import MessageThinking from './components/MessageThinking';
 import type { WriteFileResult } from './types';
 import { useAutoScroll } from './useAutoScroll';
@@ -106,6 +114,9 @@ const highlightStyle: React.CSSProperties = {
 };
 
 const getUnhandledMessageType = (_message: never): string => 'unknown';
+
+const isSummaryItem = (item: IProcessedItem): boolean =>
+  'type' in item && (item.type === 'file_summary' || item.type === 'tool_summary' || item.type === 'artifact');
 
 // Image preview context
 export const ImagePreviewContext = createContext<{ inPreviewGroup: boolean }>({ inPreviewGroup: false });
@@ -182,6 +193,7 @@ const MessageItem: React.FC<{
   rowWidthClass: string;
   showCopyButton?: boolean;
   showTimestamp?: boolean;
+  ratingContext?: MessageRatingContext;
 }> = React.memo(
   HOC((props) => {
     const { message, highlighted, rowWidthClass } = props as {
@@ -214,18 +226,25 @@ const MessageItem: React.FC<{
       message,
       showCopyButton,
       showTimestamp,
+      ratingContext,
     }: {
       message: TMessage;
       highlighted?: boolean;
       rowWidthClass: string;
       showCopyButton?: boolean;
       showTimestamp?: boolean;
+      ratingContext?: MessageRatingContext;
     }) => {
       const { t } = useTranslation();
       switch (message.type) {
         case 'text':
           return (
-            <MessageText message={message} showCopyButton={showCopyButton} showTimestamp={showTimestamp}></MessageText>
+            <MessageText
+              message={message}
+              showCopyButton={showCopyButton}
+              showTimestamp={showTimestamp}
+              ratingContext={ratingContext}
+            ></MessageText>
           );
         case 'tips':
           return <MessageTips message={message}></MessageTips>;
@@ -260,7 +279,8 @@ const MessageItem: React.FC<{
     prev.highlighted === next.highlighted &&
     prev.rowWidthClass === next.rowWidthClass &&
     prev.showCopyButton === next.showCopyButton &&
-    prev.showTimestamp === next.showTimestamp
+    prev.showTimestamp === next.showTimestamp &&
+    prev.ratingContext === next.ratingContext
 );
 
 const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }> = ({ emptySlot }) => {
@@ -269,6 +289,7 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
   const pagination = useMessagePaginationState();
   const artifacts = useConversationArtifacts();
   const conversationContext = useConversationContextSafe();
+  const [ratingEnabled] = useConfig('conversation.rating.enabled');
   const teamPermission = useTeamPermission();
   const rowWidthClass = getChatSurfaceWidthClass(Boolean(teamPermission));
   const loadPreviousMessagePage = useLoadPreviousMessagePage(conversationContext?.conversation_id);
@@ -427,6 +448,54 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
     if (isProcessing && lastTurnTextId) ids.delete(lastTurnTextId);
     return ids;
   }, [processedList, isProcessing]);
+
+  const aiRatingContexts = useMemo(() => {
+    const contexts = new Map<string, MessageRatingContext>();
+    const conversationId = conversationContext?.conversation_id;
+    if (!ratingEnabled || !conversationId) {
+      return contexts;
+    }
+
+    let currentQuestion: IMessageText | undefined;
+    let pendingAnswer: IMessageText | undefined;
+    let pendingQuestion: IMessageText | undefined;
+    let lastTurnAnswerId: string | undefined;
+    const flush = () => {
+      if (pendingAnswer && pendingQuestion) {
+        contexts.set(pendingAnswer.id, {
+          conversationId,
+          questionMessageId: pendingQuestion.id,
+          questionSnapshot: pendingQuestion.content.content,
+          answerSnapshot: pendingAnswer.content.content,
+        });
+      }
+      pendingAnswer = undefined;
+      pendingQuestion = undefined;
+    };
+
+    for (const item of processedList) {
+      if (isSummaryItem(item)) {
+        continue;
+      }
+      const message = item as TMessage;
+      if (message.position === 'right') {
+        flush();
+        currentQuestion = message.type === 'text' ? message : undefined;
+        continue;
+      }
+      if (message.position === 'left' && message.type === 'text') {
+        pendingAnswer = message;
+        pendingQuestion = currentQuestion;
+      }
+    }
+
+    lastTurnAnswerId = pendingAnswer?.id;
+    flush();
+    if (isProcessing && lastTurnAnswerId) {
+      contexts.delete(lastTurnAnswerId);
+    }
+    return contexts;
+  }, [conversationContext?.conversation_id, isProcessing, processedList, ratingEnabled]);
 
   // Use auto-scroll hook
   const {
@@ -630,6 +699,8 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
     const showCopyButton =
       message.position !== 'left' || message.type !== 'text' || aiCopyButtonTextIds.has(message.id);
     const showTimestamp = message.type !== 'text' || message.created_at != null;
+    const ratingContext =
+      message.position === 'left' && message.type === 'text' ? aiRatingContexts.get(message.id) : undefined;
     return (
       <MessageItem
         message={message}
@@ -638,6 +709,7 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
         rowWidthClass={rowWidthClass}
         showCopyButton={showCopyButton}
         showTimestamp={showTimestamp}
+        ratingContext={ratingContext}
       ></MessageItem>
     );
   };

@@ -66,5 +66,16 @@
     "yesAlwaysAllowTool": "예, 서버 \"{{serverName}}\"의 도구 \"{{toolName}}\" 항상 허용",
     "yesAlwaysAllowServer": "예, 서버 \"{{serverName}}\"의 모든 도구 항상 허용",
     "no": "아니요 (esc)"
+  },
+  "rating": {
+    "like": "Like",
+    "dislike": "Dislike",
+    "likeTitle": "Rate this answer",
+    "dislikeTitle": "Rate this answer",
+    "score": "Score",
+    "comment": "Comment",
+    "commentPlaceholder": "Optional note for this rating",
+    "submitSuccess": "Rating submitted",
+    "submitFailed": "Failed to submit rating"
   }
 }

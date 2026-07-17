@@ -66,5 +66,16 @@
     "yesAlwaysAllowTool": "是，始终允许来自服务器 \"{{serverName}}\" 的工具 \"{{toolName}}\"",
     "yesAlwaysAllowServer": "是，始终允许来自服务器 \"{{serverName}}\" 的所有工具",
     "no": "否 (esc)"
+  },
+  "rating": {
+    "like": "点赞",
+    "dislike": "点踩",
+    "likeTitle": "评价这条回答",
+    "dislikeTitle": "评价这条回答",
+    "score": "评分",
+    "comment": "评论",
+    "commentPlaceholder": "可选，补充说明这次评价",
+    "submitSuccess": "评价已提交",
+    "submitFailed": "评价提交失败"
   }
 }

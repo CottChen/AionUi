@@ -45,6 +45,7 @@ export const formatMessageTime = (timestamp: number): string => {
   return time;
 };
 import MessageCronBadge from './MessageCronBadge';
+import MessageRatingActions, { type MessageRatingContext } from './MessageRatingActions';
 import { resolveAgentLogo, useAgentLogos } from '@/renderer/utils/model/agentLogo';
 import TeammateMessageAvatar from './TeammateMessageAvatar';
 import { useTeammateColor } from '@/renderer/pages/team/identity/TeamIdentityContext';
@@ -147,7 +148,8 @@ const MessageText: React.FC<{
   message: IMessageText;
   showCopyButton?: boolean;
   showTimestamp?: boolean;
-}> = ({ message, showCopyButton = true, showTimestamp = true }) => {
+  ratingContext?: MessageRatingContext;
+}> = ({ message, showCopyButton = true, showTimestamp = true, ratingContext }) => {
   const logos = useAgentLogos();
   // Filter think tags from content before rendering
   // 在渲染前过滤 think 标签
@@ -305,13 +307,14 @@ const MessageText: React.FC<{
         {/* Desktop keeps hover-revealed metadata; touch/no-hover devices show it via CSS.
             For AI replies split across several text messages, only the last text
             of the turn shows the copy button; user messages always do. */}
-        {(showCopyButton || showTimestamp) && (
+        {(showCopyButton || showTimestamp || ratingContext) && (
           <div
             className={classNames('h-32px flex items-center mt-4px gap-8px', {
               'flex-row-reverse': isUserMessage,
             })}
           >
             {showCopyButton && copyButton}
+            {ratingContext && <MessageRatingActions answerMessageId={message.id} context={ratingContext} />}
             {showTimestamp && message.created_at && (
               <span className='message-meta-time text-12px text-t-secondary opacity-0 group-hover:opacity-100 transition-opacity select-none'>
                 {formatMessageTime(message.created_at)}

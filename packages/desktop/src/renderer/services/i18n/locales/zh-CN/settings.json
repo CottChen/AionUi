@@ -1277,5 +1277,7 @@
     }
   },
   "providerIdConflict": "Provider ID 已存在，请重试。",
-  "autoInjectedSkillsHint": "每次对话都会自动加载，无需手动启用；由智能体自行决定何时调用。"
+  "autoInjectedSkillsHint": "每次对话都会自动加载，无需手动启用；由智能体自行决定何时调用。",
+  "conversationRating": "对话评分",
+  "conversationRatingDesc": "在每次 AI 回复末尾显示点赞和点踩，用于保存问题与回答快照。"
 }
