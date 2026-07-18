@@ -6,7 +6,7 @@
 
 import { httpRequest } from '@/common/adapter/httpBridge';
 import { iconColors } from '@/renderer/styles/colors';
-import { Button, Input, InputNumber, Message, Modal, Tooltip } from '@arco-design/web-react';
+import { Button, Input, Message, Modal, Slider, Tooltip } from '@arco-design/web-react';
 import { Dislike, Like } from '@icon-park/react';
 import React, { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -134,14 +134,26 @@ const MessageRatingActions: React.FC<{
       >
         <div className='flex flex-col gap-16px'>
           <div>
-            <div className='text-13px text-t-secondary mb-6px'>{t('messages.rating.score')}</div>
-            <InputNumber
-              min={range.min}
-              max={range.max}
-              value={score}
-              onChange={(value) => setScore(clampScore(vote, typeof value === 'number' ? value : DEFAULT_SCORE[vote]))}
-              style={{ width: 120 }}
-            />
+            <div className='flex items-center justify-between mb-8px'>
+              <span className='text-13px text-t-secondary'>{t('messages.rating.score')}</span>
+              <span className='text-13px font-500 text-1'>{score}/10</span>
+            </div>
+            <div className='flex items-center gap-12px'>
+              <span className='text-12px text-t-tertiary w-18px text-right'>{range.min}</span>
+              <Slider
+                className='flex-1'
+                min={range.min}
+                max={range.max}
+                step={1}
+                value={score}
+                showTicks
+                showInput={false}
+                onChange={(value) =>
+                  setScore(clampScore(vote, typeof value === 'number' ? value : DEFAULT_SCORE[vote]))
+                }
+              />
+              <span className='text-12px text-t-tertiary w-18px'>{range.max}</span>
+            </div>
           </div>
           <div>
             <div className='text-13px text-t-secondary mb-6px'>{t('messages.rating.comment')}</div>

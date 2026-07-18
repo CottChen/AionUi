@@ -306,6 +306,7 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | undefined>();
   const handledTargetKeyRef = useRef<string>('');
   const loadingTargetKeyRef = useRef<string>('');
+  const loadedAnchorTargetKeyRef = useRef<string>('');
   const scrollerElementRef = useRef<HTMLDivElement | null>(null);
   const contentElementRef = useRef<HTMLDivElement | null>(null);
 
@@ -529,6 +530,51 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
     [handleContentRef]
   );
 
+  const scrollToProcessedTarget = useCallback(
+    (
+      targetIndex: number,
+      targetMessageId: string,
+      options: { block?: ScrollLogicalPosition; behavior?: ScrollBehavior } = {}
+    ) => {
+      const block = options.block || 'center';
+      const behavior = options.behavior || 'smooth';
+      setHighlightedMessageId(targetMessageId);
+      hideScrollButton();
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const item = processedList[targetIndex];
+          const targetElement =
+            document.getElementById(`message-${targetMessageId}`) ||
+            document.getElementById(`message-${getProcessedItemAnchorId(item)}`);
+          scrollElementIntoView(targetElement, { behavior, block });
+        });
+      });
+    },
+    [hideScrollButton, processedList, scrollElementIntoView]
+  );
+
+  const scrollToAnchorFallback = useCallback(
+    (targetMessageId: string, options: { block?: ScrollLogicalPosition; behavior?: ScrollBehavior } = {}) => {
+      const block = options.block || 'center';
+      const behavior = options.behavior || 'smooth';
+      setHighlightedMessageId(targetMessageId);
+      hideScrollButton();
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const visibleItems = Array.from(
+            contentElementRef.current?.querySelectorAll<HTMLElement>('.message-item[id^="message-"]') ?? []
+          );
+          const targetElement = visibleItems[Math.floor(visibleItems.length / 2)] ?? null;
+          scrollElementIntoView(targetElement, { behavior, block });
+        });
+      });
+      window.setTimeout(() => {
+        setHighlightedMessageId((current) => (current === targetMessageId ? undefined : current));
+      }, 2400);
+    },
+    [hideScrollButton, scrollElementIntoView]
+  );
+
   const handleMessageListScroll = useCallback(
     (event: React.UIEvent<HTMLDivElement>) => {
       handleScroll(event);
@@ -560,37 +606,42 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
     }
 
     const targetIndex = processedList.findIndex((item) => matchesTargetMessage(item, targetMessageId));
-    if (targetIndex === -1) {
-      if (loadingTargetKeyRef.current !== targetKey) {
-        loadingTargetKeyRef.current = targetKey;
-        void loadAnchorMessageWindow(targetMessageId).then((loaded) => {
-          if (!loaded) {
-            loadingTargetKeyRef.current = '';
-          }
-        });
-      }
+    if (targetIndex >= 0) {
+      handledTargetKeyRef.current = targetKey;
+      loadingTargetKeyRef.current = '';
+      loadedAnchorTargetKeyRef.current = '';
+      scrollToProcessedTarget(targetIndex, targetMessageId);
+      const timer = window.setTimeout(() => {
+        setHighlightedMessageId((current) => (current === targetMessageId ? undefined : current));
+      }, 2400);
+      return () => window.clearTimeout(timer);
+    }
+
+    if (loadedAnchorTargetKeyRef.current === targetKey) {
+      handledTargetKeyRef.current = targetKey;
+      loadingTargetKeyRef.current = '';
+      loadedAnchorTargetKeyRef.current = '';
+      scrollToAnchorFallback(targetMessageId);
       return;
     }
 
-    handledTargetKeyRef.current = targetKey;
-    loadingTargetKeyRef.current = '';
-    setHighlightedMessageId(targetMessageId);
-    hideScrollButton();
-
-    requestAnimationFrame(() => {
-      const targetElement = document.getElementById(`message-${getProcessedItemAnchorId(processedList[targetIndex])}`);
-      scrollElementIntoView(targetElement, {
-        behavior: 'smooth',
-        block: 'center',
+    if (loadingTargetKeyRef.current !== targetKey) {
+      loadingTargetKeyRef.current = targetKey;
+      void loadAnchorMessageWindow(targetMessageId).then((loaded) => {
+        loadingTargetKeyRef.current = '';
+        if (loaded) {
+          loadedAnchorTargetKeyRef.current = targetKey;
+        }
       });
-    });
-
-    const timer = window.setTimeout(() => {
-      setHighlightedMessageId((current) => (current === targetMessageId ? undefined : current));
-    }, 2400);
-
-    return () => window.clearTimeout(timer);
-  }, [hideScrollButton, loadAnchorMessageWindow, location.key, processedList, scrollElementIntoView, targetMessageId]);
+    }
+  }, [
+    loadAnchorMessageWindow,
+    location.key,
+    processedList,
+    scrollToAnchorFallback,
+    scrollToProcessedTarget,
+    targetMessageId,
+  ]);
 
   useEffect(() => {
     const handleMessageJump = (event: Event) => {
@@ -600,15 +651,13 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
         return;
 
       const targetIndex = processedList.findIndex((item) => {
-        if (
-          (item as { type?: string }).type === 'file_summary' ||
-          (item as { type?: string }).type === 'tool_summary' ||
-          (item as { type?: string }).type === 'artifact'
-        ) {
+        if (detail.messageId && matchesTargetMessage(item, detail.messageId)) {
+          return true;
+        }
+        if (isSummaryItem(item)) {
           return false;
         }
         const message = item as TMessage;
-        if (detail.messageId && message.id === detail.messageId) return true;
         if (detail.msgId && message.msg_id === detail.msgId) return true;
         return false;
       });
@@ -621,8 +670,15 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
           requestAnimationFrame(() => {
             requestAnimationFrame(() => {
               const targetElement = document.getElementById(`message-${anchorMessageId}`);
-              scrollElementIntoView(targetElement, {
-                block: detail.align || 'start',
+              if (targetElement) {
+                scrollElementIntoView(targetElement, {
+                  block: detail.align || 'start',
+                  behavior: detail.behavior || 'smooth',
+                });
+                return;
+              }
+              scrollToAnchorFallback(anchorMessageId, {
+                block: detail.align || 'center',
                 behavior: detail.behavior || 'smooth',
               });
             });
@@ -631,15 +687,9 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
         return;
       }
 
-      hideScrollButton();
-      requestAnimationFrame(() => {
-        const targetElement = document.getElementById(
-          `message-${getProcessedItemAnchorId(processedList[targetIndex])}`
-        );
-        scrollElementIntoView(targetElement, {
-          block: detail.align || 'start',
-          behavior: detail.behavior || 'smooth',
-        });
+      scrollToProcessedTarget(targetIndex, detail.messageId || getProcessedItemAnchorId(processedList[targetIndex]), {
+        block: detail.align || 'start',
+        behavior: detail.behavior || 'smooth',
       });
     };
 
@@ -649,10 +699,10 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
     };
   }, [
     conversationContext?.conversation_id,
-    hideScrollButton,
     loadAnchorMessageWindow,
     processedList,
-    scrollElementIntoView,
+    scrollToAnchorFallback,
+    scrollToProcessedTarget,
   ]);
 
   // Click scroll button

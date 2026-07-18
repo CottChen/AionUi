@@ -12,6 +12,7 @@ import { usePresetAssistantInfo } from '@/renderer/hooks/agent/usePresetAssistan
 import { useAgentLogos } from '@/renderer/utils/model/agentLogo';
 import { resolveConversationLeadingMark } from '@/renderer/pages/conversation/utils/conversationAssistantIdentity';
 import { blockMobileInputFocus, blurActiveElement } from '@/renderer/utils/ui/focus';
+import { dispatchChatMessageJump } from '@/renderer/utils/chat/chatMinimapEvents';
 import { Empty, Spin, Typography } from '@arco-design/web-react';
 import { Close, MessageOne, Robot, Search } from '@icon-park/react';
 import classNames from 'classnames';
@@ -276,6 +277,14 @@ const ConversationSearchPopover: React.FC<ConversationSearchPopoverProps> = ({
         })
       );
       onSessionClick?.();
+      const jumpDetail = {
+        conversation_id: item.conversation.id,
+        messageId: item.message_id,
+        align: 'center' as const,
+        behavior: 'smooth' as const,
+      };
+      window.setTimeout(() => dispatchChatMessageJump(jumpDetail), 80);
+      window.setTimeout(() => dispatchChatMessageJump(jumpDetail), 320);
     },
     [navigate, onConversationSelect, onSessionClick, resetSearchState]
   );
