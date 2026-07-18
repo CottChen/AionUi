@@ -671,7 +671,14 @@ const getMessageMergeKey = (message: TMessage): string => {
 
 const preferPersistedOrLiveMessage = (persisted: TMessage, live: TMessage): TMessage => {
   if (persisted.type === 'text' && live.type === 'text') {
-    return preferTextMessageVersion(persisted, live);
+    const preferred = preferTextMessageVersion(persisted, live);
+    return {
+      ...preferred,
+      id: persisted.id,
+      conversation_id: persisted.conversation_id,
+      msg_id: persisted.msg_id ?? preferred.msg_id,
+      created_at: persisted.created_at,
+    };
   }
   return persisted;
 };

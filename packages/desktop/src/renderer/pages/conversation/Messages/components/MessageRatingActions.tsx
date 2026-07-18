@@ -16,8 +16,8 @@ export type MessageRatingVote = 'up' | 'down';
 export type MessageRatingContext = {
   conversationId: string;
   questionMessageId: string;
-  questionSnapshot: string;
-  answerSnapshot: string;
+  questionMsgId?: string;
+  answerMsgId?: string;
 };
 
 type ConversationRatingResponse = {
@@ -36,6 +36,7 @@ const SCORE_RANGE: Record<MessageRatingVote, { min: number; max: number }> = {
   up: { min: 6, max: 10 },
   down: { min: 0, max: 5 },
 };
+const RATING_SUBMIT_TIMEOUT_MS = 15_000;
 
 const clampScore = (vote: MessageRatingVote, score: number): number => {
   const range = SCORE_RANGE[vote];
@@ -70,6 +71,9 @@ const MessageRatingActions: React.FC<{
   );
 
   const handleSubmit = useCallback(async () => {
+    if (submitting) {
+      return;
+    }
     const normalizedScore = clampScore(vote, score || DEFAULT_SCORE[vote]);
     setSubmitting(true);
     try {
@@ -78,12 +82,13 @@ const MessageRatingActions: React.FC<{
         `/api/conversations/${encodeURIComponent(context.conversationId)}/ratings/${encodeURIComponent(answerMessageId)}`,
         {
           question_message_id: context.questionMessageId,
+          question_msg_id: context.questionMsgId ?? null,
+          answer_msg_id: context.answerMsgId ?? null,
           vote,
           score: normalizedScore,
           comment: comment.trim() || null,
-          question_snapshot: context.questionSnapshot,
-          answer_snapshot: context.answerSnapshot,
-        }
+        },
+        { timeoutMs: RATING_SUBMIT_TIMEOUT_MS }
       );
       setSubmittedVote(result.vote);
       setScore(result.score);
@@ -95,7 +100,7 @@ const MessageRatingActions: React.FC<{
     } finally {
       setSubmitting(false);
     }
-  }, [answerMessageId, comment, context, score, t, vote]);
+  }, [answerMessageId, comment, context, score, submitting, t, vote]);
 
   return (
     <>
@@ -104,6 +109,7 @@ const MessageRatingActions: React.FC<{
           aria-label={t('messages.rating.like', { defaultValue: 'Like' })}
           className='message-meta-rating-button rd-4px transition-colors opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto'
           icon={<Like theme={submittedVote === 'up' ? 'filled' : 'outline'} size='16' fill={iconColors.secondary} />}
+          disabled={submitting}
           onClick={() => openModal('up')}
           size='mini'
           style={{ lineHeight: 0 }}
@@ -117,6 +123,7 @@ const MessageRatingActions: React.FC<{
           icon={
             <Dislike theme={submittedVote === 'down' ? 'filled' : 'outline'} size='16' fill={iconColors.secondary} />
           }
+          disabled={submitting}
           onClick={() => openModal('down')}
           size='mini'
           style={{ lineHeight: 0 }}
@@ -127,7 +134,11 @@ const MessageRatingActions: React.FC<{
         title={title}
         visible={modalVisible}
         confirmLoading={submitting}
-        onCancel={() => setModalVisible(false)}
+        onCancel={() => {
+          if (!submitting) {
+            setModalVisible(false);
+          }
+        }}
         onOk={handleSubmit}
         okText={t('common.confirm', { defaultValue: 'Confirm' })}
         cancelText={t('common.cancel', { defaultValue: 'Cancel' })}

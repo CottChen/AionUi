@@ -150,22 +150,35 @@ export function isBackendHttpError(error: unknown): error is BackendHttpError {
  */
 export type HttpRequestOptions = {
   silentStatuses?: number[];
+  timeoutMs?: number;
 };
 
 const SENSITIVE_LOG_KEY_PATTERN = /api[_-]?key|authorization|auth[_-]?token|access[_-]?token|refresh[_-]?token|secret/i;
+const LOG_STRING_PREVIEW_LIMIT = 120;
+const LOG_ARRAY_PREVIEW_LIMIT = 5;
 
-function redactForLog(value: unknown, depth = 0): unknown {
-  if (depth > 8 || value === null || typeof value !== 'object') {
+function summarizeForLog(value: unknown, depth = 0): unknown {
+  if (typeof value === 'string') {
+    if (value.length <= LOG_STRING_PREVIEW_LIMIT) {
+      return value;
+    }
+    return `${value.slice(0, LOG_STRING_PREVIEW_LIMIT)}... [${value.length} chars]`;
+  }
+  if (depth > 4 || value === null || typeof value !== 'object') {
     return value;
   }
   if (Array.isArray(value)) {
-    return value.map((item) => redactForLog(item, depth + 1));
+    return {
+      type: 'array',
+      length: value.length,
+      preview: value.slice(0, LOG_ARRAY_PREVIEW_LIMIT).map((item) => summarizeForLog(item, depth + 1)),
+    };
   }
 
   return Object.fromEntries(
     Object.entries(value as Record<string, unknown>).map(([key, entry]) => [
       key,
-      SENSITIVE_LOG_KEY_PATTERN.test(key) ? '[REDACTED]' : redactForLog(entry, depth + 1),
+      SENSITIVE_LOG_KEY_PATTERN.test(key) ? '[REDACTED]' : summarizeForLog(entry, depth + 1),
     ])
   );
 }
@@ -187,48 +200,64 @@ export async function httpRequest<T>(
     headers['x-aionui-internal'] = '1';
   }
 
+  const requestBody = body !== undefined ? JSON.stringify(body) : undefined;
+  const controller = options?.timeoutMs ? new AbortController() : undefined;
+  const timeoutId =
+    controller && options?.timeoutMs
+      ? setTimeout(() => {
+          controller.abort();
+        }, options.timeoutMs)
+      : undefined;
+
   console.debug(
     `[httpBridge] ${method} ${path}`,
-    body !== undefined ? JSON.stringify(redactForLog(body)).slice(0, 500) : '(no body)'
+    body !== undefined ? JSON.stringify(summarizeForLog(body)).slice(0, 500) : '(no body)'
   );
 
-  const response = await fetch(url, {
-    method,
-    headers,
-    credentials: 'include',
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+  try {
+    const response = await fetch(url, {
+      method,
+      headers,
+      credentials: 'include',
+      body: requestBody,
+      signal: controller?.signal,
+    });
 
-  if (!response.ok) {
-    // Response body can only be consumed once — read as text, then try JSON
-    const rawText = await response.text().catch(() => '');
-    let errorBody: unknown;
-    try {
-      errorBody = JSON.parse(rawText);
-    } catch {
-      errorBody = rawText;
+    if (!response.ok) {
+      // Response body can only be consumed once — read as text, then try JSON
+      const rawText = await response.text().catch(() => '');
+      let errorBody: unknown;
+      try {
+        errorBody = JSON.parse(rawText);
+      } catch {
+        errorBody = rawText;
+      }
+      if (options?.silentStatuses?.includes(response.status)) {
+        console.debug(`[httpBridge] ${method} ${path} → ${response.status} (silenced)`, errorBody);
+      } else {
+        console.error(`[httpBridge] ${method} ${path} → ${response.status}`, errorBody);
+      }
+      throw new BackendHttpError({ method, path, status: response.status, body: errorBody });
     }
-    if (options?.silentStatuses?.includes(response.status)) {
-      console.debug(`[httpBridge] ${method} ${path} → ${response.status} (silenced)`, errorBody);
-    } else {
-      console.error(`[httpBridge] ${method} ${path} → ${response.status}`, errorBody);
+
+    console.debug(`[httpBridge] ${method} ${path} → ${response.status} OK`);
+
+    const contentType = response.headers.get('Content-Type');
+    if (!contentType?.includes('application/json')) {
+      return undefined as T;
     }
-    throw new BackendHttpError({ method, path, status: response.status, body: errorBody });
-  }
 
-  console.debug(`[httpBridge] ${method} ${path} → ${response.status} OK`);
-
-  const contentType = response.headers.get('Content-Type');
-  if (!contentType?.includes('application/json')) {
-    return undefined as T;
+    const json = await response.json();
+    // Backend wraps in { success, data, ... } — unwrap when present
+    if (json && typeof json === 'object' && 'data' in json) {
+      return json.data as T;
+    }
+    return json as T;
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
   }
-
-  const json = await response.json();
-  // Backend wraps in { success, data, ... } — unwrap when present
-  if (json && typeof json === 'object' && 'data' in json) {
-    return json.data as T;
-  }
-  return json as T;
 }
 
 // ---------------------------------------------------------------------------

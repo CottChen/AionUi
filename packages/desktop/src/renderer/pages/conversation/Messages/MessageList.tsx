@@ -466,8 +466,8 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
         contexts.set(pendingAnswer.id, {
           conversationId,
           questionMessageId: pendingQuestion.id,
-          questionSnapshot: pendingQuestion.content.content,
-          answerSnapshot: pendingAnswer.content.content,
+          questionMsgId: pendingQuestion.msg_id,
+          answerMsgId: pendingAnswer.msg_id,
         });
       }
       pendingAnswer = undefined;
