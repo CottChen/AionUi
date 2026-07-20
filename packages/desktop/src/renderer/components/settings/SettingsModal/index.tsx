@@ -222,6 +222,14 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onCancel, defaul
       });
     }
 
+    if (!canEditGlobalSettings) {
+      builtinItems.push({
+        key: 'system',
+        label: t('settings.system'),
+        icon: <Computer theme='outline' size='20' fill={iconColors.secondary} />,
+      });
+    }
+
     if (canEditGlobalSettings) {
       builtinItems.push(
         {
@@ -344,7 +352,7 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onCancel, defaul
       case 'webui':
         return <WebuiModalContent />;
       case 'system':
-        return <SystemModalContent />;
+        return <SystemModalContent canEditGlobalSettings={canEditGlobalSettings} />;
       case 'about':
         return <AboutModalContent />;
       default:

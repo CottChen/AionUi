@@ -24,13 +24,19 @@ import DirInputItem from './DirInputItem';
 import PreferenceRow from './PreferenceRow';
 import VoiceInputSection from './VoiceInputSection';
 
+type SystemModalContentProps = {
+  canEditGlobalSettings?: boolean;
+};
+
 /**
  * System settings content component
  *
  * Provides system-level configuration options including language, directory config,
  * and developer tools (dev mode only).
  */
-const SystemModalContent: React.FC = () => {
+const SystemModalContent: React.FC<SystemModalContentProps> = ({
+  canEditGlobalSettings: canEditGlobalSettingsProp,
+}) => {
   const { t } = useTranslation();
   const isDesktop = isElectronDesktop();
   const [form] = Form.useForm();
@@ -39,6 +45,7 @@ const SystemModalContent: React.FC = () => {
   const viewMode = useSettingsViewMode();
   const isPageMode = viewMode === 'page';
   const initializingRef = useRef(true);
+  const canEditGlobalSettings = canEditGlobalSettingsProp ?? isDesktop;
 
   const [startOnBoot, setStartOnBoot] = useState<IStartOnBootStatus>({
     supported: false,
@@ -57,7 +64,7 @@ const SystemModalContent: React.FC = () => {
   const [conversationRatingEnabled, setConversationRatingEnabled] = useState(false);
 
   useEffect(() => {
-    if (!isDesktop) {
+    if (!canEditGlobalSettings || !isDesktop) {
       return;
     }
 
@@ -78,9 +85,13 @@ const SystemModalContent: React.FC = () => {
         }
       })
       .catch(() => {});
-  }, [isDesktop]);
+  }, [canEditGlobalSettings, isDesktop]);
 
   useEffect(() => {
+    if (!canEditGlobalSettings) {
+      return;
+    }
+
     setCloseToTray(configService.get('system.closeToTray') ?? false);
     if (isDesktop) {
       ipcBridge.systemSettings.getCloseToTray
@@ -96,9 +107,13 @@ const SystemModalContent: React.FC = () => {
     setSaveUploadToWorkspace(configService.get('upload.saveToWorkspace') ?? false);
     setAutoPreviewOfficeFiles(configService.get('system.autoPreviewOfficeFiles') ?? true);
     setConversationRatingEnabled(configService.get('conversation.rating.enabled') ?? false);
-  }, [isDesktop]);
+  }, [canEditGlobalSettings, isDesktop]);
 
   useEffect(() => {
+    if (!canEditGlobalSettings) {
+      return;
+    }
+
     let cancelled = false;
 
     const loadAcpTimeouts = async () => {
@@ -127,7 +142,7 @@ const SystemModalContent: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [canEditGlobalSettings]);
 
   const handleCloseToTrayChange = useCallback(
     (checked: boolean) => {
@@ -278,7 +293,9 @@ const SystemModalContent: React.FC = () => {
   }, []);
 
   // Get system directory info
-  const { data: systemInfo } = useSWR('system.dir.info', () => ipcBridge.application.systemInfo.invoke());
+  const { data: systemInfo } = useSWR(canEditGlobalSettings ? 'system.dir.info' : null, () =>
+    ipcBridge.application.systemInfo.invoke()
+  );
 
   // Initialize form data
   useEffect(() => {
@@ -293,84 +310,92 @@ const SystemModalContent: React.FC = () => {
 
   const preferenceItems = [
     { key: 'language', label: t('settings.language'), component: <LanguageSwitcher /> },
-    {
-      key: 'startOnBoot',
-      label: t('settings.startOnBoot'),
-      description: startOnBoot.supported ? t('settings.startOnBootDesc') : t('settings.startOnBootUnsupported'),
-      component: (
-        <Switch checked={startOnBoot.enabled} onChange={handleStartOnBootChange} disabled={!startOnBoot.supported} />
-      ),
-    },
-    {
-      key: 'closeToTray',
-      label: t('settings.closeToTray'),
-      component: <Switch checked={closeToTray} onChange={handleCloseToTrayChange} />,
-    },
-    ...(isDesktop && gpuStatus
+    ...(canEditGlobalSettings
       ? [
           {
-            key: 'hardwareAcceleration',
-            label: t('settings.hardwareAcceleration'),
-            description: gpuStatus.autoDisabled
-              ? t('settings.hardwareAccelerationAutoDisabled')
-              : t('settings.hardwareAccelerationDesc'),
+            key: 'startOnBoot',
+            label: t('settings.startOnBoot'),
+            description: startOnBoot.supported ? t('settings.startOnBootDesc') : t('settings.startOnBootUnsupported'),
             component: (
               <Switch
-                checked={gpuStatus.userOverride !== 'force-off' && !gpuStatus.autoDisabled}
-                onChange={handleHardwareAccelerationChange}
+                checked={startOnBoot.enabled}
+                onChange={handleStartOnBootChange}
+                disabled={!startOnBoot.supported}
               />
             ),
           },
+          {
+            key: 'closeToTray',
+            label: t('settings.closeToTray'),
+            component: <Switch checked={closeToTray} onChange={handleCloseToTrayChange} />,
+          },
+          ...(isDesktop && gpuStatus
+            ? [
+                {
+                  key: 'hardwareAcceleration',
+                  label: t('settings.hardwareAcceleration'),
+                  description: gpuStatus.autoDisabled
+                    ? t('settings.hardwareAccelerationAutoDisabled')
+                    : t('settings.hardwareAccelerationDesc'),
+                  component: (
+                    <Switch
+                      checked={gpuStatus.userOverride !== 'force-off' && !gpuStatus.autoDisabled}
+                      onChange={handleHardwareAccelerationChange}
+                    />
+                  ),
+                },
+              ]
+            : []),
+          {
+            key: 'promptTimeout',
+            label: t('settings.promptTimeout'),
+            component: (
+              <InputNumber
+                value={promptTimeout}
+                onChange={handlePromptTimeoutChange}
+                onBlur={handlePromptTimeoutBlur}
+                max={3600}
+                step={30}
+                style={{ width: 120 }}
+                suffix='s'
+              />
+            ),
+          },
+          {
+            key: 'agentIdleTimeout',
+            label: t('settings.agentIdleTimeout'),
+            description: t('settings.agentIdleTimeoutDesc'),
+            component: (
+              <InputNumber
+                value={agentIdleTimeout}
+                onChange={handleAgentIdleTimeoutChange}
+                onBlur={handleAgentIdleTimeoutBlur}
+                max={60}
+                step={5}
+                style={{ width: 120 }}
+                suffix='min'
+              />
+            ),
+          },
+          {
+            key: 'saveUploadToWorkspace',
+            label: t('settings.saveUploadToWorkspace'),
+            component: <Switch checked={saveUploadToWorkspace} onChange={handleSaveUploadToWorkspaceChange} />,
+          },
+          {
+            key: 'autoPreviewOfficeFiles',
+            label: t('settings.autoPreviewOfficeFiles'),
+            description: t('settings.autoPreviewOfficeFilesDesc'),
+            component: <Switch checked={autoPreviewOfficeFiles} onChange={handleAutoPreviewOfficeFilesChange} />,
+          },
+          {
+            key: 'conversationRating',
+            label: t('settings.conversationRating'),
+            description: t('settings.conversationRatingDesc'),
+            component: <Switch checked={conversationRatingEnabled} onChange={handleConversationRatingEnabledChange} />,
+          },
         ]
       : []),
-    {
-      key: 'promptTimeout',
-      label: t('settings.promptTimeout'),
-      component: (
-        <InputNumber
-          value={promptTimeout}
-          onChange={handlePromptTimeoutChange}
-          onBlur={handlePromptTimeoutBlur}
-          max={3600}
-          step={30}
-          style={{ width: 120 }}
-          suffix='s'
-        />
-      ),
-    },
-    {
-      key: 'agentIdleTimeout',
-      label: t('settings.agentIdleTimeout'),
-      description: t('settings.agentIdleTimeoutDesc'),
-      component: (
-        <InputNumber
-          value={agentIdleTimeout}
-          onChange={handleAgentIdleTimeoutChange}
-          onBlur={handleAgentIdleTimeoutBlur}
-          max={60}
-          step={5}
-          style={{ width: 120 }}
-          suffix='min'
-        />
-      ),
-    },
-    {
-      key: 'saveUploadToWorkspace',
-      label: t('settings.saveUploadToWorkspace'),
-      component: <Switch checked={saveUploadToWorkspace} onChange={handleSaveUploadToWorkspaceChange} />,
-    },
-    {
-      key: 'autoPreviewOfficeFiles',
-      label: t('settings.autoPreviewOfficeFiles'),
-      description: t('settings.autoPreviewOfficeFilesDesc'),
-      component: <Switch checked={autoPreviewOfficeFiles} onChange={handleAutoPreviewOfficeFilesChange} />,
-    },
-    {
-      key: 'conversationRating',
-      label: t('settings.conversationRating'),
-      description: t('settings.conversationRatingDesc'),
-      component: <Switch checked={conversationRatingEnabled} onChange={handleConversationRatingEnabledChange} />,
-    },
   ];
 
   const saveDirConfigValidate = (_values: { workDir: string; logDir: string }): Promise<unknown> => {
@@ -429,72 +454,85 @@ const SystemModalContent: React.FC = () => {
                 </PreferenceRow>
               ))}
             </div>
-            {/* Notification settings with collapsible sub-options */}
-            <Collapse
-              bordered={false}
-              activeKey={notificationEnabled ? ['notification'] : []}
-              onChange={(_, keys) => {
-                const shouldExpand = (keys as string[]).includes('notification');
-                if (shouldExpand && !notificationEnabled) {
-                  handleNotificationEnabledChange(true);
-                } else if (!shouldExpand && notificationEnabled) {
-                  handleNotificationEnabledChange(false);
-                }
-              }}
-              className='[&_.arco-collapse-item]:!border-none [&_.arco-collapse-item-header]:!px-0 [&_.arco-collapse-item-header-title]:!flex-1 [&_.arco-collapse-item-content-box]:!px-0 [&_.arco-collapse-item-content-box]:!pb-0'
-            >
-              <Collapse.Item
-                name='notification'
-                showExpandIcon={false}
-                header={
-                  <div className='flex flex-1 items-center justify-between w-full'>
-                    <span className='text-14px text-2 ml-12px'>{t('settings.notification')}</span>
-                    <Switch
-                      checked={notificationEnabled}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={handleNotificationEnabledChange}
+            {canEditGlobalSettings && (
+              <>
+                {/* Notification settings with collapsible sub-options */}
+                <Collapse
+                  bordered={false}
+                  activeKey={notificationEnabled ? ['notification'] : []}
+                  onChange={(_, keys) => {
+                    const shouldExpand = (keys as string[]).includes('notification');
+                    if (shouldExpand && !notificationEnabled) {
+                      handleNotificationEnabledChange(true);
+                    } else if (!shouldExpand && notificationEnabled) {
+                      handleNotificationEnabledChange(false);
+                    }
+                  }}
+                  className='[&_.arco-collapse-item]:!border-none [&_.arco-collapse-item-header]:!px-0 [&_.arco-collapse-item-header-title]:!flex-1 [&_.arco-collapse-item-content-box]:!px-0 [&_.arco-collapse-item-content-box]:!pb-0'
+                >
+                  <Collapse.Item
+                    name='notification'
+                    showExpandIcon={false}
+                    header={
+                      <div className='flex flex-1 items-center justify-between w-full'>
+                        <span className='text-14px text-2 ml-12px'>{t('settings.notification')}</span>
+                        <Switch
+                          checked={notificationEnabled}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={handleNotificationEnabledChange}
+                        />
+                      </div>
+                    }
+                  >
+                    {isDesktop ? (
+                      <div className='pl-12px'>
+                        <PreferenceRow label={t('settings.cronNotificationEnabled')}>
+                          <Switch
+                            checked={cronNotificationEnabled}
+                            disabled={!notificationEnabled}
+                            onChange={handleCronNotificationEnabledChange}
+                          />
+                        </PreferenceRow>
+                      </div>
+                    ) : (
+                      <BrowserNotificationGrant />
+                    )}
+                  </Collapse.Item>
+                </Collapse>
+                <Form
+                  form={form}
+                  layout='vertical'
+                  className='!mt-32px space-y-16px'
+                  onValuesChange={handleValuesChange}
+                >
+                  <DirInputItem label={t('settings.workDir')} field='workDir' />
+                  <DirInputItem label={t('settings.logDir')} field='logDir' />
+                  {error && (
+                    <Alert
+                      className='mt-16px'
+                      type='error'
+                      content={
+                        <span>
+                          {typeof error === 'string' ? error : JSON.stringify(error)}
+                          <FeedbackButton module='system-settings' className='ml-6px' />
+                        </span>
+                      }
                     />
-                  </div>
-                }
-              >
-                {isDesktop ? (
-                  <div className='pl-12px'>
-                    <PreferenceRow label={t('settings.cronNotificationEnabled')}>
-                      <Switch
-                        checked={cronNotificationEnabled}
-                        disabled={!notificationEnabled}
-                        onChange={handleCronNotificationEnabledChange}
-                      />
-                    </PreferenceRow>
-                  </div>
-                ) : (
-                  <BrowserNotificationGrant />
-                )}
-              </Collapse.Item>
-            </Collapse>
-            <Form form={form} layout='vertical' className='!mt-32px space-y-16px' onValuesChange={handleValuesChange}>
-              <DirInputItem label={t('settings.workDir')} field='workDir' />
-              <DirInputItem label={t('settings.logDir')} field='logDir' />
-              {error && (
-                <Alert
-                  className='mt-16px'
-                  type='error'
-                  content={
-                    <span>
-                      {typeof error === 'string' ? error : JSON.stringify(error)}
-                      <FeedbackButton module='system-settings' className='ml-6px' />
-                    </span>
-                  }
-                />
-              )}
-            </Form>
+                  )}
+                </Form>
+              </>
+            )}
           </div>
 
-          {/* Voice input (speech-to-text) settings */}
-          <VoiceInputSection />
+          {canEditGlobalSettings && (
+            <>
+              {/* Voice input (speech-to-text) settings */}
+              <VoiceInputSection />
 
-          {/* Developer settings: DevTools + CDP (only visible in dev mode) */}
-          <DevSettings />
+              {/* Developer settings: DevTools + CDP (only visible in dev mode) */}
+              <DevSettings />
+            </>
+          )}
         </div>
       </AionScrollArea>
     </div>

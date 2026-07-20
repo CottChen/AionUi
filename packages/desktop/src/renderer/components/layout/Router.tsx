@@ -70,6 +70,17 @@ const SettingsIndexRedirect: React.FC = () => {
   return <Navigate to={canEditGlobalSettings ? '/settings/agent' : '/settings/appearance'} replace />;
 };
 
+const SystemSettingsRoute: React.FC = () => {
+  const { user } = useAuth();
+  const canEditGlobalSettings = isElectronDesktop() || user?.isAdmin === true;
+
+  return (
+    <Suspense fallback={<AppLoader />}>
+      <SystemSettings canEditGlobalSettings={canEditGlobalSettings} />
+    </Suspense>
+  );
+};
+
 const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
   const { status } = useAuth();
 
@@ -131,10 +142,7 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
             path='/settings/pet'
             element={<AdminSettingsRoute>{withRouteFallback(PetSettings)}</AdminSettingsRoute>}
           />
-          <Route
-            path='/settings/system'
-            element={<AdminSettingsRoute>{withRouteFallback(SystemSettings)}</AdminSettingsRoute>}
-          />
+          <Route path='/settings/system' element={<SystemSettingsRoute />} />
           <Route
             path='/settings/about'
             element={<AdminSettingsRoute>{withRouteFallback(SystemSettings)}</AdminSettingsRoute>}

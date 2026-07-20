@@ -313,3 +313,7 @@ export function useAuth(): AuthContextValue {
   }
   return context;
 }
+
+export function useOptionalAuth(): AuthContextValue | undefined {
+  return useContext(AuthContext);
+}

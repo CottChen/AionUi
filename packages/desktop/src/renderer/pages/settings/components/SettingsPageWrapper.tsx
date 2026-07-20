@@ -24,7 +24,8 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useExtI18n } from '@/renderer/hooks/system/useExtI18n';
-import { BUILTIN_TAB_IDS, LEGACY_ANCHOR_REMAP } from './SettingsSider';
+import { BUILTIN_TAB_IDS, getVisibleBuiltinSettingTabIds, LEGACY_ANCHOR_REMAP } from './SettingsSider';
+import { useOptionalAuth } from '@/renderer/hooks/context/AuthContext';
 import './settings.css';
 
 interface SettingsPageWrapperProps {
@@ -91,13 +92,16 @@ const SettingsPageWrapper: React.FC<SettingsPageWrapperProps> = ({ children, cla
   const { pathname } = useLocation();
   const { t } = useTranslation();
   const isDesktop = isElectronDesktop();
+  const auth = useOptionalAuth();
+  const canEditGlobalSettings = isDesktop || auth?.user?.isAdmin === true;
 
   const extensionTabs = useExtensionSettingsTabs();
 
   const { resolveExtTabName } = useExtI18n();
 
   const menuItems = React.useMemo(() => {
-    const builtins = getBuiltinSettingsNavItems(isDesktop, t);
+    const builtinMap = new Map(getBuiltinSettingsNavItems(isDesktop, t).map((item) => [item.id, item]));
+    const builtins = getVisibleBuiltinSettingTabIds(canEditGlobalSettings, isDesktop).map((id) => builtinMap.get(id)!);
 
     // Insert extension tabs before system (unanchored default) or at anchor position
     const result = [...builtins];
@@ -105,7 +109,7 @@ const SettingsPageWrapper: React.FC<SettingsPageWrapperProps> = ({ children, cla
     const beforeMap = new Map<string, IExtensionSettingsTab[]>();
     const afterMap = new Map<string, IExtensionSettingsTab[]>();
 
-    for (const tab of extensionTabs) {
+    for (const tab of canEditGlobalSettings ? extensionTabs : []) {
       if (!tab.position) {
         unanchored.push(tab);
         continue;
@@ -154,7 +158,7 @@ const SettingsPageWrapper: React.FC<SettingsPageWrapperProps> = ({ children, cla
     }
 
     return result;
-  }, [isDesktop, t, extensionTabs, resolveExtTabName]);
+  }, [isDesktop, t, canEditGlobalSettings, extensionTabs, resolveExtTabName]);
 
   // Keep only horizontal padding on the scroll container — vertical padding is
   // moved to the content layer below. A sticky header inside a scroll container

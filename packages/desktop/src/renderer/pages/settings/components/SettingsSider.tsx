@@ -37,6 +37,25 @@ export const BUILTIN_TAB_IDS = [
   'about',
 ] as const;
 
+export type BuiltinSettingsTabId = (typeof BUILTIN_TAB_IDS)[number];
+
+export const USER_SETTING_TAB_IDS = [
+  'appearance',
+  'webui',
+  'system',
+] as const satisfies readonly BuiltinSettingsTabId[];
+
+export function getVisibleBuiltinSettingTabIds(
+  canEditGlobalSettings: boolean,
+  isDesktop: boolean
+): BuiltinSettingsTabId[] {
+  if (!canEditGlobalSettings) {
+    return [...USER_SETTING_TAB_IDS];
+  }
+
+  return BUILTIN_TAB_IDS.filter((id) => isDesktop || id !== 'pet');
+}
+
 /**
  * Legacy anchor IDs that have been merged into other tabs.
  * When an extension anchors to one of these, it is redirected to the new host.
@@ -117,9 +136,7 @@ const SettingsSider: React.FC<{ collapsed?: boolean; tooltipEnabled?: boolean }>
     };
 
     // Start with ordered builtin IDs, hiding desktop-only tabs in browser mode
-    const visibleBuiltinIds = canEditGlobalSettings
-      ? BUILTIN_TAB_IDS.filter((id) => isDesktop || id !== 'pet')
-      : (['appearance', 'webui'] as const);
+    const visibleBuiltinIds = getVisibleBuiltinSettingTabIds(canEditGlobalSettings, isDesktop);
     const result: SiderItem[] = visibleBuiltinIds.map((id) => builtinMap[id]);
 
     // Extension tabs with position anchoring
