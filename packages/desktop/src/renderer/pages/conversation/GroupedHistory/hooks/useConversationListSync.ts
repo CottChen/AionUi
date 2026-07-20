@@ -102,6 +102,7 @@ type ConversationListSyncSnapshot = {
 };
 
 const listeners = new Set<() => void>();
+const CONVERSATION_REFRESH_DEBOUNCE_MS = 150;
 
 let isStoreInitialized = false;
 let conversationsState: TChatConversation[] = [];
@@ -111,6 +112,9 @@ let completedConversationIdsState = new Set<string>();
 let conversation_idsState = new Set<string>();
 let activeConversationIdState: string | null = null;
 let refreshGenerationState = 0;
+let refreshTimerState: ReturnType<typeof setTimeout> | null = null;
+let refreshInFlightState = false;
+let refreshQueuedState = false;
 let snapshotState: ConversationListSyncSnapshot = {
   conversations: conversationsState,
   generatingConversationIds: generatingConversationIdsState,
@@ -135,7 +139,13 @@ const subscribeConversationListSync = (listener: () => void) => {
 
 const getConversationListSyncSnapshot = (): ConversationListSyncSnapshot => snapshotState;
 
-const refreshConversations = () => {
+const runConversationRefresh = () => {
+  if (refreshInFlightState) {
+    refreshQueuedState = true;
+    return;
+  }
+
+  refreshInFlightState = true;
   const generation = ++refreshGenerationState;
   void ipcBridge.database.getUserConversations
     .invoke({ limit: 10000 })
@@ -172,7 +182,25 @@ const refreshConversations = () => {
       conversationsState = [];
       conversation_idsState = new Set();
       emitStoreChange();
+    })
+    .finally(() => {
+      refreshInFlightState = false;
+      if (refreshQueuedState) {
+        refreshQueuedState = false;
+        refreshConversations();
+      }
     });
+};
+
+const refreshConversations = () => {
+  if (refreshTimerState) {
+    clearTimeout(refreshTimerState);
+  }
+
+  refreshTimerState = setTimeout(() => {
+    refreshTimerState = null;
+    runConversationRefresh();
+  }, CONVERSATION_REFRESH_DEBOUNCE_MS);
 };
 
 const markGenerating = (conversation_id: string) => {
@@ -249,6 +277,11 @@ const setActiveConversationState = (conversation_id: string | null) => {
 
 const resetConversationListSyncStore = () => {
   refreshGenerationState += 1;
+  if (refreshTimerState) {
+    clearTimeout(refreshTimerState);
+    refreshTimerState = null;
+  }
+  refreshQueuedState = false;
   conversationsState = [];
   generatingConversationIdsState = new Set<string>();
   completionUnreadConversationIdsState = new Set<string>();
