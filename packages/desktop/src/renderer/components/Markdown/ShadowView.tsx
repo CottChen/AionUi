@@ -110,10 +110,20 @@ const createInitStyle = (
     white-space: nowrap;
   }
   .markdown-local-file-line {
-    padding: 0 4px;
-    border-radius: 4px;
-    background: var(--bg-3);
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    min-height: 18px;
+    padding: 0 6px;
+    border: 1px solid var(--bg-4);
+    border-radius: 999px;
+    background: var(--bg-2);
     color: var(--text-secondary);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 16px;
+    letter-spacing: 0;
   }
   .markdown-local-file-copy {
     display: inline-flex;

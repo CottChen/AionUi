@@ -56,19 +56,17 @@ const LocalFileLink: React.FC<LocalFileLinkProps> = ({ reference, children, onOp
   );
 
   const content = (
-    <span className='inline-flex items-center gap-4px max-w-full'>
+    <span className='inline-flex items-center gap-6px max-w-full'>
       <span className='truncate'>{label}</span>
       {locationLabel && (
-        <span className='flex-shrink-0 rd-4px bg-fill-2 px-4px text-11px font-mono text-t-secondary'>
-          {locationLabel}
-        </span>
+        <span className='markdown-local-file-line flex-shrink-0'>{locationLabel}</span>
       )}
     </span>
   );
 
   return (
     <span
-      className='inline-flex items-center gap-2px max-w-full align-baseline'
+      className='inline-flex items-center gap-6px max-w-full align-baseline'
       data-local-file-path={filePath}
       data-local-file-line={line}
       title={rawReference}
