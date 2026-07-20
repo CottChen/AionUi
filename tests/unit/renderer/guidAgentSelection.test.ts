@@ -5,6 +5,7 @@ import {
   pickDefaultAssistantSelectionKey,
   resolveAssistantSelectionKey,
 } from '@/renderer/pages/guid/hooks/useGuidAssistantSelection';
+import { resolveScopedAgentModeSelection } from '@/renderer/pages/guid/utils/modeSelection';
 
 describe('guid assistant selection helpers', () => {
   const assistants: Assistant[] = [
@@ -28,6 +29,42 @@ describe('guid assistant selection helpers', () => {
 
   it('returns null when no assistants are available', () => {
     expect(pickDefaultAssistantSelectionKey([])).toBeNull();
+  });
+
+  it('keeps the selected permission mode when runtime modes refresh for the same assistant', () => {
+    expect(
+      resolveScopedAgentModeSelection({
+        previousMode: 'full-access',
+        previousSelectionScope: 'assistant-a',
+        selectionScope: 'assistant-a',
+        availableModes: ['default', 'full-access'],
+        fallbackMode: 'default',
+      })
+    ).toBe('full-access');
+  });
+
+  it('uses the fallback permission mode when switching assistants', () => {
+    expect(
+      resolveScopedAgentModeSelection({
+        previousMode: 'full-access',
+        previousSelectionScope: 'assistant-a',
+        selectionScope: 'assistant-b',
+        availableModes: ['default', 'full-access'],
+        fallbackMode: 'default',
+      })
+    ).toBe('default');
+  });
+
+  it('uses the fallback permission mode when the previous mode is unavailable', () => {
+    expect(
+      resolveScopedAgentModeSelection({
+        previousMode: 'full-access',
+        previousSelectionScope: 'assistant-a',
+        selectionScope: 'assistant-a',
+        availableModes: ['default'],
+        fallbackMode: 'default',
+      })
+    ).toBe('default');
   });
 });
 

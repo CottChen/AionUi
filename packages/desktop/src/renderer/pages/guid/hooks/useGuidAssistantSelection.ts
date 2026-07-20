@@ -20,6 +20,7 @@ import type { SlashCommandItem } from '@/common/chat/slash/types';
 import { useManagedAgentRuntimeCatalog } from '@/renderer/hooks/agent/useManagedAgents';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useCustomAgentsLoader } from './useCustomAgentsLoader';
+import { resolveScopedAgentModeSelection } from '../utils/modeSelection';
 
 export {
   buildAgentRuntimeModeState,
@@ -278,11 +279,24 @@ export const useGuidAssistantSelection = ({
     });
   }, [selectedAssistantId, selectedAssistantModels, selectedAgentRuntimeModelInfo]);
 
+  const modeSelectionScopeRef = useRef<string | null>(null);
   useEffect(() => {
-    const fallbackMode =
-      selectedAgentRuntimeModeState.currentMode || selectedAgentRuntimeModeState.options[0]?.value || 'default';
-    _setSelectedMode(fallbackMode);
-  }, [selectedAgentRuntimeModeState]);
+    const availableModes = selectedAgentRuntimeModeState.options.map((option) => option.value);
+    const fallbackMode = selectedAgentRuntimeModeState.currentMode || availableModes[0] || 'default';
+    const selectionScope = selectedAssistantId ?? '';
+
+    _setSelectedMode((previousMode) => {
+      const nextMode = resolveScopedAgentModeSelection({
+        previousMode,
+        previousSelectionScope: modeSelectionScopeRef.current,
+        selectionScope,
+        availableModes,
+        fallbackMode,
+      });
+      modeSelectionScopeRef.current = selectionScope;
+      return nextMode;
+    });
+  }, [selectedAgentRuntimeModeState, selectedAssistantId]);
 
   const thoughtLevelSelectionScopeRef = useRef<string | null>(null);
   useEffect(() => {
