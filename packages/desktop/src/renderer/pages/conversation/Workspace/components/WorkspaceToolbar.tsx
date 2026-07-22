@@ -11,7 +11,6 @@ import { Button, Dropdown, Menu, Popover, Tooltip } from '@arco-design/web-react
 import { Down, Plus, Refresh } from '@icon-park/react';
 import React from 'react';
 import UploadProgressBar from '@/renderer/components/media/UploadProgressBar';
-import { AionSearchInput } from '@/renderer/components/base';
 import type { TFunction } from 'i18next';
 
 type WorkspaceToolbarProps = {
@@ -21,12 +20,6 @@ type WorkspaceToolbarProps = {
   isTemporaryWorkspace: boolean;
   workspacePath: string;
   workspaceDisplayName: string;
-  // Search
-  showSearch: boolean;
-  searchText: string;
-  setSearchText: (v: string) => void;
-  onSearch: (v: string) => void;
-  searchInputRef: React.RefObject<HTMLInputElement | null>;
   // Tree state
   loading: boolean;
   refreshWorkspace: () => void;
@@ -44,11 +37,6 @@ const WorkspaceToolbar: React.FC<WorkspaceToolbarProps> = ({
   isTemporaryWorkspace,
   workspacePath,
   workspaceDisplayName,
-  showSearch,
-  searchText,
-  setSearchText,
-  onSearch,
-  searchInputRef,
   loading,
   refreshWorkspace,
   handleSelectHostFiles,
@@ -90,25 +78,6 @@ const WorkspaceToolbar: React.FC<WorkspaceToolbarProps> = ({
 
   return (
     <div className='px-12px'>
-      {/* Search Input */}
-      {(showSearch || searchText) && (
-        <div className='py-8px workspace-toolbar-search'>
-          <AionSearchInput
-            className='w-full workspace-search-input'
-            ref={searchInputRef}
-            placeholder={t('conversation.workspace.searchPlaceholder')}
-            value={searchText}
-            onChange={(value) => {
-              setSearchText(value);
-              onSearch(value);
-            }}
-          />
-        </div>
-      )}
-
-      {/* Border divider below search */}
-      {!isWorkspaceCollapsed && (showSearch || searchText) && <div className='border-b border-b-base' />}
-
       {/* Directory name with collapse and action icons */}
       <div className='workspace-toolbar-row flex items-center justify-between gap-8px'>
         <div

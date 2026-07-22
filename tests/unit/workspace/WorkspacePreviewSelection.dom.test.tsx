@@ -108,6 +108,7 @@ vi.mock('@/renderer/pages/conversation/Workspace/hooks/useWorkspaceTree', () => 
     setSelected: vi.fn(),
     setTreeKey: vi.fn(),
     refreshWorkspace: vi.fn(),
+    forceRefreshWorkspace: vi.fn(),
     loadWorkspace: vi.fn(),
     ensureNodeSelected: mocks.ensureNodeSelected,
     clearSelection: vi.fn(),
@@ -166,7 +167,19 @@ vi.mock('@/renderer/pages/conversation/Workspace/hooks/useWorkspaceSearch', () =
     selectSearchFolder: vi.fn(),
     setShowSearch: vi.fn(),
     setSearchText: vi.fn(),
+    searchScope: 'workspace',
+    setSearchScope: vi.fn(),
+    searchFolderLabel: '',
+    searchStats: null,
+    searchMode: 'all',
+    setSearchMode: vi.fn(),
+    searchInputRef: { current: null },
+    onSearch: vi.fn(),
   }),
+}));
+
+vi.mock('@/renderer/pages/conversation/Workspace/components/WorkspaceSearchBar', () => ({
+  default: () => <div data-testid='workspace-search-bar' />,
 }));
 
 vi.mock('@/renderer/pages/conversation/Workspace/hooks/useWorkspaceModals', () => ({

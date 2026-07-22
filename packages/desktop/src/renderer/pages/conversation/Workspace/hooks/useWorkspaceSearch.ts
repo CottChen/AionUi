@@ -4,42 +4,57 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { ipcBridge } from '@/common';
 import type { IDirOrFile } from '@/common/adapter/ipcBridge';
 import useDebounce from '@/renderer/hooks/ui/useDebounce';
+import type { RefInputType } from '@arco-design/web-react/es/Input/interface';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { buildSearchTree } from '../utils/treeHelpers';
+import type { WorkspaceSearchMode } from './useWorkspaceTree';
+
+export type WorkspaceSearchScope = 'workspace' | 'currentFolder';
+
+export type WorkspaceSearchStats = {
+  fileCount: number;
+  contentBlockCount: number;
+};
 
 type UseWorkspaceSearchParams = {
   workspace: string;
-  expandedKeys: string[];
-  setFiles: React.Dispatch<React.SetStateAction<IDirOrFile[]>>;
-  setExpandedKeys: React.Dispatch<React.SetStateAction<string[]>>;
-  setTreeKey: React.Dispatch<React.SetStateAction<number>>;
-  refreshWorkspace: () => void;
+  loadWorkspace: (path: string, search?: string, searchMode?: WorkspaceSearchMode) => Promise<IDirOrFile[]>;
+};
+
+const collectSearchStats = (nodes: IDirOrFile[]): WorkspaceSearchStats => {
+  let fileCount = 0;
+  let contentBlockCount = 0;
+
+  const visit = (node: IDirOrFile) => {
+    if (node.isFile) {
+      fileCount += 1;
+      if (node.searchContentMatchCount != null) {
+        contentBlockCount += node.searchContentMatchCount;
+      } else if (node.searchMatchKind === 'content') {
+        contentBlockCount += 1;
+      }
+    }
+    node.children?.forEach(visit);
+  };
+
+  nodes.forEach(visit);
+  return { fileCount, contentBlockCount };
 };
 
 /**
- * Manages workspace search state.
- *
- * Search is now performed entirely on the frontend: it pulls the workspace's
- * full recursive file list once (`fs.listWorkspaceFiles`, which the backend
- * already returns as a flat list of every file at any depth) and filters by
- * name/path locally. Matches at ANY nesting level surface, and their parent
- * folders are auto-expanded — fixing the old behavior where only first-level
- * names could be found. Clearing the box restores the normal lazy-loaded tree.
+ * Manages workspace search state, debounced search callback, focus behavior,
+ * and host file selector state (WebUI).
  */
-export function useWorkspaceSearch({
-  workspace,
-  expandedKeys,
-  setFiles,
-  setExpandedKeys,
-  setTreeKey,
-  refreshWorkspace,
-}: UseWorkspaceSearchParams) {
+export function useWorkspaceSearch({ workspace, loadWorkspace }: UseWorkspaceSearchParams) {
   const [searchText, setSearchText] = useState('');
   const [showSearch, setShowSearch] = useState(true);
-  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const [searchScope, setSearchScope] = useState<WorkspaceSearchScope>('workspace');
+  const [searchMode, setSearchMode] = useState<WorkspaceSearchMode>('all');
+  const [searchFolderPath, setSearchFolderPath] = useState(workspace);
+  const [searchFolderLabel, setSearchFolderLabel] = useState('');
+  const [searchStats, setSearchStats] = useState<WorkspaceSearchStats | null>(null);
+  const searchInputRef = useRef<RefInputType | null>(null);
 
   // Host file selector state (WebUI: use DirectorySelectionModal instead of native dialog)
   const [showHostFileSelector, setShowHostFileSelector] = useState(false);
@@ -67,71 +82,70 @@ export function useWorkspaceSearch({
     previousShowSearchRef.current = showSearch;
   }, [showSearch]);
 
-  // Snapshot of expandedKeys taken just before a search starts, so clearing
-  // the search box restores exactly what was expanded before — not the much
-  // larger set that the search results opened.
-  const preSearchExpandedKeysRef = useRef<string[] | null>(null);
-  const expandedKeysRef = useRef(expandedKeys);
-  expandedKeysRef.current = expandedKeys;
-
-  // Ignore stale flat-list responses when the term changes quickly.
-  const searchSeqRef = useRef(0);
-
   const runSearch = useCallback(
-    (value: string) => {
-      const term = value.trim();
-      if (!term) {
-        // Restore the normal tree. If we have a pre-search snapshot, restore
-        // the expansion state to what it was before the search, then refresh.
-        // This avoids triggering a parallel fetch for every dir the search opened.
-        searchSeqRef.current++;
-        setShowSearch(true);
-        if (preSearchExpandedKeysRef.current !== null) {
-          setExpandedKeys(preSearchExpandedKeysRef.current);
-          preSearchExpandedKeysRef.current = null;
-        }
-        refreshWorkspace();
-        return;
-      }
-      // Save expansion state before the first search keystroke.
-      if (preSearchExpandedKeysRef.current === null) {
-        preSearchExpandedKeysRef.current = [...expandedKeysRef.current];
-      }
-      const seq = ++searchSeqRef.current;
-      void ipcBridge.fs.listWorkspaceFiles
-        .invoke({ root: workspace })
-        .then((flatFiles) => {
-          if (seq !== searchSeqRef.current) return;
-          const { tree, expandedKeys: searchExpandedKeys } = buildSearchTree(flatFiles, workspace, term);
-          setFiles(tree);
-          setExpandedKeys(searchExpandedKeys);
-          setTreeKey(Math.random());
-          // Keep the search box visible even with zero matches so the user can
-          // edit the term; the tree area shows the empty state.
-          setShowSearch(true);
-        })
-        .catch((err) => {
-          if (seq !== searchSeqRef.current) return;
-          console.error('[useWorkspaceSearch] search failed:', err);
-        });
+    (value: string, scope: WorkspaceSearchScope, mode: WorkspaceSearchMode, folderPath = searchFolderPath) => {
+      const trimmedValue = value.trim();
+      const path = scope === 'currentFolder' ? folderPath : workspace;
+      void loadWorkspace(path, value, mode).then((files) => {
+        setShowSearch(files.length > 0 && files[0]?.children?.length > 0);
+        setSearchStats(trimmedValue ? collectSearchStats(files) : null);
+      });
     },
-    [workspace, setFiles, setExpandedKeys, setTreeKey, refreshWorkspace]
+    [loadWorkspace, searchFolderPath, workspace]
   );
 
-  // Debounced search handler
-  const onSearch = useDebounce((value: string) => runSearch(value), 200, [runSearch]);
+  const onSearch = useDebounce(
+    (value: string) => {
+      runSearch(value, searchScope, searchMode);
+    },
+    200,
+    [runSearch, searchMode, searchScope]
+  );
+
+  const updateSearchScope = useCallback(
+    (scope: WorkspaceSearchScope) => {
+      setSearchScope(scope);
+      if (searchText) {
+        runSearch(searchText, scope, searchMode);
+      }
+    },
+    [runSearch, searchMode, searchText]
+  );
+
+  const updateSearchMode = useCallback(
+    (mode: WorkspaceSearchMode) => {
+      setSearchMode(mode);
+      if (searchText) {
+        runSearch(searchText, searchScope, mode);
+      }
+    },
+    [runSearch, searchScope, searchText]
+  );
+
+  useEffect(() => {
+    setSearchFolderPath(workspace);
+    setSearchFolderLabel('');
+    setSearchScope('workspace');
+    setSearchStats(null);
+  }, [workspace]);
 
   const clearSearch = useCallback(() => {
-    searchSeqRef.current++;
     setSearchText('');
-    setShowSearch(true);
-    if (preSearchExpandedKeysRef.current !== null) {
-      setExpandedKeys(preSearchExpandedKeysRef.current);
-      preSearchExpandedKeysRef.current = null;
-    }
-  }, [setExpandedKeys]);
+    setSearchStats(null);
+  }, []);
 
-  // Handle host file selection callback (WebUI)
+  const selectSearchFolder = useCallback(
+    (folderPath: string, folderLabel: string) => {
+      setSearchFolderPath(folderPath);
+      setSearchFolderLabel(folderLabel);
+      setSearchScope('currentFolder');
+      if (searchText) {
+        runSearch(searchText, 'currentFolder', searchMode, folderPath);
+      }
+    },
+    [runSearch, searchMode, searchText]
+  );
+
   const handleHostFileSelected = useCallback(
     (
       paths: string[] | undefined,
@@ -150,9 +164,16 @@ export function useWorkspaceSearch({
     setSearchText,
     showSearch,
     setShowSearch,
+    searchScope,
+    setSearchScope: updateSearchScope,
+    searchFolderLabel,
+    selectSearchFolder,
+    searchStats,
+    clearSearch,
+    searchMode,
+    setSearchMode: updateSearchMode,
     searchInputRef,
     onSearch,
-    clearSearch,
     showHostFileSelector,
     setShowHostFileSelector,
     handleHostFileSelected,

@@ -23,6 +23,7 @@ import FileChangeList from './components/FileChangeList';
 import PasteConfirmModal from './components/PasteConfirmModal';
 import WorkspaceContextMenu from './components/WorkspaceContextMenu';
 import WorkspaceDialogs from './components/WorkspaceDialogs';
+import WorkspaceSearchBar from './components/WorkspaceSearchBar';
 import WorkspaceTabBar from './components/WorkspaceTabBar';
 import WorkspaceToolbar from './components/WorkspaceToolbar';
 import FileTypeIcon from './components/FileTypeIcon';
@@ -128,11 +129,7 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
 
   const searchHook = useWorkspaceSearch({
     workspace,
-    expandedKeys: treeHook.expandedKeys,
-    setFiles: treeHook.setFiles,
-    setExpandedKeys: treeHook.setExpandedKeys,
-    setTreeKey: treeHook.setTreeKey,
-    refreshWorkspace: treeHook.refreshWorkspace,
+    loadWorkspace: treeHook.loadWorkspace,
   });
 
   const fileOpsHook = useWorkspaceFileOps({
@@ -432,7 +429,26 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
           branch={fileChangesHook.snapshotInfo?.branch ?? null}
         />
 
-        {/* Toolbar: search input + directory name + action buttons */}
+        {/* Search input and controls */}
+        {activeTab === 'files' && (
+          <WorkspaceSearchBar
+            t={t}
+            isMobile={isMobile}
+            showSearch={searchHook.showSearch}
+            searchText={searchHook.searchText}
+            setSearchText={searchHook.setSearchText}
+            onSearch={searchHook.onSearch}
+            searchInputRef={searchHook.searchInputRef}
+            searchScope={searchHook.searchScope}
+            setSearchScope={searchHook.setSearchScope}
+            searchFolderLabel={searchHook.searchFolderLabel}
+            searchStats={searchHook.searchStats}
+            searchMode={searchHook.searchMode}
+            setSearchMode={searchHook.setSearchMode}
+          />
+        )}
+
+        {/* Toolbar: directory name + action buttons */}
         {activeTab === 'files' && (
           <WorkspaceToolbar
             t={t}
@@ -441,13 +457,8 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
             isTemporaryWorkspace={isTemporaryWorkspace}
             workspacePath={workspace}
             workspaceDisplayName={workspaceDisplayName}
-            showSearch={searchHook.showSearch}
-            searchText={searchHook.searchText}
-            setSearchText={searchHook.setSearchText}
-            onSearch={searchHook.onSearch}
-            searchInputRef={searchHook.searchInputRef}
             loading={treeHook.loading}
-            refreshWorkspace={treeHook.refreshWorkspace}
+            refreshWorkspace={treeHook.forceRefreshWorkspace}
             handleSelectHostFiles={pasteHook.handleSelectHostFiles}
             handleUploadDeviceFiles={pasteHook.handleUploadDeviceFiles}
             setShowHostFileSelector={searchHook.setShowHostFileSelector}
@@ -469,6 +480,15 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
               handlePreviewFile={fileOpsHook.handlePreviewFile}
               handleDownloadFile={fileOpsHook.handleDownloadFile}
               handleDeleteNode={fileOpsHook.handleDeleteNode}
+              handleSearchInFolder={(node) => {
+                if (node.isFile) return;
+                treeHook.ensureNodeSelected(node);
+                searchHook.selectSearchFolder(
+                  node.fullPath || workspace,
+                  node.name || node.relativePath || workspaceDisplayName
+                );
+                modalsHook.closeContextMenu();
+              }}
               openRenameModal={fileOpsHook.openRenameModal}
               closeContextMenu={modalsHook.closeContextMenu}
             />

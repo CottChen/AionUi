@@ -13,6 +13,8 @@ import type { SelectedNodeRef } from '../types';
 import { applyFreshListings, collectExpandedDirs, getFirstLevelKeys } from '../utils/treeHelpers';
 import { getWorkspaceTreeSnapshot, setWorkspaceTreeSnapshot } from '../utils/workspaceTreeCache';
 
+export type WorkspaceSearchMode = 'all' | 'name' | 'content';
+
 interface UseWorkspaceTreeOptions {
   workspace: string;
   conversation_id: string;
@@ -114,38 +116,50 @@ export function useWorkspaceTree({ workspace, conversation_id, eventPrefix }: Us
   // Track the latest request to ignore stale/aborted responses
   const loadSeqRef = useRef(0);
 
+  type LoadWorkspaceOptions = {
+    preserveLoadedChildren?: boolean;
+    resetExpandedKeys?: boolean;
+  };
+
   /**
    * 加载工作空间文件树
    * Load workspace file tree
    *
-   * A refresh re-fetches the root PLUS every currently-expanded directory in
-   * parallel (getWorkspace only returns one level per call), then splices those
-   * fresh listings onto the existing tree. This keeps expanded folders open
-   * (expandedKeys is never cleared on refresh) and surfaces files that were
-   * just created inside an expanded folder — the two problems the old "reuse
-   * stale children" merge could not solve together. Search no longer goes
-   * through here; it filters the flat file list on the frontend (useWorkspaceSearch).
+   * Normal refresh re-fetches the root PLUS every currently-expanded directory
+   * in parallel and splices those fresh listings onto the existing tree.
+   * Search uses the backend workspace endpoint because it supports file-name
+   * and content search modes, plus folder-scoped search.
    */
   const loadWorkspace = useCallback(
-    (path: string) => {
+    (path: string, search?: string, searchMode?: WorkspaceSearchMode, options: LoadWorkspaceOptions = {}) => {
       const seq = ++loadSeqRef.current;
       setLoadingHandler(true);
+      const searchTerm = search?.trim() ?? '';
 
-      const rootPromise = ipcBridge.conversation.getWorkspace.invoke({ path, workspace, conversation_id, search: '' });
+      const rootPromise = ipcBridge.conversation.getWorkspace.invoke({
+        path,
+        workspace,
+        conversation_id,
+        search: searchTerm,
+        searchMode,
+      });
 
       // Also re-fetch every expanded directory so their latest contents (incl.
       // newly created files) splice in without collapsing anything.
-      const expandedDirs = collectExpandedDirs(filesRef.current, expandedKeysRef.current).filter(
-        (d) => d.relativePath !== ''
-      );
-      const childPromises = expandedDirs.map((dir) =>
-        ipcBridge.conversation.getWorkspace
-          .invoke({ path: dir.fullPath, workspace, conversation_id })
-          .then((res) => ({ dir, children: res[0]?.children ?? [] }))
-          .catch(() => ({ dir, children: [] as IDirOrFile[] }))
-      );
+      const childPromise = searchTerm
+        ? Promise.resolve([] as Array<{ dir: IDirOrFile; children: IDirOrFile[] }>)
+        : Promise.all(
+            collectExpandedDirs(filesRef.current, expandedKeysRef.current)
+              .filter((d) => d.relativePath !== '')
+              .map((dir) =>
+                ipcBridge.conversation.getWorkspace
+                  .invoke({ path: dir.fullPath, workspace, conversation_id })
+                  .then((res) => ({ dir, children: res[0]?.children ?? [] }))
+                  .catch(() => ({ dir, children: [] as IDirOrFile[] }))
+              )
+          );
 
-      return Promise.all([rootPromise, Promise.all(childPromises)])
+      return Promise.all([rootPromise, childPromise])
         .then(([res, childResults]) => {
           // Ignore stale responses from superseded requests.
           if (seq !== loadSeqRef.current) {
@@ -157,30 +171,38 @@ export function useWorkspaceTree({ workspace, conversation_id, eventPrefix }: Us
           // flashing empty while the backend is temporarily unable to read the
           // workspace (e.g. concurrent file operations by another agent).
           const isEmpty = res.length === 0 || (res[0]?.children?.length ?? 0) === 0;
-          if (!isFirstLoadRef.current && isEmpty) {
+          if (!isFirstLoadRef.current && !searchTerm && isEmpty) {
             return res;
           }
 
           // Compute new files and expandedKeys synchronously so we can write
           // the cache with the correct post-update values in the same tick.
-          const newFiles: IDirOrFile[] = isFirstLoadRef.current
+          const shouldPreserveLoadedChildren =
+            options.preserveLoadedChildren ?? (!searchTerm && !isFirstLoadRef.current);
+          const newFiles: IDirOrFile[] = searchTerm
             ? res
-            : applyFreshListings(
-                filesRef.current,
-                (() => {
-                  const m = new Map<string, IDirOrFile[]>();
-                  m.set('', res[0]?.children ?? []);
-                  for (const { dir, children } of childResults) m.set(dir.relativePath, children);
-                  return m;
-                })()
-              );
+            : isFirstLoadRef.current || !shouldPreserveLoadedChildren
+              ? res
+              : applyFreshListings(
+                  filesRef.current,
+                  (() => {
+                    const m = new Map<string, IDirOrFile[]>();
+                    m.set('', res[0]?.children ?? []);
+                    for (const { dir, children } of childResults) m.set(dir.relativePath, children);
+                    return m;
+                  })()
+                );
 
-          const newExpandedKeys: string[] = isFirstLoadRef.current
-            ? getFirstLevelKeys(res)
-            : [...new Set([...expandedKeysRef.current, ...getFirstLevelKeys(res)])];
+          const newExpandedKeys: string[] =
+            searchTerm || isFirstLoadRef.current || options.resetExpandedKeys
+              ? getFirstLevelKeys(res)
+              : [...new Set([...expandedKeysRef.current, ...getFirstLevelKeys(res)])];
 
           setFiles(newFiles);
           setExpandedKeys(newExpandedKeys);
+          if (searchTerm) {
+            setTreeKey(Math.random());
+          }
 
           // 根据是否有文件决定工作空间面板的展开/折叠状态
           // Determine workspace panel expand/collapse state based on files
@@ -194,13 +216,13 @@ export function useWorkspaceTree({ workspace, conversation_id, eventPrefix }: Us
           // Only dispatch expand signal when there are files; never actively
           // collapse — avoids fighting with team mode's explicit expand and
           // prevents flicker when workspace starts empty.
-          if (hasFiles) {
+          if (hasFiles && !searchTerm) {
             dispatchWorkspaceHasFilesEvent(true, conversation_id, wasFirstLoad);
           }
 
           // Persist the freshly-computed snapshot so the cache is up to date
           // after every successful refresh (not just on unmount).
-          if (workspace) {
+          if (workspace && !searchTerm) {
             setWorkspaceTreeSnapshot(workspace, { files: newFiles, expandedKeys: newExpandedKeys });
           }
 
@@ -224,6 +246,13 @@ export function useWorkspaceTree({ workspace, conversation_id, eventPrefix }: Us
    */
   const refreshWorkspace = useCallback(() => {
     return loadWorkspace(workspace);
+  }, [workspace, loadWorkspace]);
+
+  const forceRefreshWorkspace = useCallback(() => {
+    return loadWorkspace(workspace, undefined, undefined, {
+      preserveLoadedChildren: false,
+      resetExpandedKeys: true,
+    });
   }, [workspace, loadWorkspace]);
 
   /**
@@ -324,6 +353,7 @@ export function useWorkspaceTree({ workspace, conversation_id, eventPrefix }: Us
     setSelected,
     loadWorkspace,
     refreshWorkspace,
+    forceRefreshWorkspace,
     ensureNodeSelected,
     clearSelection,
   };
