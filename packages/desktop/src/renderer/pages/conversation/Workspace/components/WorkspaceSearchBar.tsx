@@ -10,8 +10,13 @@ import { Search } from '@icon-park/react';
 import React from 'react';
 import type { TFunction } from 'i18next';
 import type { RefInputType } from '@arco-design/web-react/es/Input/interface';
-import type { WorkspaceSearchScope, WorkspaceSearchStats } from '../hooks/useWorkspaceSearch';
-import type { WorkspaceSearchMode } from '../hooks/useWorkspaceTree';
+
+type WorkspaceSearchScope = 'workspace' | 'currentFolder';
+type WorkspaceSearchMode = 'all' | 'name' | 'content';
+type WorkspaceSearchStats = {
+  fileCount: number;
+  contentBlockCount: number;
+};
 
 type WorkspaceSearchBarProps = {
   t: TFunction;

@@ -27,6 +27,7 @@ type MyAssistantsListProps = {
   /** Switch to the Official tab (to duplicate an official assistant). */
   onGoOfficial: () => void;
   canManageDefinitions: boolean;
+  searchActive?: boolean;
 };
 
 const FILTER_OPTIONS: AssistantEnabledFilter[] = ['all', 'enabled', 'disabled'];
@@ -41,6 +42,7 @@ const MyAssistantsList: React.FC<MyAssistantsListProps> = ({
   onStartChat,
   onGoOfficial,
   canManageDefinitions,
+  searchActive = false,
 }) => {
   const { t } = useTranslation();
   const talkToButler = useTalkToButler();
@@ -124,7 +126,8 @@ const MyAssistantsList: React.FC<MyAssistantsListProps> = ({
   // The "created by me" group shows a guiding empty state when the user has
   // no custom assistants yet (only in the unfiltered view — a filtered empty
   // just means "no matches", not "none exist").
-  const createdEmpty = canManageDefinitions && createdAssistants.length === 0 && filter === 'all';
+  const hasVisibleAssistants = cliAssistants.length > 0 || createdAssistants.length > 0;
+  const createdEmpty = canManageDefinitions && createdAssistants.length === 0 && filter === 'all' && !searchActive;
 
   const renderCreatedEmpty = () => (
     <div
@@ -191,6 +194,12 @@ const MyAssistantsList: React.FC<MyAssistantsListProps> = ({
         </Dropdown>
       </div>
 
+      {searchActive && !hasVisibleAssistants ? (
+        <div className='rounded-14px border border-dashed border-border-2 bg-fill-1/40 px-20px py-28px text-center text-13px text-t-secondary'>
+          {t('settings.assistantNoMatch', { defaultValue: 'No assistants match the current filters.' })}
+        </div>
+      ) : null}
+
       {renderGroup(
         t('settings.assistantGroupCli', { defaultValue: 'Your CLI' }),
         cliAssistants,
@@ -198,44 +207,44 @@ const MyAssistantsList: React.FC<MyAssistantsListProps> = ({
         'bg-warning-5'
       )}
 
-      {/* Created-by-me group: show its rows, or a guiding empty state when the
-          user has no custom assistants yet. */}
-      <div className='mt-20px' data-testid='group-created-section'>
-        <div className='mb-10px flex items-center gap-8px px-2px'>
-          <span className='h-13px w-3px rounded-2px bg-primary-5' />
-          <span className='text-12px font-600 text-t-secondary'>
-            {t('settings.assistantGroupCreated', { defaultValue: 'Created by you' })}
-          </span>
-          {createdAssistants.length > 0 ? (
-            <span className='rounded-999px bg-fill-2 px-6px py-1px text-10px font-500 text-t-quaternary'>
-              {createdAssistants.length}
+      {createdAssistants.length > 0 || createdEmpty ? (
+        <div className='mt-20px' data-testid='group-created-section'>
+          <div className='mb-10px flex items-center gap-8px px-2px'>
+            <span className='h-13px w-3px rounded-2px bg-primary-5' />
+            <span className='text-12px font-600 text-t-secondary'>
+              {t('settings.assistantGroupCreated', { defaultValue: 'Created by you' })}
             </span>
-          ) : null}
+            {createdAssistants.length > 0 ? (
+              <span className='rounded-999px bg-fill-2 px-6px py-1px text-10px font-500 text-t-quaternary'>
+                {createdAssistants.length}
+              </span>
+            ) : null}
+          </div>
+          {createdEmpty ? (
+            renderCreatedEmpty()
+          ) : (
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={createdAssistants.map((a) => a.id)} strategy={verticalListSortingStrategy}>
+                <div className='space-y-8px'>
+                  {createdAssistants.map((assistant) => (
+                    <MyAssistantRow
+                      key={assistant.id}
+                      assistant={assistant}
+                      localeKey={localeKey}
+                      draggable={draggable}
+                      onOpenDetail={onOpenDetail}
+                      onDelete={onDelete}
+                      onToggleEnabled={onToggleEnabled}
+                      onStartChat={onStartChat}
+                      canManageDefinitions={canManageDefinitions}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+          )}
         </div>
-        {createdEmpty ? (
-          renderCreatedEmpty()
-        ) : (
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext items={createdAssistants.map((a) => a.id)} strategy={verticalListSortingStrategy}>
-              <div className='space-y-8px'>
-                {createdAssistants.map((assistant) => (
-                  <MyAssistantRow
-                    key={assistant.id}
-                    assistant={assistant}
-                    localeKey={localeKey}
-                    draggable={draggable}
-                    onOpenDetail={onOpenDetail}
-                    onDelete={onDelete}
-                    onToggleEnabled={onToggleEnabled}
-                    onStartChat={onStartChat}
-                    canManageDefinitions={canManageDefinitions}
-                  />
-                ))}
-              </div>
-            </SortableContext>
-          </DndContext>
-        )}
-      </div>
+      ) : null}
     </div>
   );
 };

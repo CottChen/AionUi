@@ -17,13 +17,12 @@ import {
 } from '@/renderer/utils/workspace/workspaceEvents';
 import { Empty, Message, Tree } from '@arco-design/web-react';
 import { Right } from '@icon-park/react';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import FileChangeList from './components/FileChangeList';
 import PasteConfirmModal from './components/PasteConfirmModal';
 import WorkspaceContextMenu from './components/WorkspaceContextMenu';
 import WorkspaceDialogs from './components/WorkspaceDialogs';
-import WorkspaceSearchBar from './components/WorkspaceSearchBar';
 import WorkspaceTabBar from './components/WorkspaceTabBar';
 import WorkspaceToolbar from './components/WorkspaceToolbar';
 import FileTypeIcon from './components/FileTypeIcon';
@@ -45,6 +44,7 @@ import {
   flattenSingleRoot,
   getTargetFolderPath,
 } from './utils/treeHelpers';
+import { setWorkspaceTreeSnapshot } from './utils/workspaceTreeCache';
 import './workspace.css';
 
 const normalizeWorkspacePath = (value: string) => value.replace(/\\/g, '/').replace(/\/+$/, '');
@@ -87,7 +87,6 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
   const layout = useLayoutContext();
   const isMobile = layout?.isMobile ?? false;
   const { openPreview } = usePreviewContext();
-  const longPressTimerRef = useRef<number | null>(null);
 
   // Message API setup
   const [internalMessageApi, messageContext] = Message.useMessage();
@@ -127,17 +126,13 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
     conversation_id: conversation_id,
   });
 
-  // Get target folder path for paste, import, and scoped workspace search.
-  const targetFolderPathForModal = getTargetFolderPath(
-    treeHook.selectedNodeRef.current,
-    treeHook.selected,
-    treeHook.files,
-    workspace
-  );
-
   const searchHook = useWorkspaceSearch({
     workspace,
-    loadWorkspace: treeHook.loadWorkspace,
+    expandedKeys: treeHook.expandedKeys,
+    setFiles: treeHook.setFiles,
+    setExpandedKeys: treeHook.setExpandedKeys,
+    setTreeKey: treeHook.setTreeKey,
+    refreshWorkspace: treeHook.refreshWorkspace,
   });
 
   const fileOpsHook = useWorkspaceFileOps({
@@ -165,12 +160,11 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
   // Setup events
   useWorkspaceEvents({
     conversation_id,
+    workspace,
     eventPrefix,
     refreshWorkspace: treeHook.refreshWorkspace,
     clearSelection: treeHook.clearSelection,
-    setFiles: treeHook.setFiles,
     setSelected: treeHook.setSelected,
-    setExpandedKeys: treeHook.setExpandedKeys,
     setTreeKey: treeHook.setTreeKey,
     selectedNodeRef: treeHook.selectedNodeRef,
     selectedKeysRef: treeHook.selectedKeysRef,
@@ -185,7 +179,7 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
   const rootName = treeHook.files[0]?.name ?? '';
 
   // Hide root directory when there's a single root with children, as Toolbar serves as the first-level directory
-  const treeData = flattenSingleRoot(treeHook.files);
+  const treeData = useMemo(() => flattenSingleRoot(treeHook.files), [treeHook.files]);
 
   // Authoritative source: `conversation.extra.is_temporary_workspace` is
   // derived by the backend on every response (see
@@ -218,44 +212,6 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
       });
     },
     [treeHook.ensureNodeSelected, modalsHook.setContextMenu]
-  );
-
-  const clearNodeLongPress = useCallback(() => {
-    if (longPressTimerRef.current == null) return;
-    window.clearTimeout(longPressTimerRef.current);
-    longPressTimerRef.current = null;
-  }, []);
-
-  const startNodeLongPress = useCallback(
-    (node: IDirOrFile, event: React.TouchEvent<HTMLDivElement>) => {
-      if (!isMobile || node.isFile) return;
-      const touch = event.touches[0];
-      if (!touch) return;
-      clearNodeLongPress();
-      longPressTimerRef.current = window.setTimeout(() => {
-        openNodeContextMenu(node, touch.clientX, touch.clientY);
-        longPressTimerRef.current = null;
-      }, 500);
-    },
-    [clearNodeLongPress, isMobile, openNodeContextMenu]
-  );
-
-  useEffect(() => clearNodeLongPress, [clearNodeLongPress]);
-
-  const handleSearchInFolder = useCallback(
-    (node: IDirOrFile) => {
-      if (node.isFile) return;
-      treeHook.ensureNodeSelected(node);
-      searchHook.selectSearchFolder(node.fullPath || workspace, node.name || node.relativePath || workspaceDisplayName);
-      modalsHook.closeContextMenu();
-    },
-    [
-      modalsHook.closeContextMenu,
-      searchHook.selectSearchFolder,
-      treeHook.ensureNodeSelected,
-      workspace,
-      workspaceDisplayName,
-    ]
   );
 
   const handleOpenChangeDiff = useCallback(
@@ -298,14 +254,16 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
         const children = parentNode?.children ?? [];
 
         if (!parentRelativePath) {
-          const rootNode = parentNode ??
-            nextFiles[0] ?? {
+          const rootNode =
+            parentNode ??
+            nextFiles[0] ??
+            ({
               name: workspaceDisplayName,
               fullPath: workspace,
               relativePath: '',
               isDir: true,
               isFile: false,
-            };
+            } satisfies IDirOrFile);
           nextFiles = [{ ...rootNode, children }];
           return children;
         }
@@ -319,7 +277,7 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
 
       for (const directoryName of parts.slice(0, -1)) {
         expanded.add(parentRelativePath);
-        // Each level depends on the previous directory lookup, so this cannot be parallelized.
+        // Each level depends on the previous directory lookup.
         // eslint-disable-next-line no-await-in-loop
         const children = await loadChildren(parentRelativePath, parentFullPath);
         const directoryNode = children.find((child) => !child.isFile && child.name === directoryName);
@@ -342,9 +300,14 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
         expanded.add(targetNode.relativePath);
       }
 
+      const nextExpandedKeys = [...expanded];
       treeHook.setFiles(nextFiles);
-      treeHook.setExpandedKeys([...expanded]);
+      treeHook.setExpandedKeys(nextExpandedKeys);
+      treeHook.setTreeKey(Math.random());
       treeHook.ensureNodeSelected(targetNode);
+      if (workspace) {
+        setWorkspaceTreeSnapshot(workspace, { files: nextFiles, expandedKeys: nextExpandedKeys });
+      }
       window.requestAnimationFrame(() => scrollSelectedWorkspaceNodeIntoView(targetNode.name));
     },
     [
@@ -379,6 +342,14 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
       fileChangesHook.refreshChanges();
     }
   }, [activeTab, fileChangesHook.refreshChanges]);
+
+  // Get target folder path for paste confirm modal
+  const targetFolderPathForModal = getTargetFolderPath(
+    treeHook.selectedNodeRef.current,
+    treeHook.selected,
+    treeHook.files,
+    workspace
+  );
 
   return (
     <>
@@ -461,26 +432,7 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
           branch={fileChangesHook.snapshotInfo?.branch ?? null}
         />
 
-        {/* Search input and controls */}
-        {activeTab === 'files' && (
-          <WorkspaceSearchBar
-            t={t}
-            isMobile={isMobile}
-            showSearch={searchHook.showSearch}
-            searchText={searchHook.searchText}
-            setSearchText={searchHook.setSearchText}
-            onSearch={searchHook.onSearch}
-            searchInputRef={searchHook.searchInputRef}
-            searchScope={searchHook.searchScope}
-            setSearchScope={searchHook.setSearchScope}
-            searchFolderLabel={searchHook.searchFolderLabel}
-            searchStats={searchHook.searchStats}
-            searchMode={searchHook.searchMode}
-            setSearchMode={searchHook.setSearchMode}
-          />
-        )}
-
-        {/* Toolbar: directory name + action buttons */}
+        {/* Toolbar: search input + directory name + action buttons */}
         {activeTab === 'files' && (
           <WorkspaceToolbar
             t={t}
@@ -489,8 +441,13 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
             isTemporaryWorkspace={isTemporaryWorkspace}
             workspacePath={workspace}
             workspaceDisplayName={workspaceDisplayName}
+            showSearch={searchHook.showSearch}
+            searchText={searchHook.searchText}
+            setSearchText={searchHook.setSearchText}
+            onSearch={searchHook.onSearch}
+            searchInputRef={searchHook.searchInputRef}
             loading={treeHook.loading}
-            refreshWorkspace={treeHook.forceRefreshWorkspace}
+            refreshWorkspace={treeHook.refreshWorkspace}
             handleSelectHostFiles={pasteHook.handleSelectHostFiles}
             handleUploadDeviceFiles={pasteHook.handleUploadDeviceFiles}
             setShowHostFileSelector={searchHook.setShowHostFileSelector}
@@ -512,7 +469,6 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
               handlePreviewFile={fileOpsHook.handlePreviewFile}
               handleDownloadFile={fileOpsHook.handleDownloadFile}
               handleDeleteNode={fileOpsHook.handleDeleteNode}
-              handleSearchInFolder={handleSearchInFolder}
               openRenameModal={fileOpsHook.openRenameModal}
               closeContextMenu={modalsHook.closeContextMenu}
             />
@@ -583,10 +539,6 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
                         event.stopPropagation();
                         openNodeContextMenu(nodeData, event.clientX, event.clientY);
                       }}
-                      onTouchStart={(event) => startNodeLongPress(nodeData, event)}
-                      onTouchEnd={clearNodeLongPress}
-                      onTouchMove={clearNodeLongPress}
-                      onTouchCancel={clearNodeLongPress}
                     >
                       <span className='flex items-center gap-4px min-w-0'>
                         <FileTypeIcon node={nodeData} expanded={treeHook.expandedKeys.includes(relativePath)} />
@@ -684,7 +636,16 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
                             if (n.children) return { ...n, children: assign(n.children) };
                             return n;
                           });
-                        return assign(prev);
+                        const next = assign(prev);
+                        // Persist lazy-loaded children so refreshWorkspace and
+                        // cache-based rehydration don't drop them on next render.
+                        if (workspace) {
+                          setWorkspaceTreeSnapshot(workspace, {
+                            files: next,
+                            expandedKeys: treeHook.expandedKeys,
+                          });
+                        }
+                        return next;
                       });
                     })
                     .catch((err) => {

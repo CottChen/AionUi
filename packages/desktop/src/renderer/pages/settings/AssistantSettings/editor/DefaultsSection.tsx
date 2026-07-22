@@ -1,6 +1,7 @@
 import type { BuiltinAutoSkill, SkillInfo } from '../types';
 import type { IMcpServer } from '@/common/config/storage';
 import WorkspaceFolderSelect from '@/renderer/components/workspace/WorkspaceFolderSelect';
+import { DROPDOWN_SEARCH_THRESHOLD } from '@/renderer/components/agent/runtimeSelectorOptions';
 import { Button, Select, Tooltip } from '@arco-design/web-react';
 import { Brain, FolderOpen, Lightning, LinkCloud, Shield, Toolkit } from '@icon-park/react';
 import React from 'react';
@@ -16,6 +17,18 @@ const getEditorSelectPopupContainer = (node: HTMLElement) =>
   node.closest('[data-editor-popup-root]') ?? node.parentElement ?? document.body;
 
 const AUTO_SELECT_VALUE = '__AUTO__';
+
+/**
+ * Case-insensitive option filter for searchable Selects. Matches against the
+ * option's `data-label` (set on every Option below); the auto ("remember last
+ * used") option always stays visible so search can never hide that mode.
+ */
+const filterSelectOption = (inputValue: string, option: React.ReactElement): boolean => {
+  const props = option.props as { value?: string; 'data-label'?: string };
+  if (props.value === AUTO_SELECT_VALUE) return true;
+  const label = props['data-label'] ?? String(props.value ?? '');
+  return label.toLowerCase().includes(inputValue.trim().toLowerCase());
+};
 
 const renderSummaryTag = ({ label }: { label: React.ReactNode }) => (
   <span className={styles.summaryTagText}>{label}</span>
@@ -145,6 +158,8 @@ const DefaultsSection: React.FC<DefaultsSectionProps> = ({
             }}
             disabled={!canEditDefaultModelAndPermission}
             allowClear={false}
+            showSearch={modelOptions.length > DROPDOWN_SEARCH_THRESHOLD}
+            filterOption={filterSelectOption}
             placeholder={t('settings.assistantSelectDefaultModel', { defaultValue: 'Select a model' })}
             notFoundContent={t('settings.assistantNoAvailableModels', {
               defaultValue: 'No available models configured',
@@ -153,7 +168,7 @@ const DefaultsSection: React.FC<DefaultsSectionProps> = ({
           >
             <Select.Option value={AUTO_SELECT_VALUE}>{autoDefaultOptionLabel}</Select.Option>
             {modelOptions.map((option) => (
-              <Select.Option key={`${localeKey}-${option.key}`} value={option.value}>
+              <Select.Option key={`${localeKey}-${option.key}`} value={option.value} data-label={option.label}>
                 {option.description ? (
                   <Tooltip content={option.description} position='right'>
                     <span className='block min-w-0 truncate'>{option.label}</span>
@@ -334,6 +349,8 @@ const DefaultsSection: React.FC<DefaultsSectionProps> = ({
                 }}
                 onClear={() => setDefaultSkillsMode('auto')}
                 allowClear
+                showSearch={editableSkillOptions.length > DROPDOWN_SEARCH_THRESHOLD}
+                filterOption={filterSelectOption}
                 maxTagCount={{
                   count: 0,
                   render: () =>
@@ -383,7 +400,12 @@ const DefaultsSection: React.FC<DefaultsSectionProps> = ({
                   {autoDefaultOptionLabel}
                 </Select.Option>
                 {editableSkillOptions.map((option) => (
-                  <Select.Option key={option.value} value={option.value} disabled={option.disabled}>
+                  <Select.Option
+                    key={option.value}
+                    value={option.value}
+                    disabled={option.disabled}
+                    data-label={option.label}
+                  >
                     {option.label}
                   </Select.Option>
                 ))}
@@ -444,6 +466,8 @@ const DefaultsSection: React.FC<DefaultsSectionProps> = ({
               }}
               onClear={() => setDefaultMcpMode('auto')}
               allowClear
+              showSearch={enabledMcpServers.length > DROPDOWN_SEARCH_THRESHOLD}
+              filterOption={filterSelectOption}
               maxTagCount={{
                 count: 0,
                 render: () =>
@@ -496,7 +520,7 @@ const DefaultsSection: React.FC<DefaultsSectionProps> = ({
                 {autoDefaultOptionLabel}
               </Select.Option>
               {enabledMcpServers.map((server) => (
-                <Select.Option key={server.id} value={server.id}>
+                <Select.Option key={server.id} value={server.id} data-label={server.name}>
                   {server.name}
                 </Select.Option>
               ))}

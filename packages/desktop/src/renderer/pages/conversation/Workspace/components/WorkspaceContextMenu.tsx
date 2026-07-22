@@ -22,7 +22,7 @@ type WorkspaceContextMenuProps = {
   handlePreviewFile: (node: IDirOrFile) => Promise<void>;
   handleDownloadFile: (node: IDirOrFile) => Promise<void>;
   handleDeleteNode: (node: IDirOrFile) => void;
-  handleSearchInFolder: (node: IDirOrFile) => void;
+  handleSearchInFolder?: (node: IDirOrFile) => void;
   openRenameModal: (node: IDirOrFile) => void;
   closeContextMenu: () => void;
 };
@@ -120,7 +120,7 @@ const WorkspaceContextMenu: React.FC<WorkspaceContextMenuProps> = ({
             {t('conversation.workspace.contextMenu.download')}
           </button>
         )}
-        {!isFile && (
+        {!isFile && handleSearchInFolder && (
           <button
             type='button'
             className={MENU_BUTTON_BASE}
