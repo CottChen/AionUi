@@ -330,7 +330,7 @@ const MarkdownPreview: React.FC<MarkdownPreviewProps> = ({
                   const localFileReference = resolveLocalFileLinkReference(
                     typeof href === 'string' ? href : '',
                     undefined,
-                    { baseDir, allowedRootDir: workspace ?? baseDir }
+                    { baseDir, allowedRootDir: workspace }
                   );
                   if (localFileReference) {
                     return (

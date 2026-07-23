@@ -295,6 +295,40 @@ describe('MarkdownViewer', () => {
     });
   });
 
+  it('opens parent-relative file links from markdown previews when workspace metadata is missing', async () => {
+    const filePath = '/Users/demo/project/src/foo.ts';
+    vi.mocked(ipcBridge.fs.getFileMetadata.invoke).mockResolvedValue(fileMetadata(filePath));
+    vi.mocked(ipcBridge.fs.readFile.invoke).mockResolvedValue('export const foo = 1;\n');
+
+    render(<MarkdownViewer content='[foo](../src/foo.ts#L12)' file_path='/Users/demo/project/docs/README.md' />);
+
+    expect(screen.queryByRole('link', { name: /foo/ })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /foo\s+L12/ }));
+
+    await waitFor(() => {
+      expect(previewMocks.openPreview).toHaveBeenCalledWith(
+        'export const foo = 1;\n',
+        'code',
+        expect.objectContaining({
+          file_name: 'foo.ts',
+          file_path: filePath,
+          workspace: undefined,
+          language: 'ts',
+          targetLine: 12,
+          targetColumn: undefined,
+          truncated: false,
+        }),
+        { replace: false }
+      );
+    });
+
+    expect(ipcBridge.fs.getFileMetadata.invoke).toHaveBeenCalledWith({
+      path: filePath,
+      workspace: undefined,
+    });
+  });
+
   it('opens workspace-relative markdown links without line numbers from markdown previews', async () => {
     const filePath = '/Users/demo/project/docs/architecture/ARCHITECTURE.md';
     vi.mocked(ipcBridge.fs.getFileMetadata.invoke).mockResolvedValue(fileMetadata(filePath));
