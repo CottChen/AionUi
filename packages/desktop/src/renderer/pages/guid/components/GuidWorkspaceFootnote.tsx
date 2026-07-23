@@ -65,7 +65,7 @@ const GuidWorkspaceFootnote: React.FC<GuidWorkspaceFootnoteProps> = ({
   const handleBrowseWorkspace = useCallback(() => {
     setOpen(false);
     ipcBridge.dialog.showOpen
-      .invoke({ properties: ['openDirectory', 'createDirectory'] })
+      .invoke({ defaultPath: workspaceDir, properties: ['openDirectory', 'createDirectory'] })
       .then((dirs) => {
         if (dirs && dirs[0]) {
           addRecentWorkspace(dirs[0]);

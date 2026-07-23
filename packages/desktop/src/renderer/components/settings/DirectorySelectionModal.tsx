@@ -23,11 +23,13 @@ interface DirectoryData {
   items: DirectoryItem[];
   canGoUp: boolean;
   parentPath?: string;
+  currentPath?: string;
 }
 
 interface DirectorySelectionModalProps {
   visible: boolean;
   isFileMode?: boolean;
+  defaultPath?: string;
   onConfirm: (paths: string[] | undefined) => void;
   onCancel: () => void;
 }
@@ -35,6 +37,7 @@ interface DirectorySelectionModalProps {
 const DirectorySelectionModal: React.FC<DirectorySelectionModalProps> = ({
   visible,
   isFileMode = false,
+  defaultPath = '',
   onConfirm,
   onCancel,
 }) => {
@@ -79,11 +82,12 @@ const DirectorySelectionModal: React.FC<DirectorySelectionModalProps> = ({
             ...item,
             path: stripWindowsVerbatimPrefix(item.path),
           })),
+          currentPath: typeof data.currentPath === 'string' ? stripWindowsVerbatimPrefix(data.currentPath) : undefined,
           parentPath:
             typeof data.parentPath === 'string' ? stripWindowsVerbatimPrefix(data.parentPath) : data.parentPath,
         };
         setDirectoryData(normalized);
-        setCurrentPath(dirPath);
+        setCurrentPath(normalized.currentPath ?? stripWindowsVerbatimPrefix(dirPath));
       } catch (err) {
         console.error('Failed to load directory:', err);
         setError(err instanceof Error ? err.message : 'Failed to load directory');
@@ -97,9 +101,9 @@ const DirectorySelectionModal: React.FC<DirectorySelectionModalProps> = ({
   useEffect(() => {
     if (visible) {
       setSelectedPath('');
-      loadDirectory('').catch((error) => console.error('Failed to load initial directory:', error));
+      loadDirectory(defaultPath).catch((error) => console.error('Failed to load initial directory:', error));
     }
-  }, [visible, loadDirectory]);
+  }, [visible, defaultPath, loadDirectory]);
 
   const handleItemClick = (item: DirectoryItem) => {
     if (item.isDirectory) {
@@ -127,14 +131,16 @@ const DirectorySelectionModal: React.FC<DirectorySelectionModalProps> = ({
   };
 
   const handleConfirm = () => {
-    if (selectedPath) {
-      onConfirm([selectedPath]);
+    const confirmedPath = selectedPath || (!isFileMode ? currentPath : '');
+    if (confirmedPath) {
+      onConfirm([confirmedPath]);
     }
   };
 
   const canSelect = (item: DirectoryItem) => {
     return isFileMode ? item.isFile : item.isDirectory;
   };
+  const canConfirm = Boolean(selectedPath || (!isFileMode && currentPath));
 
   return (
     // This picker is opened *from* other modals (team/cron create dialogs sit at
@@ -149,7 +155,7 @@ const DirectorySelectionModal: React.FC<DirectorySelectionModalProps> = ({
       }}
       onCancel={onCancel}
       onOk={handleConfirm}
-      okButtonProps={{ disabled: !selectedPath }}
+      okButtonProps={{ disabled: !canConfirm }}
       className='w-[90vw] md:w-[600px]'
       style={{ width: 'min(600px, 90vw)' }}
       wrapStyle={{ zIndex: 10050 }}
@@ -172,7 +178,7 @@ const DirectorySelectionModal: React.FC<DirectorySelectionModalProps> = ({
               <Button
                 type='primary'
                 onClick={handleConfirm}
-                disabled={!selectedPath}
+                disabled={!canConfirm}
                 className='px-20px min-w-80px'
                 style={{ borderRadius: 8 }}
               >

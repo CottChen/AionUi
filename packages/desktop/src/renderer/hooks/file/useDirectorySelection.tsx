@@ -12,6 +12,7 @@ import DirectorySelectionModal from '@renderer/components/settings/DirectorySele
 interface DirectorySelectionRequest {
   id: string;
   isFileMode?: boolean;
+  defaultPath?: string;
   properties?: string[];
 }
 
@@ -23,7 +24,7 @@ export const useDirectorySelection = () => {
     (paths: string[] | undefined) => {
       if (requestData) {
         const callbackEventName = `subscribe.callback-show-open${requestData.id}`;
-        bridge.emit(callbackEventName, paths);
+        bridge.emitLocal(callbackEventName, paths);
       }
       setVisible(false);
       setRequestData(null);
@@ -34,7 +35,7 @@ export const useDirectorySelection = () => {
   const handleCancel = useCallback(() => {
     if (requestData) {
       const callbackEventName = `subscribe.callback-show-open${requestData.id}`;
-      bridge.emit(callbackEventName, undefined);
+      bridge.emitLocal(callbackEventName, undefined);
     }
     setVisible(false);
     setRequestData(null);
@@ -62,6 +63,7 @@ export const useDirectorySelection = () => {
     <DirectorySelectionModal
       visible={visible}
       isFileMode={requestData?.isFileMode}
+      defaultPath={requestData?.defaultPath}
       onConfirm={handleConfirm}
       onCancel={handleCancel}
     />

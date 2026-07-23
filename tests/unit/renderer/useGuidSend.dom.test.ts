@@ -62,6 +62,7 @@ const createDeps = (): GuidSendDeps => ({
   guidEnabledSkills: undefined,
   assistantDefaultSkillIds: undefined,
   assistantDefaultDisabledBuiltinSkillIds: undefined,
+  assistantDefaultWorkspace: undefined,
   availableMcpServers: [{ id: 'mcp-user', name: 'User MCP', enabled: true, builtin: false } as IMcpServer],
   selectedMcpServerIds: ['mcp-user'],
   assistantDefaultMcpIds: undefined,
@@ -133,6 +134,38 @@ describe('useGuidSend', () => {
     expect(payload.assistant?.conversation_overrides?.disabled_builtin_skill_ids).toEqual(['builtin-skill']);
     expect(payload.assistant?.conversation_overrides?.mcp_ids).toEqual(['mcp-user']);
     expect(payload.extra.selected_mcp_server_ids).toEqual(['mcp-user']);
+  });
+
+  it('uses the assistant default workspace when no project is manually selected', async () => {
+    const deps = createDeps();
+    deps.dir = '';
+    deps.assistantDefaultWorkspace = '/projects/default-workspace';
+
+    const { result } = renderHook(() => useGuidSend(deps));
+
+    await act(async () => {
+      await result.current.handleSend();
+    });
+
+    const payload = createConversationInvokeMock.mock.calls[0][0];
+    expect(payload.extra.workspace).toBe('/projects/default-workspace');
+    expect(payload.extra.custom_workspace).toBe(true);
+  });
+
+  it('lets a manually selected project override the assistant default workspace', async () => {
+    const deps = createDeps();
+    deps.dir = '/projects/manual-workspace';
+    deps.assistantDefaultWorkspace = '/projects/default-workspace';
+
+    const { result } = renderHook(() => useGuidSend(deps));
+
+    await act(async () => {
+      await result.current.handleSend();
+    });
+
+    const payload = createConversationInvokeMock.mock.calls[0][0];
+    expect(payload.extra.workspace).toBe('/projects/manual-workspace');
+    expect(payload.extra.custom_workspace).toBe(true);
   });
 
   it('preserves builtin MCP ids in assistant overrides while only sending user MCP ids to runtime selection', async () => {

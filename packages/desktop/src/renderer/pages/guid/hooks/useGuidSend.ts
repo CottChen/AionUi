@@ -41,6 +41,7 @@ export type GuidSendDeps = {
   guidEnabledSkills: string[] | undefined;
   assistantDefaultSkillIds?: string[];
   assistantDefaultDisabledBuiltinSkillIds?: string[];
+  assistantDefaultWorkspace?: string;
   availableMcpServers: IMcpServer[];
   selectedMcpServerIds: string[] | undefined;
   assistantDefaultMcpIds?: string[];
@@ -88,6 +89,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
     guidEnabledSkills,
     assistantDefaultSkillIds,
     assistantDefaultDisabledBuiltinSkillIds,
+    assistantDefaultWorkspace,
     availableMcpServers,
     selectedMcpServerIds,
     assistantDefaultMcpIds,
@@ -106,8 +108,8 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
       return;
     }
 
-    const isCustomWorkspace = !!dir;
-    const finalWorkspace = dir || '';
+    const finalWorkspace = dir || assistantDefaultWorkspace || '';
+    const isCustomWorkspace = !!finalWorkspace;
 
     const assistantConversationId = selectedAssistantId;
     const assistantBackend = selectedAssistantBackend;
@@ -266,6 +268,7 @@ export const useGuidSend = (deps: GuidSendDeps): GuidSendResult => {
     guidEnabledSkills,
     assistantDefaultSkillIds,
     assistantDefaultDisabledBuiltinSkillIds,
+    assistantDefaultWorkspace,
     availableMcpServers,
     selectedMcpServerIds,
     assistantDefaultMcpIds,

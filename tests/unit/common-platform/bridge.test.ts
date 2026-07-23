@@ -104,6 +104,21 @@ describe('local bridge', () => {
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
+  it('can resolve an invoke through a local callback without sending the callback to the adapter', async () => {
+    const { bridge, outbound } = await loadLoopbackBridge();
+    const endpoint = bridge.buildProvider<string, string>('show-open');
+
+    const pending = endpoint.invoke('request');
+    const request = outbound[0];
+    expect(request?.name).toBe('subscribe-show-open');
+    const requestId = (request.data as { id: string }).id;
+
+    bridge.emitLocal(`subscribe.callback-show-open${requestId}`, 'resolved locally');
+
+    await expect(pending).resolves.toBe('resolved locally');
+    expect(outbound).toHaveLength(1);
+  });
+
   it('logs rejected providers without emitting a success callback', async () => {
     const { bridge, getIncoming, outbound } = await loadLoopbackBridge();
     const error = new Error('provider failed');

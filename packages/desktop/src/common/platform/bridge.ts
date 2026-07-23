@@ -53,6 +53,10 @@ export const emit = (name: string, data?: unknown, ...args: unknown[]): void => 
   emitToAdapter(name, data, ...args);
 };
 
+export const emitLocal = (name: string, data?: unknown, ...args: unknown[]): void => {
+  eventEmitter.emit(name, data, ...args);
+};
+
 export const off = (name: string, callback: EventHandler): void => {
   const wrappers = listenerWrappers.get(name)?.get(callback);
   if (!wrappers) {
@@ -173,6 +177,7 @@ export const bridge = {
   buildEmitter,
   buildProvider,
   emit,
+  emitLocal,
   intercept,
   invoke,
   off,

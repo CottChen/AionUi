@@ -104,7 +104,10 @@ const WorkspaceFolderSelect: React.FC<WorkspaceFolderSelectProps> = ({
   const handleBrowse = async () => {
     setMenuVisible(false);
 
-    const files = await ipcBridge.dialog.showOpen.invoke({ properties: ['openDirectory', 'createDirectory'] });
+    const files = await ipcBridge.dialog.showOpen.invoke({
+      defaultPath: value,
+      properties: ['openDirectory', 'createDirectory'],
+    });
     if (files?.[0]) {
       onChange(files[0]);
       addRecentWorkspace(files[0], recentStorageKey);
