@@ -29,6 +29,9 @@ on:
 env:
   BUN_INSTALL_REGISTRY: 'https://registry.npmjs.org/'
 
+permissions:
+  contents: write
+
 jobs:
   code-quality:
     name: Code Quality
@@ -120,6 +123,27 @@ jobs:
           AIONUI_BACKEND_REPO: CottChen/AionCore
           # Version is pinned in repo-root package.json (aioncoreVersion).
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload darwin-arm64 web-cli tarball to release
+        if: ${{ matrix.platform == 'darwin' && matrix.arch == 'arm64' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: v2.1.39
+          RELEASE_TARGET: 29be8f7fb2a4e15910552cc60e4f9fc6a33c4dc1
+        run: |
+          set -euo pipefail
+          if ! gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release create "${RELEASE_TAG}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --target "${RELEASE_TARGET}" \
+              --title "AionUi ${RELEASE_TAG}" \
+              --notes "Fork build for AionUi WebUI darwin-arm64." \
+              --prerelease
+          fi
+          gh release upload "${RELEASE_TAG}" dist-web-cli/*.tar.gz dist-web-cli/*.sha256 \
+            --repo "${GITHUB_REPOSITORY}" \
+            --clobber
 
       - name: Upload tarball artifact
         uses: actions/upload-artifact@v6
