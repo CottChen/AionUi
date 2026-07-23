@@ -6,6 +6,7 @@
 
 import { bridge } from '@/common/platform/bridge';
 import { WEBUI_DEFAULT_PORT } from '@/common/config/constants';
+import { SHOW_OPEN_REQUEST_EVENT } from './constant';
 import type { ElectronBridgeAPI } from '@/common/types/platform/electron';
 
 interface CustomWindow extends Window {
@@ -22,6 +23,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isBrowserWebSocketPayload(value: unknown): value is BrowserWebSocketPayload {
   return isRecord(value) && typeof value.name === 'string';
+}
+
+function isShowOpenRequest(value: unknown): value is { id: string; data?: Record<string, unknown> } {
+  return isRecord(value) && typeof value.id === 'string';
 }
 
 export function isRealtimeAuthTerminalError(payload: unknown): boolean {
@@ -229,6 +234,14 @@ if (win.electronAPI) {
 
   bridge.adapter({
     emit(name, data) {
+      if (name === 'subscribe-show-open' && isShowOpenRequest(data)) {
+        bridge.emitLocal(SHOW_OPEN_REQUEST_EVENT, {
+          id: data.id,
+          ...(isRecord(data.data) ? data.data : {}),
+        });
+        return;
+      }
+
       const message: QueuedMessage = { name, data };
 
       ensureSocket();

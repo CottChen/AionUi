@@ -36,11 +36,13 @@ type FakeSocketEventName = keyof FakeSocketEventMap;
 
 const platformMock = vi.hoisted(() => ({
   adapter: vi.fn(),
+  emitLocal: vi.fn(),
 }));
 
 vi.mock('@/common/platform/bridge', () => ({
   bridge: {
     adapter: platformMock.adapter,
+    emitLocal: platformMock.emitLocal,
   },
 }));
 
@@ -118,6 +120,7 @@ async function loadBrowserAdapter() {
   vi.resetModules();
   FakeWebSocket.instances = [];
   platformMock.adapter.mockClear();
+  platformMock.emitLocal.mockClear();
 
   const location = setupBrowserGlobals();
 
@@ -235,5 +238,25 @@ describe('browser WebSocket realtime error handling', () => {
 
     expect(location.hash).toBe('');
     expect(FakeWebSocket.instances).toHaveLength(2);
+  });
+
+  it('routes WebUI directory picker requests to the local selection modal', async () => {
+    const { adapter, socket } = await loadBrowserAdapter();
+
+    adapter.emit('subscribe-show-open', {
+      id: 'req-1',
+      data: {
+        defaultPath: '/projects/demo',
+        properties: ['openDirectory', 'createDirectory'],
+      },
+    });
+
+    expect(platformMock.emitLocal).toHaveBeenCalledTimes(1);
+    expect(platformMock.emitLocal).toHaveBeenCalledWith('show-open-request', {
+      id: 'req-1',
+      defaultPath: '/projects/demo',
+      properties: ['openDirectory', 'createDirectory'],
+    });
+    expect(socket.sentMessages).toHaveLength(0);
   });
 });
