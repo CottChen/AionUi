@@ -3,7 +3,7 @@ import { promises as fs } from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import type { AddressInfo } from 'node:net';
+import net, { type AddressInfo } from 'node:net';
 import {
   applyOfficeProxyFrameOptions,
   normalizeBackendProxyPath,
@@ -234,6 +234,44 @@ describe('static-server', () => {
     handle = await startStaticServer({ staticDir, backendPort: freePort, port: 0 });
     const r = await fetch(`${handle.localUrl}/api/anything`);
     expect(r.status).toBe(502);
+  });
+
+  it('/api proxy tolerates client disconnect while backend response is in flight', async () => {
+    let backendReceived!: () => void;
+    const backendRequestSeen = new Promise<void>((resolve) => {
+      backendReceived = resolve;
+    });
+    const backend = await startMockBackend((_req, res) => {
+      backendReceived();
+      setTimeout(() => {
+        res.writeHead(201, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      }, 50);
+    });
+    stopBackend = backend.close;
+    handle = await startStaticServer({ staticDir, backendPort: backend.port, port: 0 });
+    const publicPort = handle.port;
+    let socket!: net.Socket;
+
+    await new Promise<void>((resolve, reject) => {
+      socket = net.connect({ host: '127.0.0.1', port: publicPort }, () => {
+        socket.write(
+          'POST /api/conversations HTTP/1.1\r\n' +
+            `Host: 127.0.0.1:${publicPort}\r\n` +
+            'Content-Type: application/json\r\n' +
+            'Content-Length: 2\r\n' +
+            'Connection: close\r\n' +
+            '\r\n' +
+            '{}'
+        );
+        resolve();
+      });
+      socket.on('error', reject);
+    });
+
+    await backendRequestSeen;
+    socket.destroy();
+    await new Promise((resolve) => setTimeout(resolve, 100));
   });
 
   rawUpgradeIt('/ws WebSocket upgrade is spliced to backend and 101 is relayed', async () => {

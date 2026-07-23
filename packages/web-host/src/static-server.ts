@@ -42,6 +42,13 @@ const DEFAULT_PORT = 25808;
 const OFFICE_PROXY_ROOT_RE = /^(\/api\/(?:office-watch-proxy|ppt-proxy)\/\d+)\/(\?.*)?$/;
 const OFFICE_PROXY_PATH_RE = /^\/api\/(?:office-watch-proxy|ppt-proxy)\/\d+(?:[/?]|$)/;
 
+function isBenignSocketClosedError(error: unknown): boolean {
+  const candidate = error as { code?: unknown; message?: unknown } | null;
+  const code = typeof candidate?.code === 'string' ? candidate.code : '';
+  const message = typeof candidate?.message === 'string' ? candidate.message : '';
+  return code === 'ERR_SOCKET_CLOSED' || code === 'ECONNRESET' || code === 'EPIPE' || /socket is closed/i.test(message);
+}
+
 function getLanIP(): string | null {
   const nets = networkInterfaces();
   for (const name of Object.keys(nets)) {
@@ -67,8 +74,26 @@ function forwardToBackend(
     headers: { ...req.headers, host: `127.0.0.1:${backendPort}` },
   };
   const proxy = http.request(options, (proxyRes) => {
+    if (res.destroyed) {
+      proxyRes.destroy();
+      return;
+    }
     const headers = applyOfficeProxyFrameOptions(proxyRes.headers, requestPath, officeProxyFrameOptions);
     res.writeHead(proxyRes.statusCode ?? 502, headers);
+    proxyRes.on('error', () => {
+      res.destroy();
+    });
+    res.on('error', (error) => {
+      proxyRes.destroy();
+      if (!isBenignSocketClosedError(error)) {
+        console.error('[web-host] proxy response socket error:', error);
+      }
+    });
+    res.on('close', () => {
+      if (!res.writableEnded) {
+        proxyRes.destroy();
+      }
+    });
     proxyRes.pipe(res);
   });
   proxy.on('error', () => {
@@ -79,6 +104,8 @@ function forwardToBackend(
       res.destroy();
     }
   });
+  req.on('aborted', () => proxy.destroy());
+  req.on('error', () => proxy.destroy());
   req.pipe(proxy);
 }
 
