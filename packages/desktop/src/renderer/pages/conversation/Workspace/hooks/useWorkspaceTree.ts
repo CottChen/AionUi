@@ -21,6 +21,8 @@ interface UseWorkspaceTreeOptions {
   eventPrefix: 'acp' | 'codex' | 'aionrs';
 }
 
+const hasLoadedWorkspaceChildren = (files: IDirOrFile[]) => files.length > 0 && (files[0]?.children?.length ?? 0) > 0;
+
 /**
  * useWorkspaceTree - 合并树状态管理和选择逻辑
  * Merge tree state management and selection logic
@@ -30,19 +32,21 @@ export function useWorkspaceTree({ workspace, conversation_id, eventPrefix }: Us
   // conversations of the same project — or a panel remount while SWR loads —
   // restores the tree and expansion exactly as the user left it.
   const initialSnapshot = getWorkspaceTreeSnapshot(workspace);
+  const usableInitialSnapshot =
+    initialSnapshot && hasLoadedWorkspaceChildren(initialSnapshot.files) ? initialSnapshot : undefined;
 
   // Tree state / 树状态
-  const [files, setFiles] = useState<IDirOrFile[]>(initialSnapshot?.files ?? []);
+  const [files, setFiles] = useState<IDirOrFile[]>(usableInitialSnapshot?.files ?? []);
   const [loading, setLoading] = useState(false);
   const [treeKey, setTreeKey] = useState(Math.random());
-  const [expandedKeys, setExpandedKeys] = useState<string[]>(initialSnapshot?.expandedKeys ?? []);
+  const [expandedKeys, setExpandedKeys] = useState<string[]>(usableInitialSnapshot?.expandedKeys ?? []);
 
   // Selection state / 选中状态
   const [selected, setSelected] = useState<string[]>([]);
 
   // A workspace that already has a cached snapshot is not a "first load" — its
   // tree and expansion come from the cache and must not be reset to first-level.
-  const isFirstLoadRef = useRef(!initialSnapshot);
+  const isFirstLoadRef = useRef(!usableInitialSnapshot);
   const selectedKeysRef = useRef<string[]>([]);
   const selectedNodeRef = useRef<SelectedNodeRef | null>(null);
 
@@ -77,9 +81,10 @@ export function useWorkspaceTree({ workspace, conversation_id, eventPrefix }: Us
     if (hydratedWorkspaceRef.current === workspace) return;
     hydratedWorkspaceRef.current = workspace;
     const snapshot = getWorkspaceTreeSnapshot(workspace);
-    setFiles(snapshot?.files ?? []);
-    setExpandedKeys(snapshot?.expandedKeys ?? []);
-    isFirstLoadRef.current = !snapshot;
+    const usableSnapshot = snapshot && hasLoadedWorkspaceChildren(snapshot.files) ? snapshot : undefined;
+    setFiles(usableSnapshot?.files ?? []);
+    setExpandedKeys(usableSnapshot?.expandedKeys ?? []);
+    isFirstLoadRef.current = !usableSnapshot;
   }, [workspace]);
 
   // Loading time tracker / 加载时间追踪
@@ -171,7 +176,7 @@ export function useWorkspaceTree({ workspace, conversation_id, eventPrefix }: Us
           // flashing empty while the backend is temporarily unable to read the
           // workspace (e.g. concurrent file operations by another agent).
           const isEmpty = res.length === 0 || (res[0]?.children?.length ?? 0) === 0;
-          if (!isFirstLoadRef.current && !searchTerm && isEmpty) {
+          if (!isFirstLoadRef.current && !searchTerm && isEmpty && hasLoadedWorkspaceChildren(filesRef.current)) {
             return res;
           }
 
