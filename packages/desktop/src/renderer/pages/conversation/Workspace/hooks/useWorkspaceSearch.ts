@@ -47,7 +47,7 @@ const collectSearchStats = (nodes: IDirOrFile[]): WorkspaceSearchStats => {
  * and host file selector state (WebUI).
  */
 export function useWorkspaceSearch({ workspace, loadWorkspace }: UseWorkspaceSearchParams) {
-  const [searchText, setSearchText] = useState('');
+  const [searchText, setSearchTextState] = useState('');
   const [showSearch, setShowSearch] = useState(true);
   const [searchScope, setSearchScope] = useState<WorkspaceSearchScope>('workspace');
   const [searchMode, setSearchMode] = useState<WorkspaceSearchMode>('all');
@@ -85,13 +85,31 @@ export function useWorkspaceSearch({ workspace, loadWorkspace }: UseWorkspaceSea
   const runSearch = useCallback(
     (value: string, scope: WorkspaceSearchScope, mode: WorkspaceSearchMode, folderPath = searchFolderPath) => {
       const trimmedValue = value.trim();
+      if (!trimmedValue) {
+        void loadWorkspace(workspace).then(() => {
+          setShowSearch(true);
+          setSearchStats(null);
+        });
+        return;
+      }
+
       const path = scope === 'currentFolder' ? folderPath : workspace;
       void loadWorkspace(path, value, mode).then((files) => {
-        setShowSearch(files.length > 0 && files[0]?.children?.length > 0);
-        setSearchStats(trimmedValue ? collectSearchStats(files) : null);
+        setShowSearch(true);
+        setSearchStats(collectSearchStats(files));
       });
     },
     [loadWorkspace, searchFolderPath, workspace]
+  );
+
+  const setSearchText = useCallback(
+    (value: string) => {
+      setSearchTextState(value);
+      if (!value.trim()) {
+        runSearch('', searchScope, searchMode);
+      }
+    },
+    [runSearch, searchMode, searchScope]
   );
 
   const onSearch = useDebounce(
@@ -123,16 +141,20 @@ export function useWorkspaceSearch({ workspace, loadWorkspace }: UseWorkspaceSea
   );
 
   useEffect(() => {
+    setSearchTextState('');
     setSearchFolderPath(workspace);
     setSearchFolderLabel('');
     setSearchScope('workspace');
     setSearchStats(null);
+    setShowSearch(true);
   }, [workspace]);
 
   const clearSearch = useCallback(() => {
-    setSearchText('');
+    setSearchTextState('');
     setSearchStats(null);
-  }, []);
+    setShowSearch(true);
+    void loadWorkspace(workspace);
+  }, [loadWorkspace, workspace]);
 
   const selectSearchFolder = useCallback(
     (folderPath: string, folderLabel: string) => {

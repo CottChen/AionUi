@@ -146,4 +146,24 @@ describe('WorkspaceSearchBar', () => {
 
     expect(screen.getByText('命中 3 个文件，7 个内容块')).toBeInTheDocument();
   });
+
+  it('keeps the search controls mounted after an empty result clears showSearch', () => {
+    render(<WorkspaceSearchBar {...baseProps} showSearch={false} searchText='' />);
+
+    expect(screen.getByLabelText('搜索文件')).toBeInTheDocument();
+    expect(screen.getByText('整个项目')).toBeInTheDocument();
+    expect(screen.getByText('全部')).toBeInTheDocument();
+  });
+
+  it('does not debounce a search request when the input is cleared', () => {
+    const setSearchText = vi.fn();
+    const onSearch = vi.fn();
+
+    render(<WorkspaceSearchBar {...baseProps} searchText='needle' setSearchText={setSearchText} onSearch={onSearch} />);
+
+    fireEvent.change(screen.getByLabelText('搜索文件'), { target: { value: '' } });
+
+    expect(setSearchText).toHaveBeenCalledWith('');
+    expect(onSearch).not.toHaveBeenCalled();
+  });
 });

@@ -74,4 +74,21 @@ describe('useWorkspaceSearch', () => {
     expect(result.current.searchScope).toBe('currentFolder');
     expect(result.current.searchFolderLabel).toBe('src');
   });
+
+  it('restores the normal workspace tree immediately when search text is cleared', async () => {
+    const loadWorkspace = vi.fn().mockResolvedValue(searchResult);
+    const { result } = renderHook(() => useWorkspaceSearch({ workspace: '/workspace', loadWorkspace }));
+
+    act(() => {
+      result.current.setSearchText('');
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(loadWorkspace).toHaveBeenCalledWith('/workspace');
+    expect(result.current.searchStats).toBeNull();
+    expect(result.current.showSearch).toBe(true);
+  });
 });

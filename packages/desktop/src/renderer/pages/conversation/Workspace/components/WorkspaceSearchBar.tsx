@@ -32,7 +32,6 @@ type WorkspaceSearchBarProps = {
 const WorkspaceSearchBar: React.FC<WorkspaceSearchBarProps> = ({
   t,
   isMobile,
-  showSearch,
   searchText,
   setSearchText,
   onSearch,
@@ -44,8 +43,6 @@ const WorkspaceSearchBar: React.FC<WorkspaceSearchBarProps> = ({
   searchMode,
   setSearchMode,
 }) => {
-  if (!showSearch && !searchText) return null;
-
   const hasSearchStats = Boolean(searchText.trim() && searchStats);
 
   return (
@@ -58,7 +55,9 @@ const WorkspaceSearchBar: React.FC<WorkspaceSearchBarProps> = ({
           value={searchText}
           onChange={(value) => {
             setSearchText(value);
-            onSearch(value);
+            if (value.trim()) {
+              onSearch(value);
+            }
           }}
           allowClear
           prefix={<Search theme='outline' size='14' fill={iconColors.primary} />}
