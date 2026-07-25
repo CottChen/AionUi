@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { joinPath } from '@/common/chat/chatLib';
 import { ipcBridge } from '@/common';
 import LocalFileLink from '@/renderer/components/Markdown/LocalFileLink';
 import { resolveLocalFileLinkReference } from '@/renderer/components/Markdown/markdownUtils';
@@ -119,13 +118,12 @@ const MarkdownImage: React.FC<MarkdownImageProps> = ({ src, alt, baseDir, worksp
         return;
       }
 
-      const normalizedBase = baseDir ? baseDir.replace(/\\/g, '/') : undefined;
       const cleanedSrc = src.replace(/\\/g, '/');
-      const absolutePath = isAbsoluteLocalPath(cleanedSrc)
-        ? cleanedSrc
-        : normalizedBase
-          ? joinPath(normalizedBase, cleanedSrc)
-          : cleanedSrc;
+      const localReference = resolveLocalFileLinkReference(cleanedSrc, undefined, {
+        baseDir,
+        allowedRootDir: workspace,
+      });
+      const absolutePath = localReference?.filePath ?? (isAbsoluteLocalPath(cleanedSrc) ? cleanedSrc : undefined);
 
       if (!absolutePath) {
         setResolvedSrc(src);

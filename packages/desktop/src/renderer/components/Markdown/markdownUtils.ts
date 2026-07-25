@@ -107,6 +107,8 @@ const parseHashLocation = (hash: string): LocalFileLocation | null => {
   };
 };
 
+const isLineLocationLikeHash = (hash: string): boolean => /^#[Ll]/.test(hash);
+
 const splitHashLocation = (href: string): LocalFilePathCandidate => {
   const hashIndex = href.indexOf('#');
   if (hashIndex < 0) return { filePath: href };
@@ -115,7 +117,7 @@ const splitHashLocation = (href: string): LocalFilePathCandidate => {
   if (!hashLocation) {
     return {
       filePath: href.slice(0, hashIndex),
-      hasInvalidHash: true,
+      hasInvalidHash: isLineLocationLikeHash(href.slice(hashIndex)),
     };
   }
 
@@ -191,7 +193,9 @@ const normalizeLocalFileHrefToPath = (
       if (!rawHash) return { filePath: path };
 
       const hashLocation = parseHashLocation(rawHash);
-      return hashLocation ? { filePath: path, hashLocation } : { filePath: path, hasInvalidHash: true };
+      return hashLocation
+        ? { filePath: path, hashLocation }
+        : { filePath: path, hasInvalidHash: isLineLocationLikeHash(rawHash) };
     } catch {
       const stripped = href.replace(/^file:(?:\/\/)?/i, '');
       const candidate = splitHashLocation(stripped);

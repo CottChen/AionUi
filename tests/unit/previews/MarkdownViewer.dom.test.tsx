@@ -364,6 +364,40 @@ describe('MarkdownViewer', () => {
     });
   });
 
+  it('opens workspace-relative markdown links with unsupported hash anchors at the file preview', async () => {
+    const filePath = '/Users/demo/project/documents/library/doc-015eeb9a7eba--左洛复产品资料分享.md';
+    vi.mocked(ipcBridge.fs.getFileMetadata.invoke).mockResolvedValue(fileMetadata(filePath));
+    vi.mocked(ipcBridge.fs.readFile.invoke).mockResolvedValue('# Product\n');
+
+    render(
+      <MarkdownViewer
+        content='[《左洛复产品资料分享》，原文第 1-2 页](../../documents/library/doc-015eeb9a7eba--左洛复产品资料分享.md#page-1)'
+        file_path='/Users/demo/project/sources/A/source.md'
+        workspace='/Users/demo/project'
+      />
+    );
+
+    expect(screen.queryByRole('link', { name: '《左洛复产品资料分享》，原文第 1-2 页' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '《左洛复产品资料分享》，原文第 1-2 页' }));
+
+    await waitFor(() => {
+      expect(previewMocks.openPreview).toHaveBeenCalledWith(
+        '# Product\n',
+        'markdown',
+        expect.objectContaining({
+          file_name: 'doc-015eeb9a7eba--左洛复产品资料分享.md',
+          file_path: filePath,
+          workspace: '/Users/demo/project',
+          language: 'md',
+          targetLine: undefined,
+          targetColumn: undefined,
+        }),
+        { replace: false }
+      );
+    });
+  });
+
   it('opens wiki links in markdown previews and falls back to markdown files by stem', async () => {
     const stemPath = '/Users/demo/project/docs/2020-8fe4e0ee';
     const markdownPath = `${stemPath}.md`;
@@ -468,6 +502,31 @@ describe('MarkdownViewer', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('img', { name: 'image' })).toHaveAttribute('src', 'data:image/jpeg;base64,abc123');
+    });
+    expect(previewMocks.openPreview).not.toHaveBeenCalled();
+  });
+
+  it('renders parent-relative local image markdown inline', async () => {
+    const imagePath = '/Users/demo/project/assets/doc-015eeb9a7eba/page-6-function-guidelines.png';
+    vi.mocked(ipcBridge.fs.getImageBase64.invoke).mockResolvedValue('data:image/png;base64,abc123');
+
+    render(
+      <MarkdownViewer
+        content='![心理社会功能研究、指南汇总与产品总结](../assets/doc-015eeb9a7eba/page-6-function-guidelines.png)'
+        file_path='/Users/demo/project/docs/source.md'
+        workspace='/Users/demo/project'
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('img', { name: '心理社会功能研究、指南汇总与产品总结' })).toHaveAttribute(
+        'src',
+        'data:image/png;base64,abc123'
+      );
+    });
+    expect(ipcBridge.fs.getImageBase64.invoke).toHaveBeenCalledWith({
+      path: imagePath,
+      workspace: '/Users/demo/project',
     });
     expect(previewMocks.openPreview).not.toHaveBeenCalled();
   });

@@ -157,6 +157,23 @@ describe('resolveLocalFileLinkPath', () => {
     expect(resolveLocalFileLinkReference('/Users/demo/file.ts#L10-l20')).toBeNull();
   });
 
+  it('ignores non-line local hash anchors and resolves the file itself', () => {
+    expect(resolveLocalFileLinkReference('/Users/demo/docs/source.md#page-1')).toEqual({
+      filePath: '/Users/demo/docs/source.md',
+      rawReference: '/Users/demo/docs/source.md',
+    });
+
+    expect(
+      resolveLocalFileLinkReference('../../documents/source.md#page-1', undefined, {
+        baseDir: '/Users/demo/project/sources/A',
+        allowedRootDir: '/Users/demo/project',
+      })
+    ).toEqual({
+      filePath: '/Users/demo/project/documents/source.md',
+      rawReference: '/Users/demo/project/documents/source.md',
+    });
+  });
+
   it('resolves workspace-relative links only when a base directory is provided', () => {
     expect(resolveLocalFileLinkReference('docs/foo.ts#L12')).toBeNull();
 
