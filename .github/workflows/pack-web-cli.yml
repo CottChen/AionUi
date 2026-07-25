@@ -29,6 +29,9 @@ on:
 env:
   BUN_INSTALL_REGISTRY: 'https://registry.npmjs.org/'
 
+permissions:
+  contents: write
+
 jobs:
   code-quality:
     name: Code Quality
@@ -77,11 +80,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { platform: darwin, arch: arm64, os: macos-14 }
-          - { platform: darwin, arch: x64, os: macos-14 }
-          - { platform: linux, arch: x64, os: ubuntu-latest }
-          - { platform: linux, arch: arm64, os: ubuntu-24.04-arm }
-          - { platform: win32, arch: x64, os: windows-2022 }
+          - { platform: darwin, arch: x64, os: macos-14, backend_run_id: '30058535484' }
+          - { platform: linux, arch: x64, os: ubuntu-latest, backend_run_id: '30146540259' }
 
     steps:
       - name: Checkout code
@@ -120,8 +120,30 @@ jobs:
         env:
           PACK_PLATFORM: ${{ matrix.platform }}
           PACK_ARCH: ${{ matrix.arch }}
+          AIONUI_BACKEND_RUN_ID: ${{ matrix.backend_run_id }}
+          AIONUI_BACKEND_REPO: CottChen/AionCore
           # Version is pinned in repo-root package.json (aioncoreVersion).
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload web-cli tarball to release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: v2.1.39
+          RELEASE_TARGET: 55264d63230a1b91a3fe3ea8cbabe2ec32b964af
+        run: |
+          set -euo pipefail
+          if ! gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            gh release create "${RELEASE_TAG}" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --target "${RELEASE_TARGET}" \
+              --title "AionUi ${RELEASE_TAG}" \
+              --notes "Fork build for AionUi WebUI darwin-x64 and linux-x64." \
+              --prerelease
+          fi
+          gh release upload "${RELEASE_TAG}" dist-web-cli/*.tar.gz dist-web-cli/*.sha256 \
+            --repo "${GITHUB_REPOSITORY}" \
+            --clobber
 
       - name: Upload tarball artifact
         uses: actions/upload-artifact@v6
