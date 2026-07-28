@@ -40,6 +40,31 @@ on:
         required: false
         type: string
         default: 'iOfficeAI/AionCore'
+      promote_run_id:
+        description: 'Optional completed Manual Build run id to promote instead of building'
+        required: false
+        type: string
+        default: ''
+      promote_artifact_name:
+        description: 'Artifact name from promote_run_id'
+        required: false
+        type: string
+        default: ''
+      release_tag:
+        description: 'Release tag used when promoting an existing run'
+        required: false
+        type: string
+        default: ''
+      release_title:
+        description: 'Release title used when promoting an existing run'
+        required: false
+        type: string
+        default: ''
+      release_prerelease:
+        description: 'Mark the promoted release as a prerelease'
+        required: false
+        type: boolean
+        default: true
 
 env:
   BUN_INSTALL_REGISTRY: 'https://registry.npmjs.org/'
@@ -47,6 +72,7 @@ env:
 jobs:
   prepare-matrix:
     name: Prepare Build Matrix
+    if: inputs.promote_run_id == ''
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -86,6 +112,7 @@ jobs:
           echo "$MATRIX" | python3 -m json.tool
 
   build-pipeline:
+    if: inputs.promote_run_id == ''
     needs: prepare-matrix
     uses: ./.github/workflows/_build-reusable.yml
     with:
@@ -97,3 +124,111 @@ jobs:
       append_commit_hash: true
       upload_installers_only: true
     secrets: inherit
+
+  promote-release:
+    name: Promote Build Artifact to Release
+    if: inputs.promote_run_id != ''
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate promotion inputs and source run
+        id: source
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PROMOTE_RUN_ID: ${{ inputs.promote_run_id }}
+          PROMOTE_ARTIFACT_NAME: ${{ inputs.promote_artifact_name }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          SOURCE_BRANCH: ${{ inputs.branch }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$PROMOTE_ARTIFACT_NAME" || -z "$RELEASE_TAG" ]]; then
+            echo "::error::promote_artifact_name and release_tag are required in promotion mode"
+            exit 1
+          fi
+
+          RUN_JSON=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PROMOTE_RUN_ID}")
+          RUN_CONCLUSION=$(jq -r '.conclusion' <<<"$RUN_JSON")
+          RUN_HEAD_SHA=$(jq -r '.head_sha' <<<"$RUN_JSON")
+          RUN_HEAD_BRANCH=$(jq -r '.head_branch' <<<"$RUN_JSON")
+
+          if [[ "$RUN_CONCLUSION" != "success" ]]; then
+            echo "::error::Source run ${PROMOTE_RUN_ID} conclusion is ${RUN_CONCLUSION}, expected success"
+            exit 1
+          fi
+
+          if [[ "$RUN_HEAD_BRANCH" != "$SOURCE_BRANCH" ]]; then
+            echo "::error::Source run branch is ${RUN_HEAD_BRANCH}, expected ${SOURCE_BRANCH}"
+            exit 1
+          fi
+
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Release ${RELEASE_TAG} already exists"
+            exit 1
+          fi
+
+          echo "head_sha=$RUN_HEAD_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ inputs.promote_artifact_name }}
+          path: release-assets
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.promote_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate release assets and generate checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mapfile -d '' ASSETS < <(
+            find release-assets -maxdepth 1 -type f \
+              \( -name '*.exe' -o -name '*.msi' -o -name '*.dmg' -o -name '*.deb' -o -name '*.zip' -o -name '*.tar.gz' \) \
+              -print0
+          )
+
+          if [[ ${#ASSETS[@]} -eq 0 ]]; then
+            echo "::error::Artifact does not contain a supported release asset"
+            find release-assets -maxdepth 2 -type f -print
+            exit 1
+          fi
+
+          (
+            cd release-assets
+            printf '%s\0' "${ASSETS[@]#release-assets/}" | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+          )
+          cat release-assets/SHA256SUMS.txt
+
+      - name: Write release notes
+        env:
+          SOURCE_RUN_ID: ${{ inputs.promote_run_id }}
+          SOURCE_SHA: ${{ steps.source.outputs.head_sha }}
+        shell: bash
+        run: |
+          cat > release-notes.md <<EOF
+          Manual build promoted from GitHub Actions.
+
+          - Source branch: \`${{ inputs.branch }}\`
+          - Source commit: \`${SOURCE_SHA}\`
+          - Build run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}
+          - Artifact: \`${{ inputs.promote_artifact_name }}\`
+
+          SHA-256 checksums are attached as \`SHA256SUMS.txt\`.
+          EOF
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag }}
+          target_commitish: ${{ steps.source.outputs.head_sha }}
+          name: ${{ inputs.release_title || inputs.release_tag }}
+          body_path: release-notes.md
+          files: release-assets/*
+          draft: false
+          prerelease: ${{ inputs.release_prerelease }}
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
