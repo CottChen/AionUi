@@ -9,6 +9,7 @@ import {
   applyFreshListings,
   buildSearchTree,
   collectExpandedDirs,
+  getTargetFolderPath,
 } from '@/renderer/pages/conversation/Workspace/utils/treeHelpers';
 import { describe, expect, it } from 'vitest';
 
@@ -147,5 +148,32 @@ describe('buildSearchTree', () => {
     const { tree, expandedKeys } = buildSearchTree(flat, '/ws', '   ');
     expect(tree[0].children).toEqual([]);
     expect(expandedKeys).toEqual(['']);
+  });
+});
+
+describe('getTargetFolderPath', () => {
+  const tree = [dir('', [dir('docs', [dir('docs/design')]), file('docs/readme.md')])];
+
+  it('uses the actively selected directory as the upload target', () => {
+    expect(
+      getTargetFolderPath({ relativePath: 'docs/design', fullPath: '/ws/docs/design' }, ['docs'], tree, '/ws')
+    ).toEqual({
+      fullPath: '/ws/docs/design',
+      relativePath: 'docs/design',
+    });
+  });
+
+  it('falls back to the deepest selected directory', () => {
+    expect(getTargetFolderPath(null, ['docs', 'docs/design'], tree, '/ws')).toEqual({
+      fullPath: '/ws/docs/design',
+      relativePath: 'docs/design',
+    });
+  });
+
+  it('falls back to the workspace root when no directory is selected', () => {
+    expect(getTargetFolderPath(null, ['docs/readme.md'], tree, '/ws')).toEqual({
+      fullPath: '/ws',
+      relativePath: null,
+    });
   });
 });
