@@ -26,11 +26,20 @@ async function startMockBackend(
   handler: (req: http.IncomingMessage, res: http.ServerResponse) => void
 ): Promise<{ port: number; close: () => Promise<void> }> {
   const server = http.createServer(handler);
+  const sockets = new Set<net.Socket>();
+  server.on('connection', (socket) => {
+    sockets.add(socket);
+    socket.on('close', () => sockets.delete(socket));
+  });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()));
   const port = (server.address() as AddressInfo).port;
   return {
     port,
-    close: () => new Promise<void>((r) => server.close(() => r())),
+    close: () =>
+      new Promise<void>((resolve) => {
+        for (const socket of sockets) socket.destroy();
+        server.close(() => resolve());
+      }),
   };
 }
 
@@ -272,6 +281,53 @@ describe('static-server', () => {
     await backendRequestSeen;
     socket.destroy();
     await new Promise((resolve) => setTimeout(resolve, 100));
+  });
+
+  it('/api proxy remains available when clients disconnect during streamed responses', async () => {
+    const backend = await startMockBackend((req, res) => {
+      if (req.url === '/api/health') {
+        res.end('ok');
+        return;
+      }
+
+      res.writeHead(200, { 'content-type': 'application/octet-stream' });
+      const chunk = Buffer.alloc(64 * 1024, 0x61);
+      const interval = setInterval(() => {
+        if (res.destroyed) {
+          clearInterval(interval);
+          return;
+        }
+        res.write(chunk);
+      }, 1);
+      res.on('close', () => {
+        clearInterval(interval);
+      });
+    });
+    stopBackend = backend.close;
+    handle = await startStaticServer({ staticDir, backendPort: backend.port, port: 0 });
+    const publicPort = handle.port;
+
+    await Promise.all(
+      Array.from(
+        { length: 8 },
+        () =>
+          new Promise<void>((resolve, reject) => {
+            const socket = net.connect({ host: '127.0.0.1', port: publicPort }, () => {
+              socket.write(`GET /api/stream HTTP/1.1\r\nHost: 127.0.0.1:${publicPort}\r\nConnection: close\r\n\r\n`);
+            });
+            socket.once('data', () => {
+              socket.destroy();
+              resolve();
+            });
+            socket.on('error', reject);
+          })
+      )
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const response = await fetch(`${handle.localUrl}/api/health`);
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('ok');
   });
 
   rawUpgradeIt('/ws WebSocket upgrade is spliced to backend and 101 is relayed', async () => {

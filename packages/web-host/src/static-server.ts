@@ -10,7 +10,13 @@
  * Design: Node native http + serve-handler. No Express. No business routes.
  */
 
-import http, { type IncomingMessage, type OutgoingHttpHeaders, type Server, type ServerResponse } from 'node:http';
+import http, {
+  type ClientRequest,
+  type IncomingMessage,
+  type OutgoingHttpHeaders,
+  type Server,
+  type ServerResponse,
+} from 'node:http';
 import { networkInterfaces } from 'node:os';
 import net, { type Socket } from 'node:net';
 import serveHandler from 'serve-handler';
@@ -49,6 +55,132 @@ function isBenignSocketClosedError(error: unknown): boolean {
   return code === 'ERR_SOCKET_CLOSED' || code === 'ECONNRESET' || code === 'EPIPE' || /socket is closed/i.test(message);
 }
 
+function canWriteResponse(res: ServerResponse): boolean {
+  return !res.destroyed && !res.writableEnded && res.socket !== null && !res.socket.destroyed;
+}
+
+function forwardRequestBody(req: IncomingMessage, proxy: ClientRequest): void {
+  const abort = (): void => {
+    req.pause();
+    proxy.destroy();
+  };
+  const write = (chunk: Buffer): void => {
+    if (proxy.destroyed || proxy.writableEnded) {
+      abort();
+      return;
+    }
+    try {
+      if (!proxy.write(chunk)) {
+        req.pause();
+        proxy.once('drain', () => {
+          if (!proxy.destroyed && !proxy.writableEnded) req.resume();
+        });
+      }
+    } catch (error) {
+      if (!isBenignSocketClosedError(error)) {
+        console.error('[web-host] proxy request write error:', error);
+      }
+      abort();
+    }
+  };
+  const end = (): void => {
+    if (proxy.destroyed || proxy.writableEnded) return;
+    try {
+      proxy.end();
+    } catch (error) {
+      if (!isBenignSocketClosedError(error)) {
+        console.error('[web-host] proxy request end error:', error);
+      }
+      abort();
+    }
+  };
+
+  req.on('data', write);
+  req.once('end', end);
+  req.once('aborted', abort);
+  req.once('error', abort);
+}
+
+function forwardBackendResponse(proxyRes: IncomingMessage, res: ServerResponse): void {
+  const downstreamSocket = res.socket;
+  let settled = false;
+  const cleanup = (): void => {
+    proxyRes.removeListener('data', write);
+    proxyRes.removeListener('end', end);
+    proxyRes.removeListener('error', onUpstreamError);
+    res.removeListener('error', onResponseError);
+    res.removeListener('close', onResponseClose);
+    downstreamSocket?.removeListener('close', abort);
+    downstreamSocket?.removeListener('error', abort);
+  };
+  const abort = (): void => {
+    if (settled) return;
+    settled = true;
+    cleanup();
+    proxyRes.pause();
+    proxyRes.destroy();
+  };
+  const write = (chunk: Buffer): void => {
+    if (!canWriteResponse(res)) {
+      abort();
+      return;
+    }
+    try {
+      if (!res.write(chunk)) {
+        proxyRes.pause();
+        res.once('drain', () => {
+          if (canWriteResponse(res)) proxyRes.resume();
+          else abort();
+        });
+      }
+    } catch (error) {
+      if (!isBenignSocketClosedError(error)) {
+        console.error('[web-host] proxy response write error:', error);
+      }
+      abort();
+    }
+  };
+  const end = (): void => {
+    if (!canWriteResponse(res)) {
+      abort();
+      return;
+    }
+    try {
+      res.end();
+      settled = true;
+      cleanup();
+    } catch (error) {
+      if (!isBenignSocketClosedError(error)) {
+        console.error('[web-host] proxy response end error:', error);
+      }
+      abort();
+    }
+  };
+  const onUpstreamError = (): void => {
+    if (settled) return;
+    settled = true;
+    cleanup();
+    if (!res.destroyed) res.destroy();
+  };
+  const onResponseError = (error: Error): void => {
+    if (!isBenignSocketClosedError(error)) {
+      console.error('[web-host] proxy response socket error:', error);
+    }
+    abort();
+  };
+  const onResponseClose = (): void => {
+    if (!res.writableEnded) abort();
+  };
+
+  proxyRes.on('data', write);
+  proxyRes.once('end', end);
+  proxyRes.once('error', onUpstreamError);
+  res.once('error', onResponseError);
+  res.once('close', onResponseClose);
+  downstreamSocket?.once('close', abort);
+  downstreamSocket?.once('error', abort);
+}
+
 function getLanIP(): string | null {
   const nets = networkInterfaces();
   for (const name of Object.keys(nets)) {
@@ -74,39 +206,38 @@ function forwardToBackend(
     headers: { ...req.headers, host: `127.0.0.1:${backendPort}` },
   };
   const proxy = http.request(options, (proxyRes) => {
-    if (res.destroyed) {
+    if (!canWriteResponse(res)) {
       proxyRes.destroy();
       return;
     }
     const headers = applyOfficeProxyFrameOptions(proxyRes.headers, requestPath, officeProxyFrameOptions);
-    res.writeHead(proxyRes.statusCode ?? 502, headers);
-    proxyRes.on('error', () => {
-      res.destroy();
-    });
-    res.on('error', (error) => {
+    try {
+      res.writeHead(proxyRes.statusCode ?? 502, headers);
+    } catch (error) {
       proxyRes.destroy();
       if (!isBenignSocketClosedError(error)) {
-        console.error('[web-host] proxy response socket error:', error);
+        console.error('[web-host] proxy response header error:', error);
       }
-    });
-    res.on('close', () => {
-      if (!res.writableEnded) {
-        proxyRes.destroy();
-      }
-    });
-    proxyRes.pipe(res);
+      return;
+    }
+    forwardBackendResponse(proxyRes, res);
   });
   proxy.on('error', () => {
-    if (!res.headersSent) {
-      res.writeHead(502, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ error: 'BACKEND_UNREACHABLE' }));
-    } else {
-      res.destroy();
+    if (!canWriteResponse(res)) return;
+    try {
+      if (!res.headersSent) {
+        res.writeHead(502, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ error: 'BACKEND_UNREACHABLE' }));
+      } else {
+        res.destroy();
+      }
+    } catch (error) {
+      if (!isBenignSocketClosedError(error)) {
+        console.error('[web-host] proxy failure response error:', error);
+      }
     }
   });
-  req.on('aborted', () => proxy.destroy());
-  req.on('error', () => proxy.destroy());
-  req.pipe(proxy);
+  forwardRequestBody(req, proxy);
 }
 
 export function normalizeBackendProxyPath(url: string): string {

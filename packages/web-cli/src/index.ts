@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { openBrowserUrl, shouldAutoOpenBrowser } from './browser.js';
 import { ensureAdminPassword } from './ensureAdminPassword.js';
+import { installProcessErrorGuard } from './processErrorGuard.js';
 
 // tarball layout:
 //   aionui-web/
@@ -54,6 +55,14 @@ const DEFAULT_PORT = 25808;
 const RESET_COMMAND = isPackaged ? 'aionui-web resetpass' : 'bun run resetpass';
 
 let currentHandle: WebHostHandle | StaticServerHandle | null = null;
+
+installProcessErrorGuard({
+  eventSource: process,
+  onFatal: (kind, error) => {
+    console.error(`[aionui-web] fatal ${kind}:`, error);
+    process.exit(1);
+  },
+});
 
 function parseArgs(argv: string[]): { command: string; flags: Map<string, string | true> } {
   const [command = 'start', ...rest] = argv;
