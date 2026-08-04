@@ -17,6 +17,7 @@ import { FEEDBACK_MODULES } from '@/common/types/feedbackDiagnostics';
 describe('resolveFeedbackModule', () => {
   it.each([
     ['/conversation/abc-123', 'conversation-session'],
+    ['/agent-sessions/codex/thread-1', 'search-history'],
     ['/team/team-1', 'agent-team'],
     ['/scheduled', 'scheduled-task'],
     ['/scheduled/job-42', 'scheduled-task'],

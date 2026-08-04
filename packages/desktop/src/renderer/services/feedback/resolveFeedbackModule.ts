@@ -18,6 +18,7 @@ import type { FeedbackModuleTag } from '@/common/types/feedbackDiagnostics';
  */
 const ROUTE_MODULE_MAP: ReadonlyArray<readonly [prefix: string, tag: FeedbackModuleTag]> = [
   ['/conversation', 'conversation-session'],
+  ['/agent-sessions', 'search-history'],
   ['/team', 'agent-team'],
   ['/scheduled', 'scheduled-task'],
   ['/assistants', 'assistant-preset'],
