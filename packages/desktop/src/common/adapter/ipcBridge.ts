@@ -87,6 +87,12 @@ import type {
   UpdateDownloadResult,
 } from '../update/updateTypes';
 import type { AgentMetadata } from '@/renderer/utils/model/agentTypes';
+import type {
+  AgentSessionBackend,
+  AgentSessionScope,
+  AgentSessionSnapshot,
+  AgentSessionSummary,
+} from '@/common/types/agent/cliSessionTypes';
 import type { Theme } from '@/common/theme/types';
 import type { ProtocolDetectionRequest, ProtocolDetectionResponse } from '../utils/protocolDetector';
 import {
@@ -918,6 +924,20 @@ export const acpConversation = {
   setConfigOption: httpPut<SetConfigOptionResponse, { conversation_id: string; option_id: string; value: string }>(
     (p) => `/api/conversations/${p.conversation_id}/config-options/${encodeURIComponent(p.option_id)}`,
     (p): SetConfigOptionRequest => ({ value: p.value })
+  ),
+};
+
+export const agentSessions = {
+  list: httpGet<AgentSessionSummary[], { backend: AgentSessionBackend; scope?: AgentSessionScope; limit?: number }>(
+    (params) => {
+      const query = new URLSearchParams({ backend: params.backend });
+      if (params.scope) query.set('scope', params.scope);
+      if (params.limit) query.set('limit', String(params.limit));
+      return `/api/agent-sessions?${query.toString()}`;
+    }
+  ),
+  inspect: httpGet<AgentSessionSnapshot, { backend: AgentSessionBackend; id: string }>(
+    (params) => `/api/agent-sessions/${params.backend}/${encodeURIComponent(params.id)}`
   ),
 };
 
