@@ -78,7 +78,7 @@ configService.initialize().catch((err) => {
 
 // i18n
 import './services/i18n';
-import { registerPwa } from './services/registerPwa';
+import { installPreloadErrorRecovery, registerPwa } from './services/registerPwa';
 
 import { ipcBridge } from '@/common';
 import { repairAllCronJobTimeZonesOnce } from '@renderer/pages/cron/repairCronJobTimeZone';
@@ -389,6 +389,7 @@ const BackendStartupFailureDialog: React.FC<{ failure: BackendStartupFailureInfo
   );
 };
 
+installPreloadErrorRecovery();
 void registerPwa();
 
 const root = createRoot(document.getElementById('root')!);

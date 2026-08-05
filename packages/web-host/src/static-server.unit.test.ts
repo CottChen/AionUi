@@ -83,12 +83,35 @@ describe('static-server', () => {
     expect(await r.text()).toContain('<title>root</title>');
   });
 
+  it('does not serve the SPA fallback for a missing hashed asset', async () => {
+    const backend = await startMockBackend((_req, res) => res.end('nope'));
+    stopBackend = backend.close;
+    handle = await startStaticServer({ staticDir, backendPort: backend.port, port: 0 });
+
+    const r = await fetch(`${handle.localUrl}/assets/removed-settings-chunk.js`);
+
+    expect(r.status).toBe(404);
+    expect(r.headers.get('cache-control')).toBe('no-store');
+    expect(await r.text()).not.toContain('<title>root</title>');
+  });
+
+  it('prevents the browser HTTP cache from retaining the SPA entry point', async () => {
+    const backend = await startMockBackend((_req, res) => res.end('nope'));
+    stopBackend = backend.close;
+    handle = await startStaticServer({ staticDir, backendPort: backend.port, port: 0 });
+
+    const r = await fetch(`${handle.localUrl}/`);
+
+    expect(r.headers.get('cache-control')).toBe('no-cache, no-store, must-revalidate');
+  });
+
   it('static asset /assets/main.js served', async () => {
     const backend = await startMockBackend((_req, res) => res.end('nope'));
     stopBackend = backend.close;
     handle = await startStaticServer({ staticDir, backendPort: backend.port, port: 0 });
     const r = await fetch(`${handle.localUrl}/assets/main.js`);
     expect(r.status).toBe(200);
+    expect(r.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
     expect(await r.text()).toContain('hi');
   });
 

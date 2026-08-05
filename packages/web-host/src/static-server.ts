@@ -17,7 +17,9 @@ import http, {
   type Server,
   type ServerResponse,
 } from 'node:http';
+import { stat } from 'node:fs/promises';
 import { networkInterfaces } from 'node:os';
+import path from 'node:path';
 import net, { type Socket } from 'node:net';
 import serveHandler from 'serve-handler';
 
@@ -432,10 +434,45 @@ export async function startStaticServer(opts: StaticServerOptions): Promise<Stat
         return;
       }
 
+      // Hashed assets must return a real 404 when an open tab still references
+      // a chunk removed by an upgrade. Returning index.html here turns a
+      // recoverable Vite preload error into a misleading MIME failure.
+      const pathname = new URL(req.url, 'http://127.0.0.1').pathname;
+      const isAssetRequest = pathname.startsWith('/assets/');
+
+      if (isAssetRequest) {
+        const assetPath = path.resolve(opts.staticDir, `.${pathname}`);
+        try {
+          const assetStat = await stat(assetPath);
+          if (!assetStat.isFile()) throw new Error('Asset path is not a file');
+        } catch {
+          res.writeHead(404, {
+            'cache-control': 'no-store',
+            'content-type': 'text/plain; charset=utf-8',
+          });
+          res.end('Not found');
+          return;
+        }
+      }
+
       // static files + SPA fallback
       await serveHandler(req, res, {
         public: opts.staticDir,
-        rewrites: [{ source: '**', destination: '/index.html' }],
+        rewrites: isAssetRequest ? [] : [{ source: '**', destination: '/index.html' }],
+        headers: [
+          {
+            source: 'index.html',
+            headers: [{ key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' }],
+          },
+          {
+            source: 'sw.js',
+            headers: [{ key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' }],
+          },
+          {
+            source: 'assets/**',
+            headers: [{ key: 'Cache-Control', value: 'public, max-age=31536000, immutable' }],
+          },
+        ],
       });
     } catch (err) {
       if (!res.headersSent) {

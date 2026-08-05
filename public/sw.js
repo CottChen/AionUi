@@ -1,8 +1,8 @@
-// Bumped from v1: the v1 networkFirst fallback returned OFFLINE_PAGE_URL
-// (index.html) for failed script requests, causing "module script MIME text/html"
-// errors when the server was down or served a different asset hash. The v2
-// activate handler deletes v1, flushing any poisoned cached entries.
-const CACHE_NAME = 'aionui-webui-v2';
+// Bumped from v2 so upgraded WebUI installations flush entry pages that still
+// reference lazy chunks removed from disk. The renderer also handles Vite's
+// preload error and reloads once, while the server now returns a real 404 for
+// missing /assets/* paths.
+const CACHE_NAME = 'aionui-webui-v3';
 const NON_CACHEABLE_PATHS = new Set(['/qr-login']);
 const OFFLINE_PAGE_URL = new URL('./index.html', self.location.href).toString();
 const PRECACHE_URLS = [
