@@ -78,6 +78,7 @@ const renderCard = (
       onDelete={onDelete}
       onToggleEnabled={onToggleEnabled}
       onStartChat={onStartChat}
+      canManageDefinitions
     />
   );
   return { onOpenDetail, onDelete, onToggleEnabled, onStartChat };
@@ -152,5 +153,26 @@ describe('MyAssistantCard', () => {
     const { onDelete } = renderCard(makeAssistant({ id: 'card-1', source: 'user' }));
     fireEvent.click(screen.getByTestId('menu-delete-card-1'));
     expect(onDelete).toHaveBeenCalledWith(expect.objectContaining({ id: 'card-1' }));
+  });
+
+  it('hides definition management actions without permission', () => {
+    const assistant = makeAssistant({ id: 'restricted', source: 'user' });
+    const onOpenDetail = vi.fn();
+    render(
+      <MyAssistantCard
+        assistant={assistant}
+        localeKey='en-US'
+        onOpenDetail={onOpenDetail}
+        onDelete={vi.fn()}
+        onToggleEnabled={vi.fn()}
+        onStartChat={vi.fn()}
+        canManageDefinitions={false}
+      />
+    );
+
+    fireEvent.click(screen.getByTestId('assistant-card-restricted'));
+    expect(onOpenDetail).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('menu-edit-restricted')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('menu-delete-restricted')).not.toBeInTheDocument();
   });
 });

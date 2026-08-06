@@ -34,7 +34,7 @@ type MockIntersectionObserver = IntersectionObserver & {
 vi.mock('@/common', () => ({
   ipcBridge: {
     fs: {
-      readFileBuffer: { invoke: vi.fn() },
+      readContent: { invoke: vi.fn() },
     },
     shell: {
       openFile: { invoke: vi.fn() },
@@ -82,7 +82,7 @@ vi.mock('@arco-design/web-react', () => ({
 describe('PDFViewer', () => {
   beforeEach(() => {
     platformState.isElectron = false;
-    vi.mocked(ipcBridge.fs.readFileBuffer.invoke).mockReset();
+    vi.mocked(ipcBridge.fs.readContent.invoke).mockReset();
     pdfMocks.destroyDocument.mockReset();
     pdfMocks.destroyTask.mockReset();
     pdfMocks.getDocument.mockReset();
@@ -119,7 +119,7 @@ describe('PDFViewer', () => {
 
   it('renders PDF through PDF.js canvases in WebUI mode without webview', async () => {
     vi.stubGlobal('IntersectionObserver', undefined);
-    vi.mocked(ipcBridge.fs.readFileBuffer.invoke).mockResolvedValue('JVBERi0xLjQ=');
+    vi.mocked(ipcBridge.fs.readContent.invoke).mockResolvedValue('JVBERi0xLjQ=');
 
     const { container } = render(<PDFViewer file_path='/workspace/report.pdf' workspace='/workspace' />);
 
@@ -129,9 +129,9 @@ describe('PDFViewer', () => {
     await waitFor(() => {
       expect(screen.getAllByTestId('pdf-page-canvas')).toHaveLength(2);
     });
-    expect(ipcBridge.fs.readFileBuffer.invoke).toHaveBeenCalledWith({
-      path: '/workspace/report.pdf',
-      workspace: '/workspace',
+    expect(ipcBridge.fs.readContent.invoke).toHaveBeenCalledWith({
+      file: { kind: 'local', path: '/workspace/report.pdf' },
+      encoding: 'base64',
     });
     expect(container.querySelector('webview')).toBeNull();
     expect(container.querySelector('iframe')).toBeNull();
@@ -157,7 +157,7 @@ describe('PDFViewer', () => {
       observers.push(this);
     });
     vi.stubGlobal('IntersectionObserver', MockedIntersectionObserver);
-    vi.mocked(ipcBridge.fs.readFileBuffer.invoke).mockResolvedValue('JVBERi0xLjQ=');
+    vi.mocked(ipcBridge.fs.readContent.invoke).mockResolvedValue('JVBERi0xLjQ=');
 
     render(<PDFViewer file_path='/workspace/report.pdf' workspace='/workspace' />);
 
@@ -190,9 +190,12 @@ describe('PDFViewer', () => {
     render(<PDFViewer file_path='/workspace/report.pdf' workspace='/workspace' />);
 
     await waitFor(() => {
-      expect(screen.getByTestId('webview-host')).toHaveAttribute('data-url', 'file:///workspace/report.pdf');
+      expect(screen.getByTestId('webview-host')).toHaveAttribute(
+        'data-url',
+        '/api/fs/stream?kind=local&path=%2Fworkspace%2Freport.pdf'
+      );
     });
-    expect(ipcBridge.fs.readFileBuffer.invoke).not.toHaveBeenCalled();
+    expect(ipcBridge.fs.readContent.invoke).not.toHaveBeenCalled();
     expect(pdfMocks.getDocument).not.toHaveBeenCalled();
   });
 });

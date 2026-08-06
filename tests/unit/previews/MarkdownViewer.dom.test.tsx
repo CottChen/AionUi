@@ -264,8 +264,8 @@ describe('MarkdownViewer', () => {
 
   it('opens workspace-relative file links from markdown previews in a new preview tab', async () => {
     const filePath = '/Users/demo/project/src/foo.ts';
-    vi.mocked(ipcBridge.fs.getFileMetadata.invoke).mockResolvedValue(fileMetadata(filePath));
-    vi.mocked(ipcBridge.fs.readFile.invoke).mockResolvedValue('export const foo = 1;\n');
+    vi.mocked(ipcBridge.fs.getContentMetadata.invoke).mockResolvedValue(fileMetadata(filePath));
+    vi.mocked(ipcBridge.fs.readContent.invoke).mockResolvedValue('export const foo = 1;\n');
 
     render(
       <MarkdownViewer
@@ -296,16 +296,15 @@ describe('MarkdownViewer', () => {
       );
     });
 
-    expect(ipcBridge.fs.getFileMetadata.invoke).toHaveBeenCalledWith({
-      path: filePath,
-      workspace: '/Users/demo/project',
+    expect(ipcBridge.fs.getContentMetadata.invoke).toHaveBeenCalledWith({
+      file: { kind: 'local', path: filePath },
     });
   });
 
   it('opens parent-relative file links from markdown previews when workspace metadata is missing', async () => {
     const filePath = '/Users/demo/project/src/foo.ts';
-    vi.mocked(ipcBridge.fs.getFileMetadata.invoke).mockResolvedValue(fileMetadata(filePath));
-    vi.mocked(ipcBridge.fs.readFile.invoke).mockResolvedValue('export const foo = 1;\n');
+    vi.mocked(ipcBridge.fs.getContentMetadata.invoke).mockResolvedValue(fileMetadata(filePath));
+    vi.mocked(ipcBridge.fs.readContent.invoke).mockResolvedValue('export const foo = 1;\n');
 
     render(<MarkdownViewer content='[foo](../src/foo.ts#L12)' file_path='/Users/demo/project/docs/README.md' />);
 
@@ -330,16 +329,15 @@ describe('MarkdownViewer', () => {
       );
     });
 
-    expect(ipcBridge.fs.getFileMetadata.invoke).toHaveBeenCalledWith({
-      path: filePath,
-      workspace: undefined,
+    expect(ipcBridge.fs.getContentMetadata.invoke).toHaveBeenCalledWith({
+      file: { kind: 'local', path: filePath },
     });
   });
 
   it('opens workspace-relative markdown links without line numbers from markdown previews', async () => {
     const filePath = '/Users/demo/project/docs/architecture/ARCHITECTURE.md';
-    vi.mocked(ipcBridge.fs.getFileMetadata.invoke).mockResolvedValue(fileMetadata(filePath));
-    vi.mocked(ipcBridge.fs.readFile.invoke).mockResolvedValue('# Architecture\n');
+    vi.mocked(ipcBridge.fs.getContentMetadata.invoke).mockResolvedValue(fileMetadata(filePath));
+    vi.mocked(ipcBridge.fs.readContent.invoke).mockResolvedValue('# Architecture\n');
 
     render(
       <MarkdownViewer
@@ -373,8 +371,8 @@ describe('MarkdownViewer', () => {
 
   it('opens workspace-relative markdown links with unsupported hash anchors at the file preview', async () => {
     const filePath = '/Users/demo/project/documents/library/doc-015eeb9a7eba--左洛复产品资料分享.md';
-    vi.mocked(ipcBridge.fs.getFileMetadata.invoke).mockResolvedValue(fileMetadata(filePath));
-    vi.mocked(ipcBridge.fs.readFile.invoke).mockResolvedValue('# Product\n');
+    vi.mocked(ipcBridge.fs.getContentMetadata.invoke).mockResolvedValue(fileMetadata(filePath));
+    vi.mocked(ipcBridge.fs.readContent.invoke).mockResolvedValue('# Product\n');
 
     render(
       <MarkdownViewer
@@ -408,10 +406,10 @@ describe('MarkdownViewer', () => {
   it('opens wiki links in markdown previews and falls back to markdown files by stem', async () => {
     const stemPath = '/Users/demo/project/docs/2020-8fe4e0ee';
     const markdownPath = `${stemPath}.md`;
-    vi.mocked(ipcBridge.fs.getFileMetadata.invoke)
-      .mockResolvedValueOnce(null)
+    vi.mocked(ipcBridge.fs.getContentMetadata.invoke)
+      .mockRejectedValueOnce(new Error('not found'))
       .mockResolvedValueOnce(fileMetadata(markdownPath));
-    vi.mocked(ipcBridge.fs.readFile.invoke).mockResolvedValue('# Guide\n');
+    vi.mocked(ipcBridge.fs.readContent.invoke).mockResolvedValue('# Guide\n');
 
     render(
       <MarkdownViewer
@@ -438,13 +436,11 @@ describe('MarkdownViewer', () => {
         { replace: false }
       );
     });
-    expect(ipcBridge.fs.getFileMetadata.invoke).toHaveBeenNthCalledWith(1, {
-      path: stemPath,
-      workspace: '/Users/demo/project',
+    expect(ipcBridge.fs.getContentMetadata.invoke).toHaveBeenNthCalledWith(1, {
+      file: { kind: 'local', path: stemPath },
     });
-    expect(ipcBridge.fs.getFileMetadata.invoke).toHaveBeenNthCalledWith(2, {
-      path: markdownPath,
-      workspace: '/Users/demo/project',
+    expect(ipcBridge.fs.getContentMetadata.invoke).toHaveBeenNthCalledWith(2, {
+      file: { kind: 'local', path: markdownPath },
     });
   });
 
@@ -468,7 +464,7 @@ describe('MarkdownViewer', () => {
       revealEvents.push((event as CustomEvent<{ workspace?: string; filePath: string }>).detail);
     };
     window.addEventListener(WORKSPACE_REVEAL_FILE_EVENT, handleReveal);
-    vi.mocked(ipcBridge.fs.getFileMetadata.invoke).mockResolvedValue({
+    vi.mocked(ipcBridge.fs.getContentMetadata.invoke).mockResolvedValue({
       ...fileMetadata(directoryPath),
       type: 'inode/directory',
       is_directory: true,

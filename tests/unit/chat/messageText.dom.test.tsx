@@ -636,7 +636,7 @@ describe('MessageText attachment paths', () => {
     };
     window.addEventListener(WORKSPACE_REVEAL_FILE_EVENT, handleReveal);
     localFileLinkMocks.payload = { path: directoryPath, reference: undefined };
-    vi.mocked(ipcBridge.fs.getFileMetadata.invoke).mockResolvedValue({
+    vi.mocked(ipcBridge.fs.getContentMetadata.invoke).mockResolvedValue({
       ...fileMetadata(directoryPath),
       type: 'inode/directory',
       is_directory: true,
