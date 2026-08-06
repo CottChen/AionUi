@@ -45,6 +45,9 @@
     "switchSuccess": "Düşünme düzeyi değiştirildi",
     "switchFailed": "Düşünme düzeyi değiştirilemedi"
   },
+  "warmup": {
+    "clickToWake": "Bu üyeyi uyandırmak için tıklayın"
+  },
   "cliSessions": {
     "title": "CLI Sessions",
     "description": "Inspect locally persisted Codex, OpenCode, and Pi sessions by thread or session ID.",

@@ -1,4 +1,5 @@
 import { ipcBridge } from '@/common';
+import type { ChatFileRef } from '@/common/types/chatFile';
 import type { IConversationMcpStatus, IProvider, TChatConversation, TProviderWithModel } from '@/common/config/storage';
 import { Message, Spin } from '@arco-design/web-react';
 import React, { Suspense, useCallback } from 'react';
@@ -6,7 +7,12 @@ import { useTranslation } from 'react-i18next';
 import { useAionrsModelSelection } from '@/renderer/pages/conversation/platforms/aionrs/useAionrsModelSelection';
 import { isLegacyReadOnlyConversationType } from '@/renderer/pages/conversation/utils/conversationRuntime';
 import type { ITeamRunAck } from '@/common/types/team/teamTypes';
-import { buildTeamSendRuntime, buildTeamStopHandler, buildTeamWorkStatusText } from './teamSendRuntime';
+import {
+  buildTeamRetryStartHandler,
+  buildTeamSendRuntime,
+  buildTeamStopHandler,
+  buildTeamWorkStatusText,
+} from './teamSendRuntime';
 import type { TeamRunViewState } from '../hooks/useTeamRunView';
 import TeamChatEmptyState from './TeamChatEmptyState';
 import { usePresetAssistantInfo } from '@/renderer/hooks/agent/usePresetAssistantInfo';
@@ -20,7 +26,7 @@ const LegacyReadOnlyConversation = React.lazy(
 
 // Narrow to Aionrs conversations so model field is always available
 type AionrsConversation = Extract<TChatConversation, { type: 'aionrs' }>;
-type TeamSendOverride = (payload: { input: string; files: string[] }) => Promise<void>;
+type TeamSendOverride = (payload: { input: string; files: ChatFileRef[] }) => Promise<void>;
 type TeamConversationCapabilitySnapshot = {
   skills?: string[];
   mcp_servers?: string[];
@@ -181,26 +187,32 @@ const TeamChatView: React.FC<TeamChatViewProps> = ({
         removing: () => t('team.work.removing', { defaultValue: 'Removing this assistant…' }),
         sessionStopped: () => t('team.work.sessionStopped', { defaultValue: 'The team session has stopped.' }),
       });
+  const isRuntimeFailed = slot_id ? slotWork?.blocked_reason === 'runtime_failed' : false;
   const teamRuntime =
     team_id && slot_id
-      ? buildTeamSendRuntime({
-          slot_id,
-          runView: teamRunView,
-          statusText: teamWorkStatusText,
-          sessionStopped: teamRunView.sessionStopped,
-          onStop: buildTeamStopHandler({
-            team_id,
+      ? {
+          ...buildTeamSendRuntime({
             slot_id,
             runView: teamRunView,
-            pauseSlotWork: (params) => ipcBridge.team.pauseSlotWork.invoke(params),
-            onStopFailed: () => {
-              Message.error(
-                t('team.stopAgentFailed', { defaultValue: 'Failed to stop this agent. Please try again.' })
-              );
-            },
-            onRunStateStale,
+            statusText: teamWorkStatusText,
+            sessionStopped: teamRunView.sessionStopped,
+            onStop: buildTeamStopHandler({
+              team_id,
+              slot_id,
+              runView: teamRunView,
+              pauseSlotWork: (params) => ipcBridge.team.pauseSlotWork.invoke(params),
+              onStopFailed: () => {
+                Message.error(
+                  t('team.stopAgentFailed', { defaultValue: 'Failed to stop this agent. Please try again.' })
+                );
+              },
+              onRunStateStale,
+            }),
           }),
-        })
+          // Only offer "retry start" when this slot's runtime failed; it triggers
+          // a directed per-member attach (not warmupSession/ensure_session).
+          onRetryStart: isRuntimeFailed ? buildTeamRetryStartHandler({ team_id, slot_id }) : undefined,
+        }
       : undefined;
   const content = (() => {
     if (isLegacyReadOnlyConversationType(conversation.type)) {
@@ -209,6 +221,11 @@ const TeamChatView: React.FC<TeamChatViewProps> = ({
 
     switch (conversation.type) {
       case 'acp':
+      // Antigravity renders through the ACP chat surface here for the same
+      // reason it does outside a team: same extra payload, same event stream,
+      // same send box. Without this it falls to `default: null` and the
+      // teammate shows neither a message list nor an input box.
+      case 'antigravity':
         return (
           <AcpChat
             key={conversation.id}

@@ -5,6 +5,7 @@
  */
 
 import { ipcBridge } from '@/common';
+import { localFileRef, type ChatFileRef } from '@/common/types/chatFile';
 import { buildPdfSrc } from '../../previewUrls';
 import { usePreviewToolbarExtras } from '../../context/PreviewToolbarExtrasContext';
 import WebviewHost from '@/renderer/components/media/WebviewHost';
@@ -15,8 +16,14 @@ import { useTranslation } from 'react-i18next';
 
 interface PDFPreviewProps {
   /**
-   * PDF file path (absolute path on disk)
-   * PDF 文件路径（磁盘上的绝对路径）
+   * ChatFileRef identity — rendered via the backend stream URL (no absolute path
+   * exposed to the renderer). Project ref for explorer files, Local otherwise.
+   * PDF 的 ChatFileRef 身份 —— 通过后端 stream URL 渲染（不向渲染进程暴露绝对路径）
+   */
+  fileRef?: ChatFileRef;
+  /**
+   * PDF file path (absolute path on disk) — retained for "open in system app".
+   * PDF 文件路径（磁盘上的绝对路径），仅用于"用系统应用打开"
    */
   file_path?: string;
   /**
@@ -289,7 +296,7 @@ const PdfCanvasDocument: React.FC<{
   );
 };
 
-const PDFPreview: React.FC<PDFPreviewProps> = ({ file_path, content, hideToolbar = false, workspace }) => {
+const PDFPreview: React.FC<PDFPreviewProps> = ({ fileRef, file_path, content, hideToolbar = false }) => {
   const { t } = useTranslation();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -299,6 +306,10 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ file_path, content, hideToolbar
   const toolbarExtrasContext = usePreviewToolbarExtras();
   const usePortalToolbar = Boolean(toolbarExtrasContext) && !hideToolbar;
   const isElectron = useMemo(() => isElectronDesktop(), []);
+  const resolvedFileRef = useMemo(
+    () => fileRef ?? (file_path ? localFileRef(file_path) : undefined),
+    [fileRef, file_path]
+  );
   const showOpenInSystemButton = isElectron && Boolean(file_path);
 
   const handleOpenInSystem = useCallback(async () => {
@@ -324,7 +335,7 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ file_path, content, hideToolbar
       setElectronPdfSrc('');
       setBrowserPdfSource(null);
 
-      if (!file_path && !content) {
+      if (!resolvedFileRef && !content) {
         setError(t('preview.pdf.pathMissing'));
         setLoading(false);
         return;
@@ -346,13 +357,14 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ file_path, content, hideToolbar
       }
 
       if (isElectron) {
-        setElectronPdfSrc(buildPdfSrc(file_path, content));
+        setElectronPdfSrc(buildPdfSrc(resolvedFileRef, content));
         setLoading(false);
         return;
       }
 
       try {
-        const base64 = await ipcBridge.fs.readFileBuffer.invoke({ path: file_path!, workspace });
+        if (!resolvedFileRef) throw new Error(t('preview.pdf.pathMissing'));
+        const base64 = await ipcBridge.fs.readContent.invoke({ file: resolvedFileRef, encoding: 'base64' });
         if (!base64) {
           throw new Error(t('preview.pdf.pathMissing'));
         }
@@ -374,7 +386,7 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ file_path, content, hideToolbar
     return () => {
       cancelled = true;
     };
-  }, [content, file_path, isElectron, t, workspace]);
+  }, [content, isElectron, resolvedFileRef, t]);
 
   const handleElectronPdfError = useCallback(
     (_errorCode: number, errorDescription: string) => {
@@ -462,7 +474,7 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ file_path, content, hideToolbar
       )}
       {/* PDF 内容区域 / PDF content area */}
       <div className='flex-1 overflow-hidden bg-bg-1'>
-        {isElectron && file_path ? (
+        {isElectron && electronPdfSrc ? (
           <WebviewHost
             key={electronPdfSrc}
             url={electronPdfSrc}

@@ -45,6 +45,9 @@
     "switchSuccess": "سطح تفکر تغییر کرد",
     "switchFailed": "تغییر سطح تفکر ناموفق بود"
   },
+  "warmup": {
+    "clickToWake": "برای بیدار کردن این عضو کلیک کنید"
+  },
   "cliSessions": {
     "title": "CLI Sessions",
     "description": "Inspect locally persisted Codex, OpenCode, and Pi sessions by thread or session ID.",

@@ -45,6 +45,9 @@
     "switchSuccess": "Уровень рассуждений переключен",
     "switchFailed": "Не удалось переключить уровень рассуждений"
   },
+  "warmup": {
+    "clickToWake": "Нажмите, чтобы разбудить этого участника"
+  },
   "cliSessions": {
     "title": "CLI Sessions",
     "description": "Inspect locally persisted Codex, OpenCode, and Pi sessions by thread or session ID.",

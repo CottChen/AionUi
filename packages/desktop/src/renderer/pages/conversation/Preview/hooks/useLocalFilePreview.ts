@@ -5,6 +5,7 @@
  */
 
 import { ipcBridge } from '@/common';
+import { localFileRef } from '@/common/types/chatFile';
 import type { PreviewContentType } from '@/common/types/office/preview';
 import type { LocalFileLinkReference } from '@/renderer/components/Markdown/markdownUtils';
 import {
@@ -53,18 +54,25 @@ export const useLocalFilePreview = (workspace?: string, options?: UseLocalFilePr
       const targetRevealKey =
         reference?.line == null ? undefined : `${file_path}:${reference.line}:${reference.column ?? ''}:${Date.now()}`;
       let previewFilePath = file_path;
+      let fileRef = localFileRef(previewFilePath);
       let content = '';
       let isLargeTextTruncated = false;
 
       try {
-        let metadata = await ipcBridge.fs.getFileMetadata.invoke({ path: previewFilePath, workspace });
-        if (metadata == null) {
+        let metadata;
+        try {
+          metadata = await ipcBridge.fs.getContentMetadata.invoke({ file: fileRef });
+        } catch {
           const fallbackPath = getMarkdownFallbackPath(previewFilePath);
           if (fallbackPath) {
-            const fallbackMetadata = await ipcBridge.fs.getFileMetadata.invoke({ path: fallbackPath, workspace });
-            if (fallbackMetadata != null) {
+            const fallbackRef = localFileRef(fallbackPath);
+            try {
+              const fallbackMetadata = await ipcBridge.fs.getContentMetadata.invoke({ file: fallbackRef });
               previewFilePath = fallbackPath;
+              fileRef = fallbackRef;
               metadata = fallbackMetadata;
+            } catch {
+              // Preserve the original missing-file error path below.
             }
           }
         }
@@ -78,13 +86,9 @@ export const useLocalFilePreview = (workspace?: string, options?: UseLocalFilePr
         const fileName = getFileNameFromPath(previewFilePath);
         const contentType = getContentTypeByExtension(fileName);
         if (contentType === 'image') {
-          const imageContent = await ipcBridge.fs.getImageBase64.invoke({ path: previewFilePath, workspace });
-          if (imageContent == null) throw null;
-          content = imageContent;
+          content = await ipcBridge.fs.readContent.invoke({ file: fileRef, encoding: 'dataurl' });
         } else if (shouldReadPreviewContent(contentType)) {
-          const textContent = await ipcBridge.fs.readFile.invoke({ path: previewFilePath, workspace });
-          if (textContent == null) throw null;
-          content = textContent;
+          content = await ipcBridge.fs.readContent.invoke({ file: fileRef, encoding: 'utf8' });
 
           if (contentType === 'code' && content.length > LARGE_TEXT_PREVIEW_THRESHOLD) {
             content = content.slice(0, LARGE_TEXT_PREVIEW_MAX_LENGTH);
@@ -98,6 +102,7 @@ export const useLocalFilePreview = (workspace?: string, options?: UseLocalFilePr
           {
             title: fileName,
             file_name: fileName,
+            fileRef,
             file_path: previewFilePath,
             workspace,
             language: getPreviewLanguage(fileName),
@@ -118,6 +123,7 @@ export const useLocalFilePreview = (workspace?: string, options?: UseLocalFilePr
           {
             title: fileName,
             file_name: fileName,
+            fileRef,
             file_path,
             workspace,
             language: getPreviewLanguage(fileName),

@@ -45,6 +45,9 @@
     "switchSuccess": "Рівень міркування змінено",
     "switchFailed": "Не вдалося змінити рівень міркування"
   },
+  "warmup": {
+    "clickToWake": "Натисніть, щоб розбудити цього учасника"
+  },
   "cliSessions": {
     "title": "CLI Sessions",
     "description": "Inspect locally persisted Codex, OpenCode, and Pi sessions by thread or session ID.",

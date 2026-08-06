@@ -43,6 +43,9 @@
     "switchSuccess": "Niveau de réflexion changé",
     "switchFailed": "Échec du changement de niveau de réflexion"
   },
+  "warmup": {
+    "clickToWake": "Cliquez pour réveiller ce membre"
+  },
   "cliSessions": {
     "title": "CLI Sessions",
     "description": "Inspect locally persisted Codex, OpenCode, and Pi sessions by thread or session ID.",

@@ -45,6 +45,9 @@
     "switchSuccess": "Nível de raciocínio alterado",
     "switchFailed": "Falha ao alterar o nível de raciocínio"
   },
+  "warmup": {
+    "clickToWake": "Clique para ativar este membro"
+  },
   "cliSessions": {
     "title": "CLI Sessions",
     "description": "Inspect locally persisted Codex, OpenCode, and Pi sessions by thread or session ID.",

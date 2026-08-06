@@ -45,6 +45,9 @@
     "switchSuccess": "Nivel de razonamiento cambiado",
     "switchFailed": "Error al cambiar el nivel de razonamiento"
   },
+  "warmup": {
+    "clickToWake": "Haz clic para activar este miembro"
+  },
   "cliSessions": {
     "title": "CLI Sessions",
     "description": "Inspect locally persisted Codex, OpenCode, and Pi sessions by thread or session ID.",

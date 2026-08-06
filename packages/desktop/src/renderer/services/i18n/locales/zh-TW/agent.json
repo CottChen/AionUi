@@ -45,6 +45,9 @@
     "switchSuccess": "思考強度切換成功",
     "switchFailed": "思考強度切換失敗"
   },
+  "warmup": {
+    "clickToWake": "點擊喚醒該成員"
+  },
   "cliSessions": {
     "title": "CLI 會話",
     "description": "依 thread ID 或 session ID 查看本機儲存的 Codex、OpenCode 和 Pi 會話執行詳情。",

@@ -140,6 +140,15 @@
     "startFailed": "Falha ao iniciar a visualização do PPT",
     "installHint": "Instale o OfficeCLI pela página oficial de releases iOfficeAI/OfficeCLI"
   },
+  "browser": {
+    "newTab": "Nova aba",
+    "addressPlaceholder": "Digite uma URL ou pesquise",
+    "agentActiveTooltip": "O agente está operando esta aba",
+    "tabLimitReached": "Limite de abas atingido ({{count}}). A aba mais antiga foi reutilizada.",
+    "agentFirstUseTitle": "O agente está usando o navegador interno",
+    "agentFirstUseContent": "Ele pode abrir páginas, clicar e ler conteúdo neste painel. Seu login é preservado.",
+    "agentFirstUseAction": "Abrir configurações"
+  },
   "revealInWorkspace": "Revelar no painel de arquivos",
   "frontmatterMetadata": "Metadados"
 }

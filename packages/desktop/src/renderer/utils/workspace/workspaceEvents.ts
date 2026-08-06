@@ -27,9 +27,12 @@ export interface WorkspaceRevealFileDetail {
   filePath: string;
 }
 
-export function dispatchWorkspaceToggleEvent() {
-  if (typeof window === 'undefined') return;
-  window.dispatchEvent(new CustomEvent(WORKSPACE_TOGGLE_EVENT));
+/** Dispatch a workspace toggle request and report whether an enabled workspace handled it. */
+export function dispatchWorkspaceToggleEvent(): boolean {
+  if (typeof window === 'undefined') return false;
+  const event = new CustomEvent(WORKSPACE_TOGGLE_EVENT, { cancelable: true });
+  window.dispatchEvent(event);
+  return event.defaultPrevented;
 }
 
 export function dispatchWorkspaceStateEvent(collapsed: boolean) {

@@ -60,13 +60,16 @@ vi.mock('@/renderer/components/chat/SendBox', () => ({
     onSend,
     onChange,
     rightTools,
+    sendButtonPrefix,
   }: {
     onSend: (message: string) => Promise<void>;
     onChange?: (value: string) => void;
     rightTools?: React.ReactNode;
+    sendButtonPrefix?: React.ReactNode;
   }) => (
     <div>
       {rightTools}
+      {sendButtonPrefix}
       <button type='button' onClick={() => onChange?.('hello')}>
         change
       </button>
@@ -196,7 +199,8 @@ vi.mock('@/renderer/utils/file/fileSelection', () => ({
   mergeFileSelectionItems: vi.fn(),
 }));
 vi.mock('@/renderer/utils/file/messageFiles', () => ({
-  buildDisplayMessage: (input: string) => input,
+  collectChatFileRefs: () => [],
+  splitChatFileRefs: () => ({ uploadFiles: [], atPath: [] }),
 }));
 vi.mock('@/renderer/pages/conversation/platforms/acp/useAcpInitialMessage', () => ({
   useAcpInitialMessage: vi.fn(),
@@ -207,6 +211,7 @@ vi.mock('@arco-design/web-react', () => ({
     error: vi.fn(),
   },
   Tag: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+  Popover: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
 }));
 
 const makeMessageState = (): UseAcpMessageReturn => ({
@@ -274,6 +279,43 @@ describe('AcpSendBox', () => {
     });
   });
 
+  it('shows a progress ring with a window size, a hollow ring without one, and nothing without usage', () => {
+    const { container, rerender } = render(
+      <AcpSendBox
+        conversation_id='conv-1'
+        backend='gemini'
+        workspacePath='/tmp/workspace'
+        messageState={{ ...makeMessageState(), tokenUsage: { total_tokens: 500_000 }, context_limit: 1_000_000 }}
+      />
+    );
+    expect(container.querySelector('.context-usage-indicator')).not.toBeNull();
+    expect(container.querySelectorAll('.context-usage-indicator circle')).toHaveLength(2);
+
+    // Usage without an agent-reported denominator renders a hollow ring
+    // (track circle only) — the count is real, but a percentage against a
+    // made-up window size would lie.
+    rerender(
+      <AcpSendBox
+        conversation_id='conv-1'
+        backend='gemini'
+        workspacePath='/tmp/workspace'
+        messageState={{ ...makeMessageState(), tokenUsage: { total_tokens: 500_000 }, context_limit: 0 }}
+      />
+    );
+    expect(container.querySelector('.context-usage-indicator')).not.toBeNull();
+    expect(container.querySelectorAll('.context-usage-indicator circle')).toHaveLength(1);
+
+    rerender(
+      <AcpSendBox
+        conversation_id='conv-1'
+        backend='gemini'
+        workspacePath='/tmp/workspace'
+        messageState={makeMessageState()}
+      />
+    );
+    expect(container.querySelector('.context-usage-indicator')).toBeNull();
+  });
+
   it('suppresses internal error cards and loading reset for active-turn busy conflicts', async () => {
     sendMessageInvokeMock.mockRejectedValue(
       new BackendHttpError({
@@ -325,7 +367,9 @@ describe('AcpSendBox', () => {
     expect(wrapper?.className).not.toContain('max-w-800px');
   });
 
-  it('uses the full available width in team mode', () => {
+  it('uses the same container-responsive width in team mode', () => {
+    // The send box shares one width class with standalone mode; the container query
+    // decides whether gutters appear, so a narrow team column still fills its width.
     useTeamPermissionMock.mockReturnValue({
       isTeamMode: true,
       isLeaderAgent: true,
@@ -345,8 +389,7 @@ describe('AcpSendBox', () => {
     );
 
     const wrapper = screen.getByRole('button', { name: 'send' }).parentElement?.parentElement;
-    expect(wrapper?.className).toContain('w-full');
-    expect(wrapper?.className).toContain('max-w-full');
+    expect(wrapper?.className).toContain('chat-surface-fluid');
     expect(wrapper?.className).not.toContain('w-[calc(100%-24px)]');
     expect(wrapper?.className).not.toContain('md:w-[calc(100%-clamp(80px,10vw,240px))]');
   });

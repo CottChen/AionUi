@@ -45,6 +45,9 @@
     "switchSuccess": "Denk-Stufe gewechselt",
     "switchFailed": "Wechsel der Denk-Stufe fehlgeschlagen"
   },
+  "warmup": {
+    "clickToWake": "Klicken, um dieses Mitglied zu aktivieren"
+  },
   "cliSessions": {
     "title": "CLI Sessions",
     "description": "Inspect locally persisted Codex, OpenCode, and Pi sessions by thread or session ID.",

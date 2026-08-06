@@ -45,6 +45,9 @@
     "switchSuccess": "Thinking level switched",
     "switchFailed": "Failed to switch thinking level"
   },
+  "warmup": {
+    "clickToWake": "Click to wake this member"
+  },
   "cliSessions": {
     "title": "CLI Sessions",
     "description": "Inspect locally persisted Codex, OpenCode, and Pi sessions by thread or session ID.",

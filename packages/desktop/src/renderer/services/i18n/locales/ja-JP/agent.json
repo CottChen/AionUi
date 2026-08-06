@@ -45,6 +45,9 @@
     "switchSuccess": "思考レベルを切り替えました",
     "switchFailed": "思考レベルの切り替えに失敗しました"
   },
+  "warmup": {
+    "clickToWake": "クリックしてこのメンバーを起動"
+  },
   "cliSessions": {
     "title": "CLI Sessions",
     "description": "Inspect locally persisted Codex, OpenCode, and Pi sessions by thread or session ID.",

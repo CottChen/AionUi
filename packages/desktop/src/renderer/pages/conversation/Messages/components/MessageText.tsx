@@ -21,6 +21,9 @@ import HorizontalFileList from '@renderer/components/media/HorizontalFileList';
 import MarkdownView from '@renderer/components/Markdown';
 import { stripThinkTags, hasThinkTags } from '@renderer/utils/chat/thinkTagFilter';
 import { stripSkillSuggest, hasSkillSuggest } from '@renderer/utils/chat/skillSuggestParser';
+import { isForkEnabled } from '@/common/chat/forkConversation';
+import { useForkConversation } from '@/renderer/hooks/chat/useForkConversation';
+import ForkBranchIcon from '@renderer/components/base/ForkBranchIcon';
 
 /**
  * Format a timestamp for message display.
@@ -149,7 +152,16 @@ const MessageText: React.FC<{
   showCopyButton?: boolean;
   showTimestamp?: boolean;
   ratingContext?: MessageRatingContext;
-}> = ({ message, showCopyButton = true, showTimestamp = true, ratingContext }) => {
+  isLastMessage?: boolean;
+  hasForkAnchor?: boolean;
+}> = ({
+  message,
+  showCopyButton = true,
+  showTimestamp = true,
+  ratingContext,
+  isLastMessage = false,
+  hasForkAnchor = false,
+}) => {
   const logos = useAgentLogos();
   // Filter think tags from content before rendering
   // 在渲染前过滤 think 标签
@@ -179,6 +191,7 @@ const MessageText: React.FC<{
   const { data, json } = useFormatContent(text);
   const shouldRenderPlainText = isUserMessage;
   const conversationContext = useConversationContextSafe();
+  const forkConversation = useForkConversation(conversationContext?.conversation_id);
   const handleLocalFileLink = useLocalFilePreview(conversationContext?.workspace);
   const resolvedFiles = useMemo(
     () => files.map((file_path) => resolveMessageFilePath(file_path, conversationContext?.workspace)),
@@ -217,6 +230,26 @@ const MessageText: React.FC<{
       />
     </Tooltip>
   );
+
+  // Fork entry point: only when the agent declares the capability, and only on
+  // messages the backend can actually fork at (any message for at_turn/codex,
+  // the last message otherwise) — see `isForkEnabled`.
+  const showForkButton = isForkEnabled(conversationContext?.forkCapability, {
+    isLastMessage,
+    hasTurnAnchor: hasForkAnchor,
+  });
+  const forkButton = showForkButton ? (
+    <Tooltip content={t('messages.fork.action')}>
+      <div
+        className='p-4px rd-4px cursor-pointer hover:bg-3 transition-colors opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto'
+        onClick={() => void forkConversation(message.msg_id ?? message.id)}
+        style={{ lineHeight: 0 }}
+        data-testid='message-fork-button'
+      >
+        <ForkBranchIcon size={16} fill={iconColors.secondary} />
+      </div>
+    </Tooltip>
+  ) : null;
 
   const cronMeta = message.content.cronMeta;
   const senderName = message.content.senderName;
@@ -279,7 +312,7 @@ const MessageText: React.FC<{
         >
           {/* JSON 内容使用折叠组件 Use CollapsibleContent for JSON content */}
           {shouldRenderPlainText ? (
-            <div className='whitespace-pre-wrap break-words' data-testid='message-text-content'>
+            <div className='whitespace-pre-wrap [overflow-wrap:anywhere]' data-testid='message-text-content'>
               {text}
             </div>
           ) : json ? (
@@ -307,7 +340,7 @@ const MessageText: React.FC<{
         {/* Desktop keeps hover-revealed metadata; touch/no-hover devices show it via CSS.
             For AI replies split across several text messages, only the last text
             of the turn shows the copy button; user messages always do. */}
-        {(showCopyButton || showTimestamp || ratingContext) && (
+        {(showCopyButton || showTimestamp || ratingContext || forkButton) && (
           <div
             className={classNames('h-32px flex items-center mt-4px gap-8px', {
               'flex-row-reverse': isUserMessage,
@@ -315,6 +348,7 @@ const MessageText: React.FC<{
           >
             {showCopyButton && copyButton}
             {ratingContext && <MessageRatingActions answerMessageId={message.id} context={ratingContext} />}
+            {forkButton}
             {showTimestamp && message.created_at && (
               <span className='message-meta-time text-12px text-t-secondary opacity-0 group-hover:opacity-100 transition-opacity select-none'>
                 {formatMessageTime(message.created_at)}
