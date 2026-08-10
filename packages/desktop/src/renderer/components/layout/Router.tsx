@@ -4,6 +4,7 @@ import AppLoader from '@renderer/components/layout/AppLoader';
 import { useAuth } from '@renderer/hooks/context/AuthContext';
 import { TEAM_MODE_ENABLED } from '@/common/config/constants';
 import { isElectronDesktop } from '@/renderer/utils/platform';
+import { canAccessCliSessions } from '@/renderer/pages/agentSessions/access';
 const Conversation = React.lazy(() => import('@renderer/pages/conversation'));
 const Guid = React.lazy(() => import('@renderer/pages/guid'));
 const AgentSettings = React.lazy(() => import('@renderer/pages/settings/AgentSettings'));
@@ -61,6 +62,16 @@ const AdminSettingsRoute: React.FC<{ children: React.ReactNode }> = ({ children 
 
   if (!canEditGlobalSettings) {
     return <Navigate to='/settings/appearance' replace />;
+  }
+
+  return <>{children}</>;
+};
+
+const AdminAgentSessionsRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
+
+  if (!canAccessCliSessions(isElectronDesktop(), user?.isAdmin)) {
+    return <Navigate to='/guid' replace />;
   }
 
   return <>{children}</>;
@@ -161,9 +172,18 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
           <Route path='/test/components' element={withRouteFallback(ComponentsShowcase)} />
           <Route path='/scheduled' element={withRouteFallback(ScheduledTasksPage)} />
           <Route path='/scheduled/:job_id' element={withRouteFallback(TaskDetailPage)} />
-          <Route path='/agent-sessions' element={withRouteFallback(AgentSessionsPage)} />
-          <Route path='/agent-sessions/:backend' element={withRouteFallback(AgentSessionsPage)} />
-          <Route path='/agent-sessions/:backend/:sessionId' element={withRouteFallback(AgentSessionsPage)} />
+          <Route
+            path='/agent-sessions'
+            element={<AdminAgentSessionsRoute>{withRouteFallback(AgentSessionsPage)}</AdminAgentSessionsRoute>}
+          />
+          <Route
+            path='/agent-sessions/:backend'
+            element={<AdminAgentSessionsRoute>{withRouteFallback(AgentSessionsPage)}</AdminAgentSessionsRoute>}
+          />
+          <Route
+            path='/agent-sessions/:backend/:sessionId'
+            element={<AdminAgentSessionsRoute>{withRouteFallback(AgentSessionsPage)}</AdminAgentSessionsRoute>}
+          />
         </Route>
         <Route path='*' element={<Navigate to={status === 'authenticated' ? '/guid' : '/login'} replace />} />
       </Routes>

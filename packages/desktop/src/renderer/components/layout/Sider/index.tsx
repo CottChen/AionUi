@@ -15,6 +15,7 @@ import {
   SiderToolbar,
 } from './SiderNav';
 import { isElectronDesktop } from '@/renderer/utils/platform';
+import { canAccessCliSessions } from '@/renderer/pages/agentSessions/access';
 import SiderFooter from './SiderFooter';
 import TeamSiderSection from './TeamSiderSection';
 import siderStyles from './Sider.module.css';
@@ -40,6 +41,7 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
   const [isBatchMode, setIsBatchMode] = useState(false);
   const isSettings = pathname.startsWith('/settings');
   const canEditGlobalSettings = isElectronDesktop() || user?.isAdmin === true;
+  const showAgentSessions = canAccessCliSessions(isElectronDesktop(), user?.isAdmin);
   const lastNonSettingsPathRef = useRef('/guid');
   const showLogout =
     typeof window !== 'undefined' && !(window as { electronAPI?: unknown }).electronAPI && status === 'authenticated';
@@ -211,13 +213,15 @@ const Sider: React.FC<SiderProps> = ({ onSessionClick, collapsed = false }) => {
               siderTooltipProps={siderTooltipProps}
               onClick={handleAssistantClick}
             />
-            <SiderAgentSessionsEntry
-              isMobile={isMobile}
-              isActive={pathname.startsWith('/agent-sessions')}
-              collapsed={collapsed}
-              siderTooltipProps={siderTooltipProps}
-              onClick={handleAgentSessionsClick}
-            />
+            {showAgentSessions && (
+              <SiderAgentSessionsEntry
+                isMobile={isMobile}
+                isActive={pathname.startsWith('/agent-sessions')}
+                collapsed={collapsed}
+                siderTooltipProps={siderTooltipProps}
+                onClick={handleAgentSessionsClick}
+              />
+            )}
             {/* Scheduled tasks nav entry - fixed above scroll */}
             <SiderScheduledEntry
               isMobile={isMobile}
