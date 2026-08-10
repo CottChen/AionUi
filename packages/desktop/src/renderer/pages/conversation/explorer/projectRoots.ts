@@ -33,6 +33,7 @@ const basename = (displayPath: string): string => {
 export const entryToRootRef = (entry: ProjectEntryDto): RootRef => ({
   pe_id: entry.pe_id,
   title: entry.display_name?.trim() || basename(entry.display_path) || entry.pe_id,
+  displayPath: entry.display_path,
   role: entry.role,
   runtimeStatus: entry.runtime_status,
 });

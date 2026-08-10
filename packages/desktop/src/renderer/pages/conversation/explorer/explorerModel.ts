@@ -258,6 +258,8 @@ export type TreeNode = {
 export type RootRef = {
   pe_id: string;
   title: string;
+  /** Human-facing absolute root path, used only as an HTTP fallback when WS fs is unavailable. */
+  displayPath?: string;
   /** Role — drives pin/immutability (workspace) vs removability (attached). */
   role?: RootRole;
   /** Folder availability — projected onto the root node for status display. */

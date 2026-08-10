@@ -23,6 +23,7 @@ vi.mock('@/renderer/pages/conversation/Preview', () => ({ usePreviewContext: () 
 const fsRead = vi.fn();
 vi.mock('@/renderer/pages/conversation/explorer/monitorTransport', () => ({
   initExplorerRuntime: () => ({ request: (m: string, p: unknown) => fsRead(m, p) }),
+  updateProjectRootFallbackPaths: vi.fn(),
 }));
 
 const emit = vi.fn();
@@ -203,7 +204,7 @@ describe('ExplorerContainer attach/remove', () => {
     await waitFor(() => expect(Message.error).toHaveBeenCalledWith('conversation.explorer.attachFailed'));
   });
 
-  it('opens a selected file in preview via /content by ChatFileRef (pe_id + relative_path, no absolute path)', async () => {
+  it('opens a selected file by Project ref and keeps display path context for markdown links', async () => {
     renderIt();
     await screen.findByTestId('roots');
     fireEvent.click(screen.getByTestId('do-open'));
@@ -221,6 +222,8 @@ describe('ExplorerContainer attach/remove', () => {
     expect(type).toBe('markdown'); // readme.md → markdown
     // Carries the Project ref so preview I/O addresses the file by pe identity.
     expect(metadata.fileRef).toEqual({ kind: 'project', pe_id: 'peA', relative_path: 'docs/readme.md' });
+    expect(metadata.file_path).toBe('/x/docs/readme.md');
+    expect(metadata.workspace).toBe('/x');
   });
 
   it('removes an attached folder and revalidates the tree', async () => {

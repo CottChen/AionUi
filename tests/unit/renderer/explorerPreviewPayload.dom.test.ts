@@ -7,8 +7,9 @@
 // Coverage for the Explorer file-open payload builder. Every explorer file maps
 // to a Project ChatFileRef: text/image read content over /api/fs/content
 // (utf8/dataurl); pdf/office read no content and resolve no absolute path (pdf
-// renders from the stream URL, office resolves the ref server-side). No WS
-// fs/resolve, no file_path/workspace exposed.
+// renders from the stream URL, office resolves the ref server-side). When the
+// project root display path is available, it is carried only as viewer context
+// for Markdown relative links/images.
 
 import { describe, expect, it, vi } from 'vitest';
 
@@ -27,7 +28,7 @@ vi.mock('@/renderer/pages/conversation/explorer/monitorTransport', () => ({ init
 import { buildExplorerPreviewPayload } from '@/renderer/pages/conversation/explorer/ExplorerContainer';
 
 describe('buildExplorerPreviewPayload', () => {
-  it('image: reads dataurl content over /content, carries a Project ref, no file_path', async () => {
+  it('image: reads dataurl content over /content and carries a Project ref', async () => {
     h.readContent.mockReset().mockResolvedValue('data:image/png;base64,QUJD');
     const out = await buildExplorerPreviewPayload('peA', 'pics/logo.png');
 
@@ -72,6 +73,24 @@ describe('buildExplorerPreviewPayload', () => {
     expect(out.content).toBe('# hello');
     expect(out.metadata.fileRef).toEqual({ kind: 'project', pe_id: 'peA', relative_path: 'notes/readme.md' });
     expect(out.metadata.editable).toBe(false); // markdown is non-editable in preview
+  });
+
+  it('adds display path context so project markdown links resolve as local previews', async () => {
+    h.readContent.mockReset().mockResolvedValue('# hello');
+    const out = await buildExplorerPreviewPayload('peA', 'notes/readme.md', '/Users/demo/project');
+
+    expect(out.metadata.fileRef).toEqual({ kind: 'project', pe_id: 'peA', relative_path: 'notes/readme.md' });
+    expect(out.metadata.file_path).toBe('/Users/demo/project/notes/readme.md');
+    expect(out.metadata.workspace).toBe('/Users/demo/project');
+  });
+
+  it('joins Windows display paths without changing the project relative-path identity', async () => {
+    h.readContent.mockReset().mockResolvedValue('# hello');
+    const out = await buildExplorerPreviewPayload('peA', 'docs/readme.md', 'C:\\Users\\demo\\project');
+
+    expect(out.metadata.fileRef).toEqual({ kind: 'project', pe_id: 'peA', relative_path: 'docs/readme.md' });
+    expect(out.metadata.file_path).toBe('C:\\Users\\demo\\project\\docs\\readme.md');
+    expect(out.metadata.workspace).toBe('C:\\Users\\demo\\project');
   });
 
   it('code: reads utf8 and stays editable (editable undefined)', async () => {

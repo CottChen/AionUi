@@ -11,9 +11,10 @@
  * end-to-end integration against a running aioncore backend.
  */
 
+import { ipcBridge } from '@/common';
 import { wsEmitter, wsSend } from '@/common/adapter/httpBridge';
 
-import type { DirRef, Entry } from './explorerModel';
+import type { DirRef, Entry, RootRef } from './explorerModel';
 import type { SubscribeResult } from './explorerStore';
 import { applyMonitorNotification, configureExplorerStore, onReconnect } from './explorerStore';
 import type { MonitorTransport } from './monitorClient';
@@ -27,6 +28,46 @@ import {
 
 const FS_EVENT = 'fs';
 const RECONNECT_EVENT = 'realtime.reconnected';
+const SUBSCRIBE_TIMEOUT_MS = 5000;
+
+const rootFallbackPaths = new Map<string, string>();
+
+const delayReject = (ms: number): Promise<never> =>
+  new Promise((_, reject) => {
+    window.setTimeout(() => reject(new Error(`fs monitor request timed out after ${ms}ms`)), ms);
+  });
+
+const withTimeout = <T,>(promise: Promise<T>, ms: number): Promise<T> => Promise.race([promise, delayReject(ms)]);
+
+const joinDisplayPath = (root: string, relativePath: string): string => {
+  if (!relativePath) return root;
+  const sep = root.includes('\\') ? '\\' : '/';
+  const suffix = relativePath.split('/').filter(Boolean).join(sep);
+  return root.endsWith('/') || root.endsWith('\\') ? `${root}${suffix}` : `${root}${sep}${suffix}`;
+};
+
+const fallbackSubscribe = async (refs: DirRef[]): Promise<SubscribeResult> => {
+  const snapshots = await Promise.all(
+    refs.map(async (ref) => {
+      const root = rootFallbackPaths.get(ref.pe_id);
+      if (!root) throw new Error(`missing fallback path for ${ref.pe_id}`);
+      const dir = joinDisplayPath(root, ref.relative_path);
+      const items = await ipcBridge.fs.getFilesByDir.invoke({ root, dir });
+      return {
+        target: ref,
+        entries: items.map((item) => ({ name: item.name, kind: item.isDir ? 'dir' : 'file' }) satisfies Entry),
+      };
+    })
+  );
+  return { snapshots };
+};
+
+export function updateProjectRootFallbackPaths(roots: RootRef[]): void {
+  rootFallbackPaths.clear();
+  for (const root of roots) {
+    if (root.displayPath) rootFallbackPaths.set(root.pe_id, root.displayPath);
+  }
+}
 
 /** Transport over the WS singleton: `fs` event族 in, `wsSend('fs', …)` out. */
 export function createWsMonitorTransport(): MonitorTransport {
@@ -73,8 +114,16 @@ export function initExplorerRuntime(): MonitorClient {
 
   configureExplorerStore({
     subscribe: async (refs: DirRef[]): Promise<SubscribeResult> => {
-      const result = (await monitor.request('fs/subscribe', { targets: refs })) as MonitorRequestResult;
-      return { snapshots: result.snapshots };
+      try {
+        const result = (await withTimeout(
+          monitor.request('fs/subscribe', { targets: refs }),
+          SUBSCRIBE_TIMEOUT_MS
+        )) as MonitorRequestResult;
+        return { snapshots: result.snapshots };
+      } catch (err) {
+        console.warn('[monitor] fs/subscribe failed; falling back to /api/fs/dir', err);
+        return fallbackSubscribe(refs);
+      }
     },
     unsubscribe: (refs: DirRef[]): void => {
       monitor.notify('fs/unsubscribe', { targets: refs });

@@ -43,7 +43,7 @@ import type { FileOrFolderItem } from '@/renderer/utils/file/fileTypes';
 
 import { ExplorerPanel } from './ExplorerPanel';
 import { buildRemoveRequest, buildRenameRequest, parentRel, peKey, type RenameRequest } from './explorerModel';
-import { initExplorerRuntime } from './monitorTransport';
+import { initExplorerRuntime, updateProjectRootFallbackPaths } from './monitorTransport';
 import { toRootRefs } from './projectRoots';
 import { reveal, select } from './explorerStore';
 import { useCurrentConversation } from './currentConversationStore';
@@ -70,28 +70,41 @@ export type ExplorerPreviewPayload = {
     title: string;
     file_name: string;
     // Project ChatFileRef identity — the sole identity for an explorer-opened
-    // file. Preview I/O addresses it by pe id + relative path (content over
-    // /api/fs/content, pdf over /api/fs/stream, office via officecli resolve),
-    // so the renderer never sees an absolute path.
+    // file. Preview I/O addresses it by pe id + relative path; file_path/workspace
+    // are optional viewer context for Markdown relative links/images.
     fileRef: ChatFileRef;
+    file_path?: string;
+    workspace?: string;
     language: string;
     editable?: boolean;
   };
 };
 
-// The Explorer tree knows `{pe_id, relative_path}`, mapped straight to a Project
-// ChatFileRef. Text/image read their content eagerly over `/api/fs/content`
-// (utf8 / dataurl — the backend prepends the image data-URL prefix); pdf and
-// office carry no content (pdf renders from the stream URL, office resolves the
-// ref server-side for its watch). No absolute path is ever exposed — the old WS
-// path-resolve patch is gone.
+const joinDisplayPath = (rootDisplayPath: string | undefined, relativePath: string): string | undefined => {
+  if (!rootDisplayPath) return undefined;
+  const separator = rootDisplayPath.includes('\\') && !rootDisplayPath.includes('/') ? '\\' : '/';
+  const root = rootDisplayPath.replace(/[\\/]+$/, '');
+  const child = relativePath
+    .split('/')
+    .filter((segment) => segment.length > 0)
+    .join(separator);
+  return child ? `${root}${separator}${child}` : root;
+};
+
+// The Explorer tree opens files by `{pe_id, relative_path}` as the terminal
+// identity. Text/image read content over `/api/fs/content`; pdf/office render
+// from the Project ref. When a project root exposes a display path, we also carry
+// it as Markdown context so relative links and images can resolve against the
+// current file directory without replacing the Project ChatFileRef identity.
 export const buildExplorerPreviewPayload = async (
   peId: string,
-  relativePath: string
+  relativePath: string,
+  rootDisplayPath?: string
 ): Promise<ExplorerPreviewPayload> => {
   const name = relativePath.split('/').pop() || relativePath;
   const contentType = getContentTypeByExtension(name);
   const fileRef = projectFileRef(peId, relativePath);
+  const filePath = joinDisplayPath(rootDisplayPath, relativePath);
 
   let content = '';
   if (contentType === 'image') {
@@ -110,6 +123,8 @@ export const buildExplorerPreviewPayload = async (
       title: name,
       file_name: name,
       fileRef,
+      file_path: filePath,
+      workspace: rootDisplayPath,
       language: name.split('.').pop() || '',
       editable: contentType === 'markdown' || contentType === 'image' ? false : undefined,
     },
@@ -149,7 +164,8 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
   // can stay open at once.
   const handleOpenFile = async (peId: string, relativePath: string): Promise<void> => {
     try {
-      const { content, contentType, metadata } = await buildExplorerPreviewPayload(peId, relativePath);
+      const rootDisplayPath = roots.find((root) => root.pe_id === peId)?.displayPath;
+      const { content, contentType, metadata } = await buildExplorerPreviewPayload(peId, relativePath, rootDisplayPath);
       openPreview(content, contentType, metadata);
     } catch (e) {
       Message.error(t(previewErrorToI18nKey(classifyPreviewError(e))));
@@ -326,6 +342,7 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
   if (isLoading && !data) return <Spin loading />;
 
   const roots = data ? toRootRefs(data) : [];
+  updateProjectRootFallbackPaths(roots);
   // Search roots = the project's pe roots (each folder root, rel=''). fs/search
   // spans all bound folders; the front-end ranks the merged hit stream.
   const searchRoots = roots.map((root) => ({ pe_id: root.pe_id, relative_path: '' }));
