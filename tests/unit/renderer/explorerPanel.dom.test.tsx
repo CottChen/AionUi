@@ -25,6 +25,8 @@ import type { MonitorPort } from '@/renderer/pages/conversation/explorer/explore
 import {
   applyMonitorNotification,
   configureExplorerStore,
+  getExplorerInternalsForTest,
+  onReconnect,
   resetExplorerStoreForTest,
   select,
   setExpandedKeys,
@@ -52,6 +54,30 @@ beforeEach(() => {
 afterEach(() => cleanup());
 
 describe('ExplorerPanel arco expand roundtrip', () => {
+  it('shows a subscribe error, rolls back reported dirs, and reloads on reconnect', async () => {
+    configureExplorerStore({
+      subscribe: vi.fn().mockRejectedValue(new Error('monitor transport not connected')),
+      unsubscribe: () => {},
+    });
+    render(<ExplorerPanel projectId='p1' roots={[{ pe_id: 'pe1', title: 'app', role: 'workspace' }]} />);
+
+    await act(async () => {
+      await flush();
+    });
+
+    expect(screen.getByText('conversation.explorer.loadFailed')).toBeInTheDocument();
+    expect(getExplorerInternalsForTest().current).toEqual([]);
+
+    configureExplorerStore(makePort({ [peKey('pe1', '')]: [file('a.ts')] }));
+    await act(async () => {
+      onReconnect();
+      await flush();
+    });
+
+    expect(await screen.findByText('a.ts')).toBeInTheDocument();
+    expect(screen.queryByText('conversation.explorer.loadFailed')).toBeNull();
+  });
+
   it('renders a directory as a non-leaf expandable node (loadMore regression) and expands it via the controlled expandedKeys roundtrip', async () => {
     // NOTE: arco's internal switcher-click wiring is not reproducible under jsdom
     // (fireEvent does not reach it); that click→onExpand path is verified live via

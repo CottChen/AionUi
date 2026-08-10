@@ -647,10 +647,12 @@
     "imported": "已导入 {{count}} 个文件",
     "importPartialFailed": "已复制 {{copied}} 个，{{failed}} 个失败（重名或不支持）",
     "importFailed": "导入文件失败",
+    "loadFailed": "目录加载失败：{{error}}",
     "search": {
       "placeholder": "按文件名搜索",
       "searching": "搜索中…",
       "empty": "没有匹配的文件",
+      "failed": "搜索失败：{{error}}",
       "limitReached": "仅显示前 {{count}} 项 — 请缩小范围"
     }
   }

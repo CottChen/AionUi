@@ -647,10 +647,12 @@
     "imported": "Imported {{count}} file(s)",
     "importPartialFailed": "{{copied}} copied, {{failed}} failed (name conflicts or unsupported)",
     "importFailed": "Failed to import files",
+    "loadFailed": "Failed to load directory: {{error}}",
     "search": {
       "placeholder": "Search files by name",
       "searching": "Searching…",
       "empty": "No files match",
+      "failed": "Search failed: {{error}}",
       "limitReached": "Showing first {{count}} — refine to narrow"
     }
   }

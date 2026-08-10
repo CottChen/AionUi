@@ -85,7 +85,7 @@ describe('SearchPanel', () => {
     type('btn');
     expect(hooks.runSearch).toHaveBeenCalledWith('btn', {
       roots: [{ pe_id: 'pe1', relative_path: '' }],
-      mode: 'all',
+      mode: 'name',
     });
     type('');
     expect(hooks.cancel).toHaveBeenCalled();
@@ -122,7 +122,7 @@ describe('SearchPanel', () => {
     );
 
     expect(screen.getByText('conversation.workspace.searchScope.selectedFolder')).toBeTruthy();
-    expect(hooks.runSearch).toHaveBeenCalledWith('button', { roots: [folderTarget.ref], mode: 'all' });
+    expect(hooks.runSearch).toHaveBeenCalledWith('button', { roots: [folderTarget.ref], mode: 'name' });
   });
 
   it('clicking a result row reveals it (not preview)', () => {
@@ -195,6 +195,13 @@ describe('SearchPanel', () => {
     );
     type('a');
     expect(screen.getByText('conversation.explorer.search.limitReached')).toBeTruthy();
+  });
+
+  it('shows a visible error when panel search fails', () => {
+    setView({ hits: [], status: 'error', error: 'search transport closed' });
+    renderPanel();
+    type('btn');
+    expect(screen.getByText('conversation.explorer.search.failed')).toBeTruthy();
   });
 
   it('shows content previews and content match statistics', () => {

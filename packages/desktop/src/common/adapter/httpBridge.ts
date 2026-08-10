@@ -422,9 +422,7 @@ function ensureWs(): void {
     const isReconnect = wsHasOpened;
     wsHasOpened = true;
     wsReconnectAttempt = 0;
-    if (isReconnect) {
-      dispatchWsEvent(REALTIME_RECONNECTED_EVENT, { timestamp: Date.now() });
-    }
+    dispatchWsEvent(REALTIME_RECONNECTED_EVENT, { timestamp: Date.now(), initial: !isReconnect });
   });
 
   current.addEventListener('close', (e) => {

@@ -12,7 +12,7 @@
  * a right-click "Remove from project" action; the workspace root is immutable.
  */
 
-import { Dropdown, Menu, Tree } from '@arco-design/web-react';
+import { Alert, Dropdown, Menu, Tree } from '@arco-design/web-react';
 import { isElectronDesktop } from '@/renderer/utils/platform';
 import type { TreeProps } from '@arco-design/web-react';
 import { Caution } from '@icon-park/react';
@@ -315,6 +315,14 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
 
   return (
     <div className='h-full' tabIndex={-1} ref={containerRef} {...containerProps}>
+      {view.error && (
+        <Alert
+          type='warning'
+          showIcon
+          className='mx-12px mb-8px'
+          content={t('conversation.explorer.loadFailed', { error: view.error })}
+        />
+      )}
       {/* `workspace-tree` opts into the full-row VSCode-style hover + selected
           backgrounds in arco-override.css (selected = --color-fill-3), so a
           revealed/selected node has a clearly visible highlight. */}

@@ -67,7 +67,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
   const [scope, setScope] = useState<SearchScope>('workspace');
-  const [mode, setMode] = useState<SearchMode>('all');
+  const [mode, setMode] = useState<SearchMode>('name');
   const effectiveRoots = useMemo(
     () => (scope === 'folder' && folderTarget ? [folderTarget.ref] : roots),
     [folderTarget, roots, scope]
@@ -137,6 +137,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   const rows = owned ? view.hits : []; // non-owner: show nothing (the other skin owns the stream)
   const showSearching = owned && view.status === 'searching' && rows.length === 0;
   const showEmpty = owned && view.status === 'done' && rows.length === 0;
+  const showError = owned && view.status === 'error';
   const contentBlockCount = rows.reduce((sum, hit) => sum + (hit.content_match_count ?? 0), 0);
 
   return (
@@ -218,6 +219,11 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
           )}
           {showEmpty && (
             <div className='px-8px py-6px text-t-secondary text-13px'>{t('conversation.explorer.search.empty')}</div>
+          )}
+          {showError && (
+            <div className='px-8px py-6px text-t-secondary text-13px'>
+              {t('conversation.explorer.search.failed', { error: view.error })}
+            </div>
           )}
           {owned && view.status === 'done' && rows.length > 0 && (
             <div className='px-8px pb-4px text-t-tertiary text-11px'>

@@ -47,6 +47,7 @@ export type ExplorerView = {
   projectId: string | null;
   treeData: TreeNode[];
   selected: PeKey | null;
+  error?: string;
   /** Expanded dir keys — drives arco Tree's controlled `expandedKeys` so the
    *  visual expand state stays in sync with the store (which owns subscriptions). */
   expanded: PeKey[];
@@ -66,6 +67,7 @@ let cache: FactCache = new Map();
 let expanded = new Set<PeKey>();
 let selected: PeKey | null = null;
 let current = new Set<PeKey>();
+let error: string | undefined;
 
 let snapshot: ExplorerView = { projectId: null, treeData: [], selected: null, expanded: [] };
 let reconcileScheduled = false;
@@ -110,7 +112,7 @@ const persistUi = (): void => {
 // ── snapshot + notify ────────────────────────────────────────────────────────
 
 const rebuildSnapshot = (): void => {
-  snapshot = { projectId, treeData: buildTreeData(cache, expanded, roots), selected, expanded: [...expanded] };
+  snapshot = { projectId, treeData: buildTreeData(cache, expanded, roots), selected, expanded: [...expanded], error };
 };
 
 const commit = (): void => {
@@ -129,6 +131,7 @@ const runReconcile = (): void => {
     port.unsubscribe(toRemove.map(keyToRef));
   }
   if (toAdd.length > 0) {
+    const adding = new Set(toAdd);
     port
       .subscribe(toAdd.map(keyToRef))
       .then((result) => {
@@ -142,11 +145,18 @@ const runReconcile = (): void => {
           cache = applySnapshot(cache, key, snap.entries);
           changed = true;
         }
+        if (error) {
+          error = undefined;
+          changed = true;
+        }
         if (changed) commit();
       })
-      .catch(() => {
-        // Offline / reconnect: current already advanced; the reconnect path
-        // resets current and re-declares, so no gap is left behind.
+      .catch((err: unknown) => {
+        // A subscribe can race the initial WebSocket open. Roll back those
+        // optimistic entries so the initial/reconnect declaration retries them.
+        current = new Set([...current].filter((key) => !adding.has(key)));
+        error = err instanceof Error ? err.message : String(err);
+        commit();
       });
   }
 };
@@ -265,6 +275,7 @@ export const openProject = (id: string, projectRoots: RootRef[]): void => {
   roots = projectRoots;
   cache = new Map();
   current = new Set();
+  error = undefined;
   // Restore UI state, but prune any keys whose pe_id is no longer a root of this
   // project (e.g. a folder was removed, or a pe was swapped out). Otherwise stale
   // localStorage entries would re-expand/re-subscribe an orphaned pe that isn't
@@ -324,6 +335,7 @@ export const select = (key: PeKey | null): void => {
 /** Reconnect: drop the reported set and re-declare the full want set. */
 export const onReconnect = (): void => {
   current = new Set();
+  error = undefined;
   scheduleReconcile();
 };
 
@@ -356,6 +368,7 @@ export const resetExplorerStoreForTest = (): void => {
   expanded = new Set();
   selected = null;
   current = new Set();
+  error = undefined;
   reconcileScheduled = false;
   snapshot = { projectId: null, treeData: [], selected: null, expanded: [] };
   listeners.clear();
