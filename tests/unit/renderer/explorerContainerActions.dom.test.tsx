@@ -14,6 +14,9 @@ import type { ProjectDetailDto, ProjectEntryDto } from '@/common/types/project';
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (k: string) => k }) }));
 
+const platformMocks = vi.hoisted(() => ({ isElectronDesktop: vi.fn(() => false) }));
+vi.mock('@/renderer/utils/platform', () => ({ isElectronDesktop: platformMocks.isElectronDesktop }));
+
 const openPreview = vi.fn();
 vi.mock('@/renderer/pages/conversation/Preview', () => ({ usePreviewContext: () => ({ openPreview }) }));
 
@@ -41,12 +44,16 @@ vi.mock('@/renderer/pages/conversation/explorer/ExplorerPanel', () => ({
     onOpenFile,
     onAddToChat,
     onImportFiles,
+    onSearchInFolder,
+    onUploadFiles,
   }: {
     roots: Array<{ title: string }>;
     onRemoveRoot?: (id: string) => void;
     onOpenFile?: (pe: string, rel: string) => void;
     onAddToChat?: (pe: string, rel: string, name: string, isFile: boolean) => void;
     onImportFiles?: (pe: string, rel: string, paths: string[]) => void;
+    onSearchInFolder?: (pe: string, rel: string, name: string) => void;
+    onUploadFiles?: (pe: string, rel: string) => void;
   }) => (
     <div>
       <span data-testid='roots'>{roots.map((r) => r.title).join(',')}</span>
@@ -62,6 +69,12 @@ vi.mock('@/renderer/pages/conversation/explorer/ExplorerPanel', () => ({
       </button>
       <button data-testid='do-import' onClick={() => onImportFiles?.('peA', 'sub', ['/os/a.txt', '/os/b.txt'])}>
         import
+      </button>
+      <button data-testid='do-search-folder' onClick={() => onSearchInFolder?.('peA', 'sub', 'sub')}>
+        search-folder
+      </button>
+      <button data-testid='do-upload-folder' onClick={() => onUploadFiles?.('peA', 'sub')}>
+        upload-folder
       </button>
     </div>
   ),
@@ -124,6 +137,7 @@ beforeEach(() => {
   copyFiles.mockReset().mockResolvedValue({ copied_files: [], failed_files: [] });
   emit.mockReset();
   activeConversationId = null;
+  platformMocks.isElectronDesktop.mockReturnValue(false);
   fsRead.mockReset().mockResolvedValue({ content: 'hello', encoding: 'utf-8' });
   readContent.mockReset().mockResolvedValue('hello');
   vi.spyOn(Message, 'info').mockImplementation(() => '' as never);
@@ -293,5 +307,31 @@ describe('ExplorerContainer A-paste import', () => {
     renderIt();
     fireEvent.click(await screen.findByTestId('do-import'));
     await waitFor(() => expect(Message.error).toHaveBeenCalledWith('conversation.explorer.importFailed'));
+  });
+
+  it('uses the desktop file picker and imports into the right-clicked directory', async () => {
+    platformMocks.isElectronDesktop.mockReturnValue(true);
+    showOpen.mockResolvedValue(['/os/a.txt', '/os/b.txt']);
+    copyFiles.mockResolvedValue({ copied_files: ['/ws/sub/a.txt', '/ws/sub/b.txt'], failed_files: [] });
+    renderIt();
+
+    fireEvent.click(await screen.findByTestId('do-upload-folder'));
+
+    await waitFor(() => expect(showOpen).toHaveBeenCalledWith({ properties: ['openFile', 'multiSelections'] }));
+    await waitFor(() =>
+      expect(copyFiles).toHaveBeenCalledWith({
+        file_paths: ['/os/a.txt', '/os/b.txt'],
+        target: { pe_id: 'peA', relative_path: 'sub' },
+      })
+    );
+  });
+});
+
+describe('ExplorerContainer scoped search', () => {
+  it('passes the right-clicked folder to the search panel', async () => {
+    renderIt();
+    fireEvent.click(await screen.findByTestId('do-search-folder'));
+
+    expect(await screen.findByText('conversation.workspace.searchScope.selectedFolder')).toBeInTheDocument();
   });
 });

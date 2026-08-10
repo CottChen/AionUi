@@ -51,7 +51,7 @@ describe('searchStore lifecycle', () => {
 
     startSearch(OWNER, ROOTS, 'btn');
     expect(getSearchSnapshot()).toMatchObject({ query: 'btn', status: 'searching', hits: [] });
-    expect(calls[0].params).toEqual({ roots: ROOTS, query: 'btn', limit: undefined });
+    expect(calls[0].params).toEqual({ roots: ROOTS, query: 'btn', mode: 'name', limit: undefined });
 
     applySearchMatch({ search_id: calls[0].id, matches: [hit('btn.tsx'), hit('iconBtn.tsx')] });
     expect(getSearchSnapshot().hits.map((h) => h.name)).toEqual(['btn.tsx', 'iconBtn.tsx']);

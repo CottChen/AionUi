@@ -21,16 +21,25 @@
  *     is active. Preview is a deferred feature — no action wired here yet.
  */
 
-import { Button, Input } from '@arco-design/web-react';
+import { Button, Input, Radio } from '@arco-design/web-react';
 import { Plus, Search } from '@icon-park/react';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { useLatestRef } from '@renderer/hooks/ui/useLatestRef';
 
 import type { DirRef } from '../explorerModel';
 import FileTypeIcon from '../fileIcon/FileTypeIcon';
 import { useFileSearch } from './useFileSearch';
 import { type PeNameMap, peLabeledPath, type SearchHit, searchHitKey } from './searchModel';
-import { PANEL_SEARCH_OWNER } from './searchStore';
+import { PANEL_SEARCH_OWNER, type SearchMode } from './searchStore';
+
+export type SearchFolderTarget = {
+  ref: DirRef;
+  label: string;
+};
+
+type SearchScope = 'workspace' | 'folder';
 
 export type SearchPanelProps = {
   /** Search roots = the project's bound folders (each a pe root, rel=''). */
@@ -41,14 +50,40 @@ export type SearchPanelProps = {
   onRevealHit: (hit: SearchHit) => void;
   /** Explicit add-to-chat for a hit. Omit to hide the action (no active conversation). */
   onAddHit?: (hit: SearchHit) => void;
+  /** Folder selected through the Explorer context menu for scoped search. */
+  folderTarget?: SearchFolderTarget;
   /** The Explorer tree — kept mounted underneath; shown only while the query is empty. */
   children: React.ReactNode;
 };
 
-export const SearchPanel: React.FC<SearchPanelProps> = ({ roots, peNames, onRevealHit, onAddHit, children }) => {
+export const SearchPanel: React.FC<SearchPanelProps> = ({
+  roots,
+  peNames,
+  onRevealHit,
+  onAddHit,
+  folderTarget,
+  children,
+}) => {
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
-  const { view, runSearch, cancel } = useFileSearch(PANEL_SEARCH_OWNER, roots);
+  const [scope, setScope] = useState<SearchScope>('workspace');
+  const [mode, setMode] = useState<SearchMode>('all');
+  const effectiveRoots = useMemo(
+    () => (scope === 'folder' && folderTarget ? [folderTarget.ref] : roots),
+    [folderTarget, roots, scope]
+  );
+  const { view, runSearch, cancel } = useFileSearch(PANEL_SEARCH_OWNER, effectiveRoots, mode);
+  const queryRef = useLatestRef(query);
+  const modeRef = useLatestRef(mode);
+
+  useEffect(() => {
+    if (!folderTarget) return;
+    setScope('folder');
+    const currentQuery = queryRef.current.trim();
+    if (currentQuery) {
+      runSearch(currentQuery, { roots: [folderTarget.ref], mode: modeRef.current });
+    }
+  }, [folderTarget, modeRef, queryRef, runSearch]);
 
   const active = query.trim().length > 0;
   // Render results only while this panel owns the shared stream. If the `@`
@@ -60,12 +95,31 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({ roots, peNames, onReve
     (value: string): void => {
       setQuery(value);
       if (value.trim().length > 0) {
-        runSearch(value);
+        runSearch(value, { roots: effectiveRoots, mode });
       } else {
         cancel();
       }
     },
-    [runSearch, cancel]
+    [cancel, effectiveRoots, mode, runSearch]
+  );
+
+  const handleScopeChange = useCallback(
+    (value: string): void => {
+      const nextScope: SearchScope = value === 'folder' && folderTarget ? 'folder' : 'workspace';
+      setScope(nextScope);
+      const nextRoots = nextScope === 'folder' && folderTarget ? [folderTarget.ref] : roots;
+      if (query.trim()) runSearch(query, { roots: nextRoots, mode });
+    },
+    [folderTarget, mode, query, roots, runSearch]
+  );
+
+  const handleModeChange = useCallback(
+    (value: string): void => {
+      const nextMode: SearchMode = value === 'name' || value === 'content' ? value : 'all';
+      setMode(nextMode);
+      if (query.trim()) runSearch(query, { roots: effectiveRoots, mode: nextMode });
+    },
+    [effectiveRoots, query, runSearch]
   );
 
   // Reveal + EXIT search: locate the hit in the tree, then clear the query so the
@@ -83,6 +137,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({ roots, peNames, onReve
   const rows = owned ? view.hits : []; // non-owner: show nothing (the other skin owns the stream)
   const showSearching = owned && view.status === 'searching' && rows.length === 0;
   const showEmpty = owned && view.status === 'done' && rows.length === 0;
+  const contentBlockCount = rows.reduce((sum, hit) => sum + (hit.content_match_count ?? 0), 0);
 
   return (
     <div className='h-full flex flex-col min-h-0'>
@@ -96,7 +151,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({ roots, peNames, onReve
           12px inner padding would push the magnifier to 24px, so !pl-8px trims it to
           8px and lands the icon at 20px — the same line as the tab text and the tree
           arrow (see the baseline note in ExplorerContainer.tsx). */}
-      <div className='flex-shrink-0 pl-12px pr-8px pt-8px pb-4px'>
+      <div className='flex-shrink-0 pl-12px pr-8px pt-8px pb-6px'>
         <Input
           value={query}
           onChange={onQueryChange}
@@ -104,9 +159,35 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({ roots, peNames, onReve
           size='small'
           className='[&_.arco-input-inner-wrapper]:!pl-8px'
           prefix={<Search theme='outline' size='14' />}
-          placeholder={t('conversation.explorer.search.placeholder')}
-          aria-label={t('conversation.explorer.search.placeholder')}
+          placeholder={t('conversation.workspace.searchPlaceholder')}
+          aria-label={t('conversation.workspace.searchPlaceholder')}
         />
+        <div className='mt-6px flex flex-col gap-4px'>
+          <Radio.Group type='button' size='small' value={scope} onChange={handleScopeChange} className='w-full flex'>
+            <Radio value='workspace' className='flex-1 text-center'>
+              {t('conversation.workspace.searchScope.workspace')}
+            </Radio>
+            <Radio value='folder' disabled={!folderTarget} className='flex-1 text-center'>
+              {t('conversation.workspace.searchScope.currentFolder')}
+            </Radio>
+          </Radio.Group>
+          <Radio.Group type='button' size='small' value={mode} onChange={handleModeChange} className='w-full flex'>
+            <Radio value='all' className='flex-1 text-center'>
+              {t('conversation.workspace.searchMode.all')}
+            </Radio>
+            <Radio value='name' className='flex-1 text-center'>
+              {t('conversation.workspace.searchMode.name')}
+            </Radio>
+            <Radio value='content' className='flex-1 text-center'>
+              {t('conversation.workspace.searchMode.content')}
+            </Radio>
+          </Radio.Group>
+          {scope === 'folder' && folderTarget && (
+            <div className='truncate px-2px text-11px text-t-tertiary' title={folderTarget.label}>
+              {t('conversation.workspace.searchScope.selectedFolder', { folder: folderTarget.label })}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Tree slot — always mounted; hidden (not unmounted) only while THIS panel
@@ -138,6 +219,11 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({ roots, peNames, onReve
           {showEmpty && (
             <div className='px-8px py-6px text-t-secondary text-13px'>{t('conversation.explorer.search.empty')}</div>
           )}
+          {owned && view.status === 'done' && rows.length > 0 && (
+            <div className='px-8px pb-4px text-t-tertiary text-11px'>
+              {t('conversation.workspace.searchStats', { fileCount: rows.length, contentBlockCount })}
+            </div>
+          )}
           {rows.map((hit) => (
             <div
               key={searchHitKey(hit)}
@@ -150,15 +236,24 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({ roots, peNames, onReve
                   handleReveal(hit);
                 }
               }}
-              className='group flex items-center gap-4px px-8px py-3px rd-4px cursor-pointer hover:bg-2 min-w-0'
+              className='group flex items-start gap-4px px-8px py-5px rd-4px cursor-pointer hover:bg-2 min-w-0'
               title={hit.relative_path}
             >
               <FileTypeIcon node={{ name: hit.name, relativePath: hit.relative_path, isFile: true }} />
-              <span className='overflow-hidden text-ellipsis whitespace-nowrap flex-shrink-0 max-w-[45%]'>
-                {hit.name}
-              </span>
-              <span className='overflow-hidden text-ellipsis whitespace-nowrap text-t-tertiary text-12px flex-1 min-w-0'>
-                {peLabeledPath(hit.pe_id, hit.relative_path, peNames)}
+              <span className='min-w-0 flex-1 flex flex-col gap-2px'>
+                <span className='flex min-w-0 items-center gap-4px'>
+                  <span className='overflow-hidden text-ellipsis whitespace-nowrap flex-shrink-0 max-w-[45%]'>
+                    {hit.name}
+                  </span>
+                  <span className='overflow-hidden text-ellipsis whitespace-nowrap text-t-tertiary text-12px flex-1 min-w-0'>
+                    {peLabeledPath(hit.pe_id, hit.relative_path, peNames)}
+                  </span>
+                </span>
+                {hit.content_preview && (
+                  <span className='overflow-hidden text-ellipsis whitespace-nowrap text-t-secondary text-11px'>
+                    {hit.content_preview}
+                  </span>
+                )}
               </span>
               {onAddHit && (
                 <Button

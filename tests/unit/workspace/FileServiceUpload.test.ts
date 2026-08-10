@@ -110,4 +110,19 @@ describe('uploadFileViaHttp workspace destination', () => {
     xhr.respond(200, JSON.stringify({ success: false }));
     await expect(pending).rejects.toThrow('server returned unsuccessful response');
   });
+
+  it('sends a pe-addressed project folder destination', async () => {
+    const pending = uploadFileViaHttp(new File(['content'], 'project.md'), undefined, undefined, undefined, {
+      projectTarget: { pe_id: 'pe-1', relative_path: 'docs/specs' },
+    });
+    const xhr = await waitForRequest();
+    const formData = xhr.sentBody as FormData;
+
+    expect(formData.get('project_pe_id')).toBe('pe-1');
+    expect(formData.get('project_relative_path')).toBe('docs/specs');
+    expect(formData.has('conversation_id')).toBe(false);
+
+    xhr.respond(200, JSON.stringify({ success: true, data: '/project/docs/specs/project.md' }));
+    await expect(pending).resolves.toBe('/project/docs/specs/project.md');
+  });
 });

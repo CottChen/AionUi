@@ -15,6 +15,8 @@ export type UploadFileOptions = {
   signal?: AbortSignal;
   /** Explicit workspace-relative destination. An empty string targets the workspace root. */
   workspaceRelativePath?: string;
+  /** Explicit Project Explorer destination. Used by folder-context uploads in desktop/WebUI. */
+  projectTarget?: { pe_id: string; relative_path: string };
 };
 
 /**
@@ -50,6 +52,10 @@ export async function uploadFileViaHttp(
   }
   if (options?.workspaceRelativePath !== undefined) {
     formData.append('workspace_relative_path', options.workspaceRelativePath);
+  }
+  if (options?.projectTarget) {
+    formData.append('project_pe_id', options.projectTarget.pe_id);
+    formData.append('project_relative_path', options.projectTarget.relative_path);
   }
 
   return new Promise<string>((resolve, reject) => {

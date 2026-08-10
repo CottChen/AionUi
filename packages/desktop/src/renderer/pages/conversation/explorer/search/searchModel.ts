@@ -28,6 +28,9 @@ export type SearchHit = {
   pe_id: string;
   relative_path: string;
   name: string;
+  match_kind?: 'name' | 'content' | 'both';
+  content_match_count?: number;
+  content_preview?: string;
 };
 
 /**
@@ -88,6 +91,7 @@ export const scoreSearchHit = (hit: SearchHit, query: string): number => {
   if (name.includes(q)) return 200;
   if (path.startsWith(q)) return 100;
   if (path.includes(q)) return 50;
+  if (hit.match_kind === 'content' || hit.match_kind === 'both') return 25;
   return -1;
 };
 

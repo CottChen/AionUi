@@ -29,9 +29,12 @@ import type { RpcId } from '../monitorClient';
 import { rankSearchHits, type SearchHit, searchHitKey } from './searchModel';
 
 /** `fs/search` request params (protocol.md §文件名搜索). */
+export type SearchMode = 'all' | 'name' | 'content';
+
 export type SearchParams = {
   roots: DirRef[];
   query: string;
+  mode: SearchMode;
   limit?: number;
 };
 
@@ -145,7 +148,13 @@ export const configureSearchStore = (nextPort: SearchPort): void => {
  * locally (the backend auto-supersedes it), then issues a fresh `fs/search` and
  * tracks its id as authoritative — later matches for older ids are discarded.
  */
-export const startSearch = (nextOwner: string, roots: DirRef[], nextQuery: string, limit?: number): void => {
+export const startSearch = (
+  nextOwner: string,
+  roots: DirRef[],
+  nextQuery: string,
+  mode: SearchMode = 'name',
+  limit?: number
+): void => {
   if (!port) {
     status = 'error';
     error = 'search port not configured';
@@ -159,7 +168,7 @@ export const startSearch = (nextOwner: string, roots: DirRef[], nextQuery: strin
     port.abandon(activeSearchId);
   }
 
-  const { id, result } = port.search({ roots, query: nextQuery, limit });
+  const { id, result } = port.search({ roots, query: nextQuery, mode, limit });
   activeSearchId = id;
   owner = nextOwner;
   query = nextQuery;

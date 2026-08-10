@@ -15,6 +15,7 @@ vi.mock('@/renderer/pages/conversation/explorer/fileIcon/FileTypeIcon', () => ({
 }));
 
 import type { SearchHit } from '@/renderer/pages/conversation/explorer/search/searchModel';
+import type { SearchFolderTarget } from '@/renderer/pages/conversation/explorer/search/SearchPanel';
 import type { SearchView } from '@/renderer/pages/conversation/explorer/search/searchStore';
 
 // Controllable useFileSearch: tests set `hooks.view` before the action that
@@ -41,12 +42,14 @@ const renderPanel = (
     onRevealHit?: (h: SearchHit) => void;
     onAddHit?: (h: SearchHit) => void;
     peNames?: Record<string, string>;
+    folderTarget?: SearchFolderTarget;
   } = {}
 ) =>
   render(
     <SearchPanel
       roots={[{ pe_id: 'pe1', relative_path: '' }]}
       peNames={props.peNames ?? {}}
+      folderTarget={props.folderTarget}
       onRevealHit={props.onRevealHit ?? (() => {})}
       onAddHit={props.onAddHit}
     >
@@ -80,9 +83,46 @@ describe('SearchPanel', () => {
   it('drives runSearch on input and cancel on clear', () => {
     renderPanel();
     type('btn');
-    expect(hooks.runSearch).toHaveBeenCalledWith('btn');
+    expect(hooks.runSearch).toHaveBeenCalledWith('btn', {
+      roots: [{ pe_id: 'pe1', relative_path: '' }],
+      mode: 'all',
+    });
     type('');
     expect(hooks.cancel).toHaveBeenCalled();
+  });
+
+  it('reruns the active query when search mode changes', () => {
+    renderPanel();
+    type('design');
+    hooks.runSearch.mockClear();
+
+    fireEvent.click(screen.getByText('conversation.workspace.searchMode.content'));
+
+    expect(hooks.runSearch).toHaveBeenCalledWith('design', {
+      roots: [{ pe_id: 'pe1', relative_path: '' }],
+      mode: 'content',
+    });
+  });
+
+  it('switches to a folder selected from the tree context menu and searches only that folder', () => {
+    const folderTarget = { ref: { pe_id: 'pe1', relative_path: 'src' }, label: 'Root/src' };
+    const { rerender } = renderPanel();
+    type('button');
+    hooks.runSearch.mockClear();
+
+    rerender(
+      <SearchPanel
+        roots={[{ pe_id: 'pe1', relative_path: '' }]}
+        peNames={{}}
+        folderTarget={folderTarget}
+        onRevealHit={() => {}}
+      >
+        <div data-testid='tree'>TREE</div>
+      </SearchPanel>
+    );
+
+    expect(screen.getByText('conversation.workspace.searchScope.selectedFolder')).toBeTruthy();
+    expect(hooks.runSearch).toHaveBeenCalledWith('button', { roots: [folderTarget.ref], mode: 'all' });
   });
 
   it('clicking a result row reveals it (not preview)', () => {
@@ -155,5 +195,25 @@ describe('SearchPanel', () => {
     );
     type('a');
     expect(screen.getByText('conversation.explorer.search.limitReached')).toBeTruthy();
+  });
+
+  it('shows content previews and content match statistics', () => {
+    setView({
+      hits: [
+        {
+          ...hit('notes.txt'),
+          match_kind: 'content',
+          content_match_count: 2,
+          content_preview: 'Design search design',
+        },
+      ],
+      status: 'done',
+      total: 1,
+    });
+    renderPanel();
+    type('design');
+
+    expect(screen.getByText('Design search design')).toBeTruthy();
+    expect(screen.getByText('conversation.workspace.searchStats')).toBeTruthy();
   });
 });

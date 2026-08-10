@@ -22,7 +22,7 @@ import { useLatestRef } from '@renderer/hooks/ui/useLatestRef';
 
 import type { DirRef } from '../explorerModel';
 import { initExplorerRuntime } from '../monitorTransport';
-import { cancelSearch, type SearchView, startSearch, useSearch } from './searchStore';
+import { cancelSearch, type SearchMode, type SearchView, startSearch, useSearch } from './searchStore';
 
 /** Debounce for query→fs/search (search.md §触发: front-end debounce). */
 export const FILE_SEARCH_DEBOUNCE_MS = 150;
@@ -30,14 +30,15 @@ export const FILE_SEARCH_DEBOUNCE_MS = 150;
 export type FileSearch = {
   view: SearchView;
   /** Debounced: issue (or supersede) a search for `query` over the current roots. */
-  runSearch: (query: string) => void;
+  runSearch: (query: string, options?: { roots?: DirRef[]; mode?: SearchMode }) => void;
   /** Cancel the active search now (box closed / query cleared) and reset. */
   cancel: () => void;
 };
 
-export const useFileSearch = (owner: string, roots: DirRef[]): FileSearch => {
+export const useFileSearch = (owner: string, roots: DirRef[], mode: SearchMode = 'name'): FileSearch => {
   const view = useSearch();
   const rootsRef = useLatestRef(roots);
+  const modeRef = useLatestRef(mode);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Wire the monitor runtime once (idempotent) so the search port is configured.
@@ -53,14 +54,16 @@ export const useFileSearch = (owner: string, roots: DirRef[]): FileSearch => {
   }, []);
 
   const runSearch = useCallback(
-    (query: string): void => {
+    (query: string, options?: { roots?: DirRef[]; mode?: SearchMode }): void => {
       clearTimer();
+      const searchRoots = options?.roots ?? rootsRef.current;
+      const searchMode = options?.mode ?? modeRef.current;
       timerRef.current = setTimeout(() => {
         timerRef.current = null;
-        startSearch(owner, rootsRef.current, query);
+        startSearch(owner, searchRoots, query, searchMode);
       }, FILE_SEARCH_DEBOUNCE_MS);
     },
-    [clearTimer, owner, rootsRef]
+    [clearTimer, modeRef, owner, rootsRef]
   );
 
   const cancel = useCallback((): void => {

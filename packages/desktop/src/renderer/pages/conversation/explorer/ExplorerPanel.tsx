@@ -54,6 +54,10 @@ export type ExplorerPanelProps = {
    * (Electron only — empty in the browser, where the drop is ignored). Omit to
    * disable drop import. */
   onImportFiles?: (targetPeId: string, targetRelativePath: string, filePaths: string[]) => void;
+  /** Select this directory as the scoped-search root. */
+  onSearchInFolder?: (targetPeId: string, targetRelativePath: string, name: string) => void;
+  /** Open the platform file picker and upload/import files into this directory. */
+  onUploadFiles?: (targetPeId: string, targetRelativePath: string) => void;
 };
 
 export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
@@ -67,6 +71,8 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
   onAddToChat,
   onRevealInFolder,
   onImportFiles,
+  onSearchInFolder,
+  onUploadFiles,
 }) => {
   const view = useExplorerView();
   const { t } = useTranslation();
@@ -203,7 +209,8 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
       // Reveal-in-folder is Electron-only (needs a local OS shell; WebUI may be
       // remote and has no shell permission), so gate the menu item on the runtime.
       const canReveal = Boolean(onRevealInFolder) && isElectronDesktop();
-      const hasMenu = onAddToChat || canReveal || (isRoot ? onRemoveRoot : onRename || onDelete);
+      const folderActions = !isFile && (onSearchInFolder || onUploadFiles);
+      const hasMenu = onAddToChat || canReveal || folderActions || (isRoot ? onRemoveRoot : onRename || onDelete);
       if (!hasMenu) return title;
 
       // Stop menu-item clicks from bubbling. arco renders the droplist as a React
@@ -224,6 +231,8 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
         else if (menuKey === 'delete') onDelete?.(peId, rel, name);
         else if (menuKey === 'remove' && removable) onRemoveRoot?.(peId);
         else if (menuKey === 'revealInFolder') onRevealInFolder?.(peId, rel);
+        else if (menuKey === 'searchInFolder' && !isFile) onSearchInFolder?.(peId, rel, name);
+        else if (menuKey === 'uploadFiles' && !isFile) onUploadFiles?.(peId, rel);
       };
 
       return (
@@ -235,6 +244,12 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
               {onAddToChat && <Menu.Item key='addToChat'>{t('conversation.explorer.contextMenu.addToChat')}</Menu.Item>}
               {canReveal && (
                 <Menu.Item key='revealInFolder'>{t('conversation.workspace.contextMenu.openLocation')}</Menu.Item>
+              )}
+              {!isFile && onSearchInFolder && (
+                <Menu.Item key='searchInFolder'>{t('conversation.workspace.contextMenu.searchInFolder')}</Menu.Item>
+              )}
+              {!isFile && onUploadFiles && (
+                <Menu.Item key='uploadFiles'>{t('conversation.workspace.addFile')}</Menu.Item>
               )}
               {!isRoot && onRename && (
                 <Menu.Item key='rename'>{t('conversation.explorer.contextMenu.rename')}</Menu.Item>
@@ -252,7 +267,19 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
         </Dropdown>
       );
     },
-    [onRemoveRoot, onRename, onDelete, onAddToChat, onImportFiles, dragOverKey, workspacePeId, t, view.expanded]
+    [
+      onRemoveRoot,
+      onRename,
+      onDelete,
+      onAddToChat,
+      onImportFiles,
+      onSearchInFolder,
+      onUploadFiles,
+      dragOverKey,
+      workspacePeId,
+      t,
+      view.expanded,
+    ]
   );
 
   // Container-level import target: the workspace root ('' rel). Node drops set

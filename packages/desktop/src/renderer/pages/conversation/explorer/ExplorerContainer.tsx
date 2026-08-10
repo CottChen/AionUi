@@ -16,9 +16,9 @@
  * reveal / explicit add-to-chat; see {@link SearchPanel}).
  */
 
-import { Button, Input, Message, Modal, Spin, Tooltip } from '@arco-design/web-react';
+import { Button, Input, Message, Modal, Spin, Tooltip, Upload } from '@arco-design/web-react';
 import { FolderPlus } from '@icon-park/react';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
@@ -31,6 +31,8 @@ import { usePreviewContext } from '@/renderer/pages/conversation/Preview';
 import WorkspaceOpenButton from '@/renderer/pages/conversation/components/ChatLayout/WorkspaceOpenButton';
 import { getContentTypeByExtension } from '@/renderer/pages/conversation/Preview/fileUtils';
 import { classifyPreviewError, previewErrorToI18nKey } from '@/renderer/utils/previewError';
+import { isElectronDesktop } from '@/renderer/utils/platform';
+import { UPLOAD_ABORTED_ERROR, uploadFileViaHttp } from '@/renderer/services/FileService';
 // PATCH(ELECTRON-3SZ): used only by the preview payload patch below — remove with it.
 import type { PreviewContentType } from '@/common/types/office/preview';
 
@@ -45,7 +47,7 @@ import { initExplorerRuntime } from './monitorTransport';
 import { toRootRefs } from './projectRoots';
 import { reveal, select } from './explorerStore';
 import { useCurrentConversation } from './currentConversationStore';
-import { SearchPanel } from './search/SearchPanel';
+import { SearchPanel, type SearchFolderTarget } from './search/SearchPanel';
 import type { SearchHit } from './search/searchModel';
 
 export type ExplorerContainerProps = {
@@ -121,6 +123,14 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
   const { data, isLoading, mutate } = useSWR(projectId ? `explorer-project/${projectId}` : null, () =>
     ipcBridge.project.get.invoke({ project_id: projectId })
   );
+  const [searchFolderTarget, setSearchFolderTarget] = useState<SearchFolderTarget>();
+  const [browserUploadTarget, setBrowserUploadTarget] = useState<{ pe_id: string; relative_path: string }>();
+  const browserUploadTriggerRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    setSearchFolderTarget(undefined);
+    setBrowserUploadTarget(undefined);
+  }, [projectId]);
 
   // Let the workspace-collapse hook (keyed per-project via workspacePreferenceKey)
   // read + restore this project's panel open/closed preference. The hook starts
@@ -293,6 +303,25 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
     }
   };
 
+  const handleSearchInFolder = (peId: string, rel: string, name: string): void => {
+    const rootName = data?.explorer.entries.find((entry) => entry.pe_id === peId)?.display_name;
+    setSearchFolderTarget({
+      ref: { pe_id: peId, relative_path: rel },
+      label: rel ? `${rootName || name}/${rel}` : rootName || name,
+    });
+  };
+
+  const handleUploadFiles = async (peId: string, rel: string): Promise<void> => {
+    if (isElectronDesktop()) {
+      const paths = await ipcBridge.dialog.showOpen.invoke({ properties: ['openFile', 'multiSelections'] });
+      if (paths?.length) await handleImportFiles(peId, rel, paths);
+      return;
+    }
+
+    setBrowserUploadTarget({ pe_id: peId, relative_path: rel });
+    window.setTimeout(() => browserUploadTriggerRef.current?.click(), 0);
+  };
+
   if (!projectId) return null;
   if (isLoading && !data) return <Spin loading />;
 
@@ -382,6 +411,7 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
         <SearchPanel
           roots={searchRoots}
           peNames={searchPeNames}
+          folderTarget={searchFolderTarget}
           onRevealHit={handleRevealHit}
           onAddHit={activeConversationId ? handleAddHit : undefined}
         >
@@ -396,9 +426,40 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
             onAddToChat={activeConversationId ? handleAddToChat : undefined}
             onRevealInFolder={handleRevealInFolder}
             onImportFiles={handleImportFiles}
+            onSearchInFolder={handleSearchInFolder}
+            onUploadFiles={(peId, rel) => void handleUploadFiles(peId, rel)}
           />
         </SearchPanel>
       </div>
+      <Upload
+        multiple
+        showUploadList={false}
+        customRequest={({ file, onProgress, onSuccess, onError }) => {
+          const target = browserUploadTarget;
+          if (!target) {
+            onError(new Error('missing project upload target'));
+            return;
+          }
+          const controller = new AbortController();
+          void uploadFileViaHttp(file, undefined, (percent) => onProgress(percent), undefined, {
+            signal: controller.signal,
+            projectTarget: target,
+          })
+            .then(() => {
+              onSuccess();
+              Message.success(t('conversation.explorer.imported', { count: 1 }));
+            })
+            .catch((error: unknown) => {
+              onError(error instanceof Error ? error : new Error(String(error)));
+              if (!(error instanceof Error && error.message === UPLOAD_ABORTED_ERROR)) {
+                Message.error(t('conversation.explorer.importFailed'));
+              }
+            });
+          return { abort: () => controller.abort() };
+        }}
+      >
+        <Button ref={browserUploadTriggerRef} className='!hidden' tabIndex={-1} aria-hidden />
+      </Upload>
       {activeTab === 'changes' && (
         <div className='flex-1 min-h-0 flex items-center justify-center px-16px text-center text-t-secondary text-13px'>
           {t('conversation.explorer.changesPlaceholder')}

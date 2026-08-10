@@ -13,7 +13,7 @@
  */
 
 import React from 'react';
-import { act, render, screen, cleanup } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (k: string) => k }) }));
@@ -149,5 +149,41 @@ describe('ExplorerPanel reveal highlight + scroll-into-view', () => {
       await flush();
     });
     expect(scrollSpy).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('ExplorerPanel folder context actions', () => {
+  it('selects a directory as the scoped-search root without opening it', async () => {
+    const onSearchInFolder = vi.fn();
+    configureExplorerStore(makePort({ [peKey('pe1', '')]: [dir('sub')] }));
+    render(
+      <ExplorerPanel
+        projectId='p1'
+        roots={[{ pe_id: 'pe1', title: 'app', role: 'workspace' }]}
+        onSearchInFolder={onSearchInFolder}
+      />
+    );
+
+    fireEvent.contextMenu(await screen.findByText('sub'));
+    fireEvent.click(await screen.findByText('conversation.workspace.contextMenu.searchInFolder'));
+
+    expect(onSearchInFolder).toHaveBeenCalledWith('pe1', 'sub', 'sub');
+  });
+
+  it('requests file upload into the right-clicked directory', async () => {
+    const onUploadFiles = vi.fn();
+    configureExplorerStore(makePort({ [peKey('pe1', '')]: [dir('sub')] }));
+    render(
+      <ExplorerPanel
+        projectId='p1'
+        roots={[{ pe_id: 'pe1', title: 'app', role: 'workspace' }]}
+        onUploadFiles={onUploadFiles}
+      />
+    );
+
+    fireEvent.contextMenu(await screen.findByText('sub'));
+    fireEvent.click(await screen.findByText('conversation.workspace.addFile'));
+
+    expect(onUploadFiles).toHaveBeenCalledWith('pe1', 'sub');
   });
 });

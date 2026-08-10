@@ -41,6 +41,12 @@ describe('scoreSearchHit', () => {
     expect(scoreSearchHit(hit('p', 'a.ts'), '')).toBe(0);
     expect(scoreSearchHit(hit('p', 'a.ts'), 'zzz')).toBe(-1);
   });
+
+  it('keeps a content-only backend hit even when its name and path do not match', () => {
+    const contentHit = { ...hit('p', 'notes.txt'), match_kind: 'content' as const };
+    expect(scoreSearchHit(contentHit, 'design')).toBeGreaterThan(0);
+    expect(rankSearchHits([contentHit], 'design')).toEqual([contentHit]);
+  });
 });
 
 describe('rankSearchHits', () => {
