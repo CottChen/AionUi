@@ -37,7 +37,7 @@ const delayReject = (ms: number): Promise<never> =>
     window.setTimeout(() => reject(new Error(`fs monitor request timed out after ${ms}ms`)), ms);
   });
 
-const withTimeout = <T,>(promise: Promise<T>, ms: number): Promise<T> => Promise.race([promise, delayReject(ms)]);
+const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> => Promise.race([promise, delayReject(ms)]);
 
 const joinDisplayPath = (root: string, relativePath: string): string => {
   if (!relativePath) return root;
@@ -55,7 +55,12 @@ const fallbackSubscribe = async (refs: DirRef[]): Promise<SubscribeResult> => {
       const items = await ipcBridge.fs.getFilesByDir.invoke({ root, dir });
       return {
         target: ref,
-        entries: items.map((item) => ({ name: item.name, kind: item.isDir ? 'dir' : 'file' }) satisfies Entry),
+        entries: items.map((item) => {
+          // `/api/fs/dir` is a Rust JSON boundary and returns `is_dir`; older
+          // Electron IPC callers return `isDir`. The fallback must accept both.
+          const isDir = item.isDir || (item as typeof item & { is_dir?: boolean }).is_dir === true;
+          return { name: item.name, kind: isDir ? 'dir' : 'file' } satisfies Entry;
+        }),
       };
     })
   );

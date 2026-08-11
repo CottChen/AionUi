@@ -21,6 +21,8 @@ import {
   withResponseMap,
   BackendHttpError,
   isBackendHttpError,
+  reconnectWebSocket,
+  suspendWebSocket,
   wsEmitter,
   wsMappedEmitter,
   stubEmitter,
@@ -366,27 +368,29 @@ describe('httpBridge', () => {
   });
 
   describe('wsEmitter', () => {
-    it('emits realtime.reconnected only after a prior websocket open', () => {
+    it('recreates the socket after auth changes and reports initial versus subsequent opens', () => {
       vi.useFakeTimers();
       vi.stubGlobal('window', { __backendPort: 13400 });
       vi.stubGlobal('WebSocket', FakeWebSocket as unknown as typeof WebSocket);
       vi.spyOn(console, 'debug').mockImplementation(() => {});
       FakeWebSocket.instances = [];
+      suspendWebSocket();
 
       const events: unknown[] = [];
       const unsubscribe = wsEmitter('realtime.reconnected').on((payload: unknown) => events.push(payload));
+      reconnectWebSocket();
 
       FakeWebSocket.instances[0].dispatchOpen();
-      expect(events).toEqual([]);
+      expect(events).toEqual([{ timestamp: expect.any(Number), initial: true }]);
 
       FakeWebSocket.instances[0].dispatchClose();
       vi.advanceTimersByTime(1000);
       FakeWebSocket.instances[1].dispatchOpen();
 
-      expect(events).toHaveLength(1);
-      expect(events[0]).toEqual({ timestamp: expect.any(Number) });
+      expect(events).toHaveLength(2);
+      expect(events[1]).toEqual({ timestamp: expect.any(Number), initial: false });
 
-      FakeWebSocket.instances[1].dispatchClose();
+      suspendWebSocket();
       vi.clearAllTimers();
       unsubscribe();
       vi.useRealTimers();

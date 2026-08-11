@@ -1,6 +1,8 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { emitter } from '@/renderer/utils/emitter';
 import { configService } from '@/common/config/configService';
+import { reconnectWebSocket, suspendWebSocket } from '@/common/adapter/httpBridge';
+import { reloadRendererConfig } from '@/renderer/services/bootstrapRenderer';
 // M6: CSRF removed with legacy webserver — stub functions for compatibility, re-implement in M7
 const withCsrfToken = <T extends Record<string, unknown>>(data: T): T => data;
 const hasValidCsrfToken = (): boolean => true;
@@ -219,6 +221,10 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
         };
       }
 
+      // Startup config loading can run before the Web session is authenticated.
+      // Reload now so global assistant order and other inherited preferences
+      // are available before the authenticated application mounts.
+      await reloadRendererConfig();
       setUser({
         id: data.user.id,
         username: data.user.username,
@@ -226,8 +232,12 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
       });
       setStatus('authenticated');
       setReady(true);
-      configService.reset();
       emitter.emit('auth.user.changed');
+
+      // The shared HTTP bridge may have opened its socket before login, when
+      // local-mode AionCore assigned it to system_default_user. Re-handshake
+      // after the session cookie changes so project fs requests use this user.
+      reconnectWebSocket();
 
       // Re-enable WebSocket reconnection after successful login (WebUI mode only)
       const reconnectWindow = typeof window !== 'undefined' ? (window as WebSocketReconnectWindow) : undefined;
@@ -281,6 +291,7 @@ export const AuthProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     } catch (error) {
       console.error('Logout request failed:', error);
     } finally {
+      suspendWebSocket();
       setUser(null);
       setStatus('unauthenticated');
       configService.reset();

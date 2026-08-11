@@ -47,18 +47,18 @@ describe('monitorTransport HTTP fallback', () => {
     mocks.getFilesByDir.mockReset().mockResolvedValue([
       {
         name: 'src',
-        fullPath: '/repo/src',
-        relativePath: 'src',
-        isDir: true,
-        isFile: false,
+        full_path: '/repo/src',
+        relative_path: 'src',
+        is_dir: true,
+        is_file: false,
         children: [],
       },
       {
         name: 'README.md',
-        fullPath: '/repo/README.md',
-        relativePath: 'README.md',
-        isDir: false,
-        isFile: true,
+        full_path: '/repo/README.md',
+        relative_path: 'README.md',
+        is_dir: false,
+        is_file: true,
       },
     ]);
   });

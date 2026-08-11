@@ -6,14 +6,16 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { configInitializeMock, consoleErrorMock } = vi.hoisted(() => ({
+const { configInitializeMock, configResetMock, consoleErrorMock } = vi.hoisted(() => ({
   configInitializeMock: vi.fn(),
+  configResetMock: vi.fn(),
   consoleErrorMock: vi.fn(),
 }));
 
 vi.mock('@/common/config/configService', () => ({
   configService: {
     initialize: configInitializeMock,
+    reset: configResetMock,
   },
 }));
 
@@ -39,5 +41,16 @@ describe('bootstrapRendererConfig', () => {
 
     await expect(bootstrapRendererConfig(consoleErrorMock)).resolves.toBeUndefined();
     expect(consoleErrorMock).toHaveBeenCalledWith('Failed to initialize config:', error);
+  });
+
+  it('clears stale anonymous preferences before reloading authenticated preferences', async () => {
+    configInitializeMock.mockResolvedValue(undefined);
+    const { reloadRendererConfig } = await import('@/renderer/services/bootstrapRenderer');
+
+    await reloadRendererConfig(consoleErrorMock);
+
+    expect(configResetMock).toHaveBeenCalledTimes(1);
+    expect(configResetMock.mock.invocationCallOrder[0]).toBeLessThan(configInitializeMock.mock.invocationCallOrder[0]);
+    expect(consoleErrorMock).not.toHaveBeenCalled();
   });
 });

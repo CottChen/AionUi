@@ -17,3 +17,9 @@ export async function bootstrapRendererConfig(logError: BootstrapLogger = consol
     logError('Failed to initialize config:', err);
   });
 }
+
+/** Reload user-visible preferences after the authenticated identity changes. */
+export async function reloadRendererConfig(logError: BootstrapLogger = console.error): Promise<void> {
+  configService.reset();
+  await bootstrapRendererConfig(logError);
+}

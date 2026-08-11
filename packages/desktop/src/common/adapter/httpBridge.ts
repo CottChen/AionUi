@@ -382,6 +382,7 @@ let ws: WebSocket | null = null;
 let wsReconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let wsReconnectAttempt = 0;
 let wsHasOpened = false;
+let wsReconnectEnabled = true;
 
 function dispatchWsEvent(eventName: string, payload: unknown): void {
   const handlers = wsListeners.get(eventName);
@@ -398,6 +399,10 @@ function dispatchWsEvent(eventName: string, payload: unknown): void {
 function ensureWs(): void {
   if (typeof window === 'undefined') {
     console.debug('[ensureWs] skipped: no window');
+    return;
+  }
+  if (!wsReconnectEnabled) {
+    console.debug('[ensureWs] skipped: reconnect suspended');
     return;
   }
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
@@ -427,8 +432,10 @@ function ensureWs(): void {
 
   current.addEventListener('close', (e) => {
     console.debug('[ensureWs] CLOSED code=' + e.code + ' reason=' + e.reason);
-    if (ws === current) ws = null;
-    scheduleWsReconnect();
+    if (ws === current) {
+      ws = null;
+      scheduleWsReconnect();
+    }
   });
 
   current.addEventListener('error', (e) => {
@@ -457,13 +464,45 @@ function ensureWs(): void {
 }
 
 function scheduleWsReconnect(): void {
-  if (wsReconnectTimer) return;
+  if (!wsReconnectEnabled || wsReconnectTimer) return;
   const delay = Math.min(1000 * Math.pow(2, wsReconnectAttempt), 30000);
   wsReconnectAttempt++;
   wsReconnectTimer = setTimeout(() => {
     wsReconnectTimer = null;
     ensureWs();
   }, delay);
+}
+
+/**
+ * Recreate the shared realtime connection after the authenticated Web user
+ * changes. A socket authenticates only during its upgrade handshake, so keeping
+ * a pre-login/local socket would keep routing fs requests as the previous user.
+ */
+export function reconnectWebSocket(): void {
+  wsReconnectEnabled = true;
+  if (wsReconnectTimer) {
+    clearTimeout(wsReconnectTimer);
+    wsReconnectTimer = null;
+  }
+  wsReconnectAttempt = 0;
+  const current = ws;
+  ws = null;
+  current?.close();
+  ensureWs();
+}
+
+/** Stop the shared realtime connection while no authenticated Web user exists. */
+export function suspendWebSocket(): void {
+  wsReconnectEnabled = false;
+  if (wsReconnectTimer) {
+    clearTimeout(wsReconnectTimer);
+    wsReconnectTimer = null;
+  }
+  wsReconnectAttempt = 0;
+  wsHasOpened = false;
+  const current = ws;
+  ws = null;
+  current?.close();
 }
 
 /**
