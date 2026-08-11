@@ -42,6 +42,20 @@ const forkMocks = vi.hoisted(() => ({
   ensureRuntime: vi.fn().mockResolvedValue(undefined),
   navigate: vi.fn(),
 }));
+const authMocks = vi.hoisted(() => ({
+  user: { isAdmin: true } as { isAdmin: boolean } | null,
+}));
+const platformMocks = vi.hoisted(() => ({
+  isElectronDesktop: vi.fn(() => false),
+}));
+
+vi.mock('@/renderer/hooks/context/AuthContext', () => ({
+  useAuth: () => ({ user: authMocks.user }),
+}));
+
+vi.mock('@/renderer/utils/platform', () => ({
+  isElectronDesktop: platformMocks.isElectronDesktop,
+}));
 
 vi.mock('@/common', () => ({
   ipcBridge: {
@@ -806,6 +820,8 @@ describe('MessageText fork entry point', () => {
   };
 
   beforeEach(() => {
+    authMocks.user = { isAdmin: true };
+    platformMocks.isElectronDesktop.mockReturnValue(false);
     forkMocks.fork.mockReset().mockResolvedValue({ id: 'conv-forked' });
     forkMocks.ensureRuntime.mockReset().mockResolvedValue(undefined);
     forkMocks.navigate.mockReset();
@@ -819,6 +835,12 @@ describe('MessageText fork entry point', () => {
   it('shows the fork button on anchored mid-history messages for at_turn backends', () => {
     renderWithCapability({ at_turn: true }, { isLastMessage: false, hasForkAnchor: true });
     expect(screen.getByTestId('message-fork-button')).toBeInTheDocument();
+  });
+
+  it('hides the fork button from regular web users', () => {
+    authMocks.user = { isAdmin: false };
+    renderWithCapability({ at_turn: true }, { isLastMessage: false, hasForkAnchor: true });
+    expect(screen.queryByTestId('message-fork-button')).toBeNull();
   });
 
   it('hides the fork button on un-anchored legacy messages even for at_turn backends', () => {

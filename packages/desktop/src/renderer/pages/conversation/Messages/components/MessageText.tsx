@@ -6,9 +6,11 @@
 
 import type { IMessageText } from '@/common/chat/chatLib';
 import { AIONUI_FILES_MARKER } from '@/common/config/constants';
+import { useAuth } from '@/renderer/hooks/context/AuthContext';
 import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
 import { useLocalFilePreview } from '@/renderer/pages/conversation/Preview/hooks/useLocalFilePreview';
 import { iconColors } from '@/renderer/styles/colors';
+import { isElectronDesktop } from '@/renderer/utils/platform';
 import { Alert, Button, Message, Tooltip } from '@arco-design/web-react';
 import { Copy } from '@icon-park/react';
 import classNames from 'classnames';
@@ -191,6 +193,7 @@ const MessageText: React.FC<{
   const { data, json } = useFormatContent(text);
   const shouldRenderPlainText = isUserMessage;
   const conversationContext = useConversationContextSafe();
+  const { user } = useAuth();
   const forkConversation = useForkConversation(conversationContext?.conversation_id);
   const handleLocalFileLink = useLocalFilePreview(conversationContext?.workspace);
   const resolvedFiles = useMemo(
@@ -234,10 +237,13 @@ const MessageText: React.FC<{
   // Fork entry point: only when the agent declares the capability, and only on
   // messages the backend can actually fork at (any message for at_turn/codex,
   // the last message otherwise) — see `isForkEnabled`.
-  const showForkButton = isForkEnabled(conversationContext?.forkCapability, {
-    isLastMessage,
-    hasTurnAnchor: hasForkAnchor,
-  });
+  const canForkConversation = isElectronDesktop() || user?.isAdmin === true;
+  const showForkButton =
+    canForkConversation &&
+    isForkEnabled(conversationContext?.forkCapability, {
+      isLastMessage,
+      hasTurnAnchor: hasForkAnchor,
+    });
   const forkButton = showForkButton ? (
     <Tooltip content={t('messages.fork.action')}>
       <div

@@ -53,6 +53,8 @@ import type { SearchHit } from './search/searchModel';
 export type ExplorerContainerProps = {
   /** Owning project id — scopes the store's fact cache + localStorage UI state. */
   projectId: string;
+  /** Called after a file is opened, e.g. to dismiss the mobile explorer overlay. */
+  onPreviewOpen?: () => void;
 };
 
 /** A local absolute path → `file://` URI (normalize `\`, ensure leading slash, encode). */
@@ -131,7 +133,7 @@ export const buildExplorerPreviewPayload = async (
   };
 };
 
-export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId }) => {
+export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId, onPreviewOpen }) => {
   const { t } = useTranslation();
   const { openPreview } = usePreviewContext();
   const activeConversationId = useCurrentConversation();
@@ -167,6 +169,7 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId 
       const rootDisplayPath = roots.find((root) => root.pe_id === peId)?.displayPath;
       const { content, contentType, metadata } = await buildExplorerPreviewPayload(peId, relativePath, rootDisplayPath);
       openPreview(content, contentType, metadata);
+      onPreviewOpen?.();
     } catch (e) {
       Message.error(t(previewErrorToI18nKey(classifyPreviewError(e))));
     }

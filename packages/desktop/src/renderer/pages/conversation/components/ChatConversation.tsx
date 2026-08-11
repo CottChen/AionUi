@@ -218,10 +218,9 @@ const AionrsConversationPanel: React.FC<{ conversation: AionrsConversation; slid
       </div>
     ),
     workspaceEnabled,
-    // For project conversations the preview panel is hoisted to the Layout-level
-    // project host (structurally persistent across same-project conversation
-    // switches — no remount). ChatLayout then renders chat only.
-    previewHosted: Boolean(conversation.project_id),
+    // Desktop project previews are hoisted to Layout; mobile keeps ChatLayout's
+    // full-width preview because Layout does not mount its hosted region there.
+    previewHosted: Boolean(conversation.project_id) && !isMobile,
     workspacePath: conversation.extra?.workspace,
     // Key the workspace-panel collapse preference per-project (falls back to
     // conversation_id inside ChatLayout when there is no project) so the panel's
@@ -393,7 +392,7 @@ const ChatConversation: React.FC<{
       siderTitle={sliderTitle}
       sider={<ChatSlider conversation={conversation} />}
       workspaceEnabled={workspaceEnabled}
-      previewHosted={Boolean(conversation?.project_id)}
+      previewHosted={Boolean(conversation?.project_id) && !isMobile}
       workspacePath={conversation?.extra?.workspace}
       workspacePreferenceKey={conversation?.project_id}
       isTemporaryWorkspace={

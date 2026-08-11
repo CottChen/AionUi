@@ -8,6 +8,10 @@ import ChatConversation from '@/renderer/pages/conversation/components/ChatConve
 const usePresetAssistantInfoMock = vi.fn();
 const acpChatMock = vi.fn(() => <div data-testid='mock-acp-chat'>acp chat</div>);
 const acpModelSelectorMock = vi.fn(() => <div data-testid='mock-acp-model-selector'>model selector</div>);
+const layoutMocks = vi.hoisted(() => ({
+  isMobile: false,
+  chatLayout: vi.fn(),
+}));
 
 vi.mock('@/renderer/pages/conversation/Messages/MessageList', () => ({
   default: ({ className }: { className?: string }) => <div className={className}>message history</div>,
@@ -25,12 +29,15 @@ vi.mock('@/renderer/pages/conversation/Messages/artifacts', () => ({
 }));
 
 vi.mock('@/renderer/pages/conversation/components/ChatLayout', () => ({
-  default: ({ children, headerExtra }: { children: React.ReactNode; headerExtra?: React.ReactNode }) => (
-    <div>
-      {headerExtra}
-      {children}
-    </div>
-  ),
+  default: (props: { children: React.ReactNode; headerExtra?: React.ReactNode; previewHosted?: boolean }) => {
+    layoutMocks.chatLayout(props);
+    return (
+      <div>
+        {props.headerExtra}
+        {props.children}
+      </div>
+    );
+  },
 }));
 
 vi.mock('@/renderer/pages/conversation/platforms/acp/AcpChat', () => ({
@@ -57,7 +64,7 @@ vi.mock('@/renderer/hooks/agent/usePresetAssistantInfo', () => ({
 }));
 
 vi.mock('@/renderer/hooks/context/LayoutContext', () => ({
-  useLayoutContext: () => ({ isMobile: false }),
+  useLayoutContext: () => ({ isMobile: layoutMocks.isMobile }),
 }));
 
 vi.mock('@/renderer/pages/conversation/Preview', () => ({
@@ -82,10 +89,64 @@ function legacyConversation(type: 'gemini' | 'codex' | 'openclaw-gateway' | 'nan
 
 describe('ChatConversation legacy runtime rendering', () => {
   beforeEach(() => {
+    layoutMocks.isMobile = false;
+    layoutMocks.chatLayout.mockClear();
     usePresetAssistantInfoMock.mockReset();
     acpChatMock.mockClear();
     acpModelSelectorMock.mockClear();
     usePresetAssistantInfoMock.mockReturnValue({ info: undefined, isLoading: false });
+  });
+
+  it('keeps project preview inside ChatLayout on mobile', () => {
+    layoutMocks.isMobile = true;
+
+    render(
+      <ChatConversation
+        conversation={
+          {
+            id: 'conv-project-mobile',
+            user_id: 'user-1',
+            name: 'Mobile project',
+            type: 'acp',
+            model: {},
+            extra: { workspace: '/tmp/project', backend: 'codex' },
+            project_id: 'project-1',
+            status: 'finished',
+            source: 'aionui',
+            created_at: 1,
+            modified_at: 1,
+            pinned: false,
+          } as TChatConversation
+        }
+      />
+    );
+
+    expect(layoutMocks.chatLayout).toHaveBeenCalledWith(expect.objectContaining({ previewHosted: false }));
+  });
+
+  it('keeps project preview hosted by Layout on desktop', () => {
+    render(
+      <ChatConversation
+        conversation={
+          {
+            id: 'conv-project-desktop',
+            user_id: 'user-1',
+            name: 'Desktop project',
+            type: 'acp',
+            model: {},
+            extra: { workspace: '/tmp/project', backend: 'codex' },
+            project_id: 'project-1',
+            status: 'finished',
+            source: 'aionui',
+            created_at: 1,
+            modified_at: 1,
+            pinned: false,
+          } as TChatConversation
+        }
+      />
+    );
+
+    expect(layoutMocks.chatLayout).toHaveBeenCalledWith(expect.objectContaining({ previewHosted: true }));
   });
 
   it.each(['gemini', 'codex', 'openclaw-gateway', 'nanobot', 'remote'] as const)(

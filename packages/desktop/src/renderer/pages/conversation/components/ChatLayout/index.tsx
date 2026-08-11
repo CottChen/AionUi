@@ -39,10 +39,10 @@ const ChatLayout: React.FC<{
   headerExtra?: React.ReactNode;
   workspaceEnabled?: boolean;
   /**
-   * When true (project conversations), the preview panel is hoisted to the
-   * Layout-level project host and this ChatLayout renders chat only — the preview
-   * region + its resize live at the Layout level, structurally persistent across
-   * same-project conversation switches (no remount).
+   * When true on desktop (project conversations), the preview panel is hoisted
+   * to the Layout-level project host and this ChatLayout renders chat only. On
+   * mobile, ChatLayout keeps the full-width local preview because Layout does not
+   * mount the hosted region there.
    */
   previewHosted?: boolean;
   /** Conversation ID for mode switching */
@@ -72,7 +72,9 @@ const ChatLayout: React.FC<{
 
   // Preview panel state
   const { isOpen: isPreviewOpenRaw } = usePreviewContext();
-  const previewHosted = Boolean(props.previewHosted);
+  // Layout only mounts the project preview host on desktop. Mobile must render
+  // the local full-width preview or both hosts would be disabled.
+  const previewHosted = Boolean(props.previewHosted) && !isMobile;
   // For project conversations the preview lives at the Layout host, so this
   // ChatLayout must behave as if there is no preview: chat fills, no split, no
   // preview panel. Everywhere below uses `isPreviewOpen` for that local decision.

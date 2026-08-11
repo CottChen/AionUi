@@ -121,10 +121,10 @@ const detail = (entries: ProjectEntryDto[]): ProjectDetailDto => ({
 });
 const backendErr = (code: string) => ({ name: 'BackendHttpError', status: 409, code });
 
-const renderIt = () =>
+const renderIt = (onPreviewOpen?: () => void) =>
   render(
     <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
-      <ExplorerContainer projectId='p1' />
+      <ExplorerContainer projectId='p1' onPreviewOpen={onPreviewOpen} />
     </SWRConfig>
   );
 
@@ -224,6 +224,29 @@ describe('ExplorerContainer attach/remove', () => {
     expect(metadata.fileRef).toEqual({ kind: 'project', pe_id: 'peA', relative_path: 'docs/readme.md' });
     expect(metadata.file_path).toBe('/x/docs/readme.md');
     expect(metadata.workspace).toBe('/x');
+  });
+
+  it('notifies the mobile host only after the preview opens successfully', async () => {
+    const onPreviewOpen = vi.fn();
+    renderIt(onPreviewOpen);
+    await screen.findByTestId('roots');
+
+    fireEvent.click(screen.getByTestId('do-open'));
+
+    await waitFor(() => expect(openPreview).toHaveBeenCalled());
+    expect(onPreviewOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the mobile explorer open when loading the preview fails', async () => {
+    const onPreviewOpen = vi.fn();
+    readContent.mockRejectedValue(new Error('read failed'));
+    renderIt(onPreviewOpen);
+    await screen.findByTestId('roots');
+
+    fireEvent.click(screen.getByTestId('do-open'));
+
+    await waitFor(() => expect(Message.error).toHaveBeenCalled());
+    expect(onPreviewOpen).not.toHaveBeenCalled();
   });
 
   it('removes an attached folder and revalidates the tree', async () => {

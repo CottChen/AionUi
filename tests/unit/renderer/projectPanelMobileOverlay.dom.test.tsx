@@ -9,7 +9,14 @@ import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/renderer/pages/conversation/explorer/ExplorerContainer', () => ({
-  ExplorerContainer: ({ projectId }: { projectId: string }) => <div data-testid='explorer'>{projectId}</div>,
+  ExplorerContainer: ({ projectId, onPreviewOpen }: { projectId: string; onPreviewOpen?: () => void }) => (
+    <div data-testid='explorer'>
+      {projectId}
+      <button type='button' onClick={onPreviewOpen}>
+        open preview
+      </button>
+    </div>
+  ),
 }));
 
 import { ProjectPanelMobileOverlay } from '@/renderer/components/layout/ProjectPanelMobileOverlay';
@@ -47,6 +54,15 @@ describe('ProjectPanelMobileOverlay (P3 mobile)', () => {
     expect(backdrop).not.toBeNull();
     fireEvent.click(backdrop);
     expect(onCollapse).toHaveBeenCalledTimes(2);
+  });
+
+  it('collapses the explorer after a file opens so the mobile preview is visible', () => {
+    const onCollapse = vi.fn();
+    render(<ProjectPanelMobileOverlay projectId='p1' collapsed={false} onCollapse={onCollapse} widthPx={360} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'open preview' }));
+
+    expect(onCollapse).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the same mount across an open→close prop change (no remount)', () => {
