@@ -307,6 +307,7 @@ const ChatConversation: React.FC<{
             }
             assistantId={acpAssistantId}
             forkCapability={conversation.fork_capability}
+            promptCapability={conversation.prompt_capability}
           ></AcpChat>
         );
       default:

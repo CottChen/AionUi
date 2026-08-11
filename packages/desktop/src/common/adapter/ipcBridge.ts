@@ -15,6 +15,7 @@
 import type { IConfirmation } from '@/common/chat/chatLib';
 import type { AcpSlashCommandApiItem } from '@/common/chat/slash/types';
 import { bridge } from '@/common/platform/bridge';
+import { buildListTasksPath } from './teamTaskPath';
 import type { OpenDialogOptions } from 'electron';
 import type {
   ICssTheme,
@@ -34,7 +35,6 @@ import type {
   SetAssistantStateRequest,
   UpdateAssistantRequest,
 } from '../types/agent/assistantTypes';
-import type { PreviewHistoryTarget, PreviewSnapshotInfo } from '../types/office/preview';
 import type {
   EnsureConversationRuntimeResponse,
   GetConfigOptionsResponse,
@@ -55,9 +55,12 @@ import type {
   ITeamAgentRuntimeStatusEvent,
   ITeamAgentSpawnedEvent,
   ITeamAgentStatusEvent,
+  ITeamActivityPage,
   ITeamChildTurnEvent,
   ITeamCreatedEvent,
   ITeamListChangedEvent,
+  ITeamMailboxChangedEvent,
+  ITeamMailboxMessage,
   ITeamRemovedEvent,
   ITeamRenamedEvent,
   ITeamRunAck,
@@ -67,6 +70,7 @@ import type {
   ITeamSessionStatusChangedEvent,
   ITeamSlotWorkChangedEvent,
   ITeamTaskChangedEvent,
+  ITeamTaskItem,
   ICancelTeamChildTurnParams,
   ICancelTeamRunParams,
   IPauseTeamSlotParams,
@@ -127,8 +131,12 @@ import {
 } from './teamMapper';
 import {
   absoluteToRelativePath,
+  fromBackendSkillFileNodes,
   fromBackendWorkspaceFlatFiles,
   fromBackendWorkspaceList,
+  resolveWebSkillFile,
+  resolveWebSkillRoot,
+  type RawSkillFileNode,
   type RawWorkspaceFlatFile,
 } from './workspaceMapper';
 
@@ -270,6 +278,10 @@ export const conversation = {
     (p) => `/api/conversations/${p.conversation_id}/cancel`,
     (p) => ({ turn_id: p.turn_id })
   ),
+  killTerminal: httpPost<void, { conversation_id: string; terminal_id: string }>(
+    (p) => `/api/conversations/${p.conversation_id}/terminals/${encodeURIComponent(p.terminal_id)}/kill`,
+    () => undefined
+  ),
   activeCount: httpGet<{ count: number }>('/api/conversations/active-count'),
   sendMessage: httpPost<ISendMessageResult, ISendMessageParams>(
     (p) => `/api/conversations/${p.conversation_id}/messages`,
@@ -302,6 +314,13 @@ export const conversation = {
   confirmMessage: httpPost<void, IConfirmMessageParams>(
     (p) => `/api/conversations/${p.conversation_id}/confirmations/${encodeURIComponent(p.call_id)}/confirm`,
     (p) => ({ msg_id: p.msg_id, data: p.confirm_key })
+  ),
+  // Dedicated answer channel for the structured question card (AskUserQuestion)
+  // — question answers must not ride the permission confirm endpoint
+  // (2026-08-05 ruling). Send either answers[] or decline:true, never both.
+  answerAsk: httpPost<void, IAnswerAskParams>(
+    (p) => `/api/conversations/${p.conversation_id}/asks/${encodeURIComponent(p.request_id)}/answer`,
+    (p) => (p.decline ? { decline: true } : { answers: p.answers ?? [] })
   ),
   listArtifacts: httpGet<IConversationArtifact[], { conversation_id: string }>(
     (p) => `/api/conversations/${p.conversation_id}/artifacts`
@@ -437,6 +456,27 @@ export const project = {
    * for a subdir, the existing focused) entry. 409 `project_explorer_duplicate` /
    * `project_explorer_overlap` surface via BackendHttpError.code.
    */
+  /**
+   * POST /api/projects/{id}/resolve-ref → the strongest identity for a file.
+   *
+   * The explorer and a chat link describe the same file differently (`project` vs
+   * `local`), so anything keyed on the ref — tab identity, change subscriptions —
+   * would otherwise treat one file as two. This resolves a local path that lives
+   * under one of the project's roots into its project form.
+   *
+   * Always answers with a usable ref: `project` and `upload` come back untouched,
+   * and a path outside every root — or one that does not exist — is echoed back
+   * rather than raising, so a caller mid-way through opening a missing file still
+   * has something to render with. `upgraded` says whether it changed.
+   *
+   * The comparison stays server-side because case folding is a compile-time
+   * platform decision; comparing path strings here would miss matches on macOS and
+   * merge distinct files on Linux.
+   */
+  resolveRef: httpPost<{ file: ChatFileRef; upgraded: boolean }, { project_id: string; file: ChatFileRef }>(
+    (p) => `/api/projects/${encodeURIComponent(p.project_id)}/resolve-ref`,
+    (p) => ({ file: p.file })
+  ),
   attachFolder: httpPost<ProjectEntryDto, { project_id: string } & AttachFolderRequest>(
     (p) => `/api/projects/${encodeURIComponent(p.project_id)}/folders`,
     (p) => (p.display_name ? { uri: p.uri, display_name: p.display_name } : { uri: p.uri })
@@ -654,12 +694,15 @@ export const registerWebShowOpenHandler = (handler: ShowOpenHandler | null): voi
 
 const nativeShowOpen = bridge.buildProvider<string[] | undefined, ShowOpenOptions>('show-open');
 
+/** Detect Electron at call time because this adapter is shared by Electron and WebUI renderers. */
+const isElectronRenderer = (): boolean =>
+  typeof window !== 'undefined' && Boolean((window as { electronAPI?: unknown }).electronAPI);
+
 export const dialog = {
   showOpen: {
     provider: nativeShowOpen.provider,
     invoke: ((options?: ShowOpenOptions) => {
-      const hasElectron = typeof window !== 'undefined' && Boolean((window as { electronAPI?: unknown }).electronAPI);
-      if (!hasElectron && webShowOpenHandler) {
+      if (!isElectronRenderer() && webShowOpenHandler) {
         return webShowOpenHandler(options);
       }
       return nativeShowOpen.invoke(options);
@@ -677,6 +720,15 @@ export type SkillFileNode = {
   type: 'directory' | 'file';
   children?: SkillFileNode[];
 };
+
+// Keep both transports available: Electron owns dedicated skill-file IPC channels,
+// while WebUI must use the backend's workspace-scoped filesystem endpoints.
+const webListSkillFiles = httpPost<RawSkillFileNode[], { dir: string; root: string }>('/api/fs/dir');
+const webReadSkillFile = httpPost<string | null, { path: string; workspace: string }>('/api/fs/read');
+const nativeListSkillFiles = bridge.buildProvider<SkillFileNode[], { skill_location: string }>('skills.files.list');
+const nativeReadSkillFile = bridge.buildProvider<string, { skill_location: string; relative_path: string }>(
+  'skills.files.read'
+);
 
 /** Raw metadata as the backend serializes it (snake_case). */
 type RawFileMetadata = {
@@ -707,6 +759,20 @@ export const fs = {
   // calls shell.showItemInFolder — the front end never builds the absolute path
   // (avoids the Windows verbatim `\\?\` pitfall). Electron-only at the call site.
   reveal: httpPost<void, { pe_id: string; relative_path: string }>('/api/fs/reveal'),
+  // Copy a project-scoped entry's absolute device path to the OS clipboard, for
+  // the Explorer "copy absolute path" action. Mirrors reveal: the backend resolves
+  // the path AND writes the clipboard itself, returning void — the front end never
+  // receives the absolute path. Electron desktop-only (a remote WebUI must not use
+  // it). Errors come back as codes only, never a message containing a path.
+  copyAbsolutePath: httpPost<void, { pe_id: string; relative_path: string }>('/api/fs/copy-absolute-path'),
+  // Open a file in the OS default application, addressed by ChatFileRef so it
+  // works for all three ref kinds (project / local / upload). The backend
+  // resolves the ref and shells out; the front end never receives an absolute
+  // path — errors come back as codes only (FILE_NOT_FOUND / REVEAL_FAILED /
+  // INTERNAL_ERROR), never a message containing a path. This is the escape hatch
+  // for tabs that cannot be previewed (oversized, unsupported), including
+  // explorer-opened files that deliberately carry no file_path.
+  openSystem: httpPost<void, { file: ChatFileRef }>('/api/fs/open-system'),
   listWorkspaceFiles: withResponseMap(
     httpPost<Array<RawWorkspaceFlatFile>, { root: string }>('/api/fs/list'),
     fromBackendWorkspaceFlatFiles
@@ -842,20 +908,40 @@ export const fs = {
   ),
   enableSkillsMarket: httpPost<void, void>('/api/skills/market/enable'),
   disableSkillsMarket: httpPost<void, void>('/api/skills/market/disable'),
-  listSkillFiles: bridge.buildProvider<SkillFileNode[], { skill_location: string }>('skills.files.list'),
-  readSkillFile: bridge.buildProvider<string, { skill_location: string; relative_path: string }>('skills.files.read'),
+  listSkillFiles: {
+    provider: nativeListSkillFiles.provider,
+    invoke: async ({ skill_location }: { skill_location: string }) => {
+      if (isElectronRenderer()) return nativeListSkillFiles.invoke({ skill_location });
+
+      // The generic WebUI directory endpoint returns backend-shaped nodes, so
+      // normalize them to the same contract consumed from native IPC.
+      const root = resolveWebSkillRoot(skill_location);
+      const nodes = await webListSkillFiles.invoke({ dir: root, root });
+      return fromBackendSkillFileNodes(nodes);
+    },
+  },
+  readSkillFile: {
+    provider: nativeReadSkillFile.provider,
+    invoke: async ({ skill_location, relative_path }: { skill_location: string; relative_path: string }) => {
+      if (isElectronRenderer()) return nativeReadSkillFile.invoke({ skill_location, relative_path });
+      const content = await webReadSkillFile.invoke(resolveWebSkillFile(skill_location, relative_path));
+      if (content === null) throw new Error('Skill file could not be read');
+      return content;
+    },
+  },
 };
 
 // ---------------------------------------------------------------------------
 // File Watch — routed to /api/fs/watch/*
 // ---------------------------------------------------------------------------
 
-// Workspace Office file watch
-export const workspaceOfficeWatch = {
-  start: httpPost<void, { workspace: string }>('/api/fs/office-watch/start'),
-  stop: httpPost<void, { workspace: string }>('/api/fs/office-watch/stop'),
-  fileAdded: wsEmitter<{ file_path: string; workspace: string }>('workspaceOfficeWatch.fileAdded'),
-};
+// Note for whoever next compares a watch event's path against a local one: the
+// workspace Office watch removed here carried the repo's only macOS
+// `/private/var` → `/var` (and `/private/tmp` → `/tmp`) normalizer. macOS reports
+// watch events under the `/private` symlink while a workspace path usually is not,
+// so a naive string comparison silently never matches on that platform. The fold
+// survives as `normalizeWatchPath` in `renderer/utils/workspace/workspace.ts` —
+// use it on both sides of the comparison.
 
 // File streaming updates (real-time content push when agent writes)
 export const fileStream = {
@@ -1234,28 +1320,6 @@ export const database = {
   ),
 };
 
-// ---------------------------------------------------------------------------
-// Preview History — routed to /api/preview-history/*
-// ---------------------------------------------------------------------------
-
-function mapPreviewTarget(target: PreviewHistoryTarget): Record<string, unknown> {
-  return { ...target, content_type: target.contentType, contentType: undefined };
-}
-
-export const previewHistory = {
-  list: httpPost<PreviewSnapshotInfo[], { target: PreviewHistoryTarget }>('/api/preview-history/list', (p) => ({
-    target: mapPreviewTarget(p.target),
-  })),
-  save: httpPost<PreviewSnapshotInfo, { target: PreviewHistoryTarget; content: string }>(
-    '/api/preview-history/save',
-    (p) => ({ target: mapPreviewTarget(p.target), content: p.content })
-  ),
-  getContent: httpPost<
-    { snapshot: PreviewSnapshotInfo; content: string } | null,
-    { target: PreviewHistoryTarget; snapshot_id: string }
-  >('/api/preview-history/get-content', (p) => ({ target: mapPreviewTarget(p.target), snapshot_id: p.snapshot_id })),
-};
-
 // Preview panel
 export const preview = {
   open: wsEmitter<{
@@ -1373,10 +1437,6 @@ export const systemSettings = {
   getSaveUploadToWorkspace: httpGetClientSetting<boolean>('saveUploadToWorkspace'),
   setSaveUploadToWorkspace: httpPut<void, { enabled: boolean }>('/api/settings/client', (p) => ({
     saveUploadToWorkspace: p.enabled,
-  })),
-  getAutoPreviewOfficeFiles: httpGetClientSetting<boolean>('autoPreviewOfficeFiles'),
-  setAutoPreviewOfficeFiles: httpPut<void, { enabled: boolean }>('/api/settings/client', (p) => ({
-    autoPreviewOfficeFiles: p.enabled,
   })),
   getPetEnabled: bridge.buildProvider<boolean, void>('system-settings:get-pet-enabled'),
   setPetEnabled: bridge.buildProvider<void, { enabled: boolean }>('system-settings:set-pet-enabled'),
@@ -1679,6 +1739,13 @@ export interface ISendMessageResult {
   msg_id: string;
   turn_id: string;
   runtime: TConversationRuntimeSummary;
+}
+
+export interface IAnswerAskParams {
+  conversation_id: string;
+  request_id: string;
+  answers?: Array<{ question: string; labels: string[] }>;
+  decline?: boolean;
 }
 
 export interface IConfirmMessageParams {
@@ -2137,7 +2204,10 @@ export const team = {
     })),
     fromBackendTeam
   ),
-  list: withResponseMap(httpGet<TTeam[], void>('/api/teams'), fromBackendTeamList),
+  list: withResponseMap(
+    httpGet<TTeam[], { user_id: string }>((p) => `/api/teams?user_id=${encodeURIComponent(p.user_id)}`),
+    fromBackendTeamList
+  ),
   get: withResponseMap(
     httpGet<TTeam | null, { id: string }>((p) => `/api/teams/${p.id}`),
     fromBackendTeamOptional
@@ -2179,6 +2249,31 @@ export const team = {
     (p) => ({ mode: p.session_mode })
   ),
   getRunState: httpGet<ITeamRunStateResponse, { team_id: string }>((p) => `/api/teams/${p.team_id}/run-state`),
+  listMailbox: httpGet<ITeamMailboxMessage[], { team_id: string; limit?: number }>(
+    (p) => `/api/teams/${p.team_id}/mailbox?limit=${p.limit ?? 500}`
+  ),
+  listTasks: httpGet<ITeamTaskItem[], { team_id: string; limit?: number; ids?: string[] }>((p) =>
+    buildListTasksPath(p)
+  ),
+  listActivity: httpGet<
+    ITeamActivityPage,
+    {
+      team_id: string;
+      limit?: number;
+      cursor_ts?: number;
+      cursor_id?: string;
+      direction?: 'desc' | 'asc';
+      kind?: 'all' | 'message' | 'task';
+    }
+  >((p) => {
+    const q = new URLSearchParams();
+    if (p.limit != null) q.set('limit', String(p.limit));
+    if (p.cursor_ts != null) q.set('cursor_ts', String(p.cursor_ts));
+    if (p.cursor_id != null) q.set('cursor_id', p.cursor_id);
+    if (p.direction) q.set('direction', p.direction);
+    if (p.kind) q.set('kind', p.kind);
+    return `/api/teams/${p.team_id}/activity?${q.toString()}`;
+  }),
   sendMessage: httpPost<ITeamRunAck, ISendTeamMessageParams>(
     (p) => `/api/teams/${p.team_id}/messages`,
     (p) => ({
@@ -2227,6 +2322,7 @@ export const team = {
   teammateMessage: wsEmitter<ITeamTeammateMessageEvent>('team.teammateMessage'),
   sessionStatusChanged: wsEmitter<ITeamSessionStatusChangedEvent>('team.sessionStatusChanged'),
   taskChanged: wsEmitter<ITeamTaskChangedEvent>('team.taskChanged'),
+  mailboxChanged: wsEmitter<ITeamMailboxChangedEvent>('team.mailboxChanged'),
   sessionChanged: wsEmitter<ITeamSessionChangedEvent>('team.sessionChanged'),
   runAccepted: wsEmitter<ITeamRunEvent>('team.runAccepted'),
   runStarted: wsEmitter<ITeamRunEvent>('team.runStarted'),

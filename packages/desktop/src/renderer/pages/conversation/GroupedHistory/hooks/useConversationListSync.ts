@@ -60,9 +60,15 @@ export type SidebarStreamGuardDecision = {
 export const getSidebarStreamGuardDecision = ({
   type,
   completed,
+  completedTurnId,
+  streamTurnId,
 }: {
   type: string;
   completed: boolean;
+  /** Turn whose completion set the `completed` flag, when known. */
+  completedTurnId?: string | null;
+  /** Turn the incoming stream frame belongs to, when known. */
+  streamTurnId?: string | null;
 }): SidebarStreamGuardDecision => {
   if (!isGeneratingStreamMessage(type)) {
     return {
@@ -81,10 +87,28 @@ export const getSidebarStreamGuardDecision = ({
   }
 
   if (completed) {
+    // A frame from a DIFFERENT turn than the one that completed is not late —
+    // it belongs to a newer turn. codex keeps streaming after ending its
+    // prompt turn (unified exec runs the command in a background PTY), so the
+    // old turn's completion used to swallow the next turn's whole stream and
+    // the sidebar never lit up as generating.
+    const isNewerTurn =
+      typeof streamTurnId === 'string' &&
+      streamTurnId.length > 0 &&
+      typeof completedTurnId === 'string' &&
+      completedTurnId.length > 0 &&
+      streamTurnId !== completedTurnId;
+    if (!isNewerTurn) {
+      return {
+        markGenerating: false,
+        clearCompleted: false,
+        lateIgnored: true,
+      };
+    }
     return {
-      markGenerating: false,
-      clearCompleted: false,
-      lateIgnored: true,
+      markGenerating: true,
+      clearCompleted: true,
+      lateIgnored: false,
     };
   }
 
@@ -110,6 +134,14 @@ let generatingConversationIdsState = new Set<string>();
 let completionUnreadConversationIdsState = new Set<string>();
 let completedConversationIdsState = new Set<string>();
 let conversation_idsState = new Set<string>();
+// Full id → owning project_id map over ALL loaded conversations (incl. the team
+// member rows filtered out of `conversationsState`). Every row from
+// GET /api/conversations carries project_id, so this lets the route publish the
+// active project synchronously on switch — no waiting for the per-conversation
+// `conversation.get` to resolve (that async lag painted the previous project's
+// tree). `null` = known conversation with no project (or project_id not yet
+// backfilled); a missing key = not loaded yet (caller placeholders).
+let projectIdByIdState = new Map<string, string | null>();
 let activeConversationIdState: string | null = null;
 let refreshGenerationState = 0;
 let refreshTimerState: ReturnType<typeof setTimeout> | null = null;
@@ -139,6 +171,24 @@ const subscribeConversationListSync = (listener: () => void) => {
 
 const getConversationListSyncSnapshot = (): ConversationListSyncSnapshot => snapshotState;
 
+/**
+ * Synchronous lookup of a conversation's owning project id from the in-memory
+ * list snapshot (loaded once via GET /api/conversations, every row carrying
+ * project_id). Returns the project id string, `null` when the conversation is
+ * known but has no project (or its project_id has not been backfilled yet), or
+ * `undefined` when the conversation is not in the snapshot yet (brand-new /
+ * not-loaded — the caller should placeholder rather than paint a stale project).
+ */
+export const getSnapshotConversationProjectId = (conversation_id: string): string | null | undefined => {
+  if (!projectIdByIdState.has(conversation_id)) return undefined;
+  return projectIdByIdState.get(conversation_id) ?? null;
+};
+
+/** Test hook: seed the id → project_id map so the sync lookup can be exercised. */
+export const setConversationProjectMapForTest = (entries: Array<[string, string | null]>): void => {
+  projectIdByIdState = new Map(entries);
+};
+
 const runConversationRefresh = () => {
   if (refreshInFlightState) {
     refreshQueuedState = true;
@@ -166,12 +216,16 @@ const runConversationRefresh = () => {
         // responseStream listener recognises them as known and doesn't
         // trigger an infinite refreshConversations loop.
         conversation_idsState = new Set(items.map((conversation) => conversation.id));
+        // Map ALL rows (unfiltered) so a team member conversation's project_id is
+        // resolvable too — the team route looks up its leader conversation here.
+        projectIdByIdState = new Map(items.map((conversation) => [conversation.id, conversation.project_id ?? null]));
         emitStoreChange();
         return;
       }
 
       conversationsState = [];
       conversation_idsState = new Set();
+      projectIdByIdState = new Map();
       emitStoreChange();
     })
     .catch((error) => {
@@ -181,6 +235,7 @@ const runConversationRefresh = () => {
       console.error('[WorkspaceGroupedHistory] Failed to load conversations:', error);
       conversationsState = [];
       conversation_idsState = new Set();
+      projectIdByIdState = new Map();
       emitStoreChange();
     })
     .finally(() => {
@@ -243,8 +298,13 @@ const clearCompletionUnreadState = (conversation_id: string) => {
   emitStoreChange();
 };
 
-const markCompleted = (conversation_id: string) => {
+/** Turn id that put a conversation into the `completed` set (for turn-aware
+ *  late-frame detection). */
+const completedTurnIdByConversation = new Map<string, string | null>();
+
+const markCompleted = (conversation_id: string, turn_id?: string | null) => {
   completedConversationIdsState = new Set(completedConversationIdsState).add(conversation_id);
+  completedTurnIdByConversation.set(conversation_id, turn_id ?? null);
 };
 
 const clearCompleted = (conversation_id: string) => {
@@ -255,6 +315,7 @@ const clearCompleted = (conversation_id: string) => {
   const next = new Set(completedConversationIdsState);
   next.delete(conversation_id);
   completedConversationIdsState = next;
+  completedTurnIdByConversation.delete(conversation_id);
 };
 
 const logLateStreamIgnored = (conversation_id: string, type: string) => {
@@ -334,6 +395,8 @@ const initializeConversationListSyncStore = () => {
     const decision = getSidebarStreamGuardDecision({
       type: message.type,
       completed: completedConversationIdsState.has(conversation_id),
+      completedTurnId: completedTurnIdByConversation.get(conversation_id) ?? null,
+      streamTurnId: message.turn_id ?? null,
     });
     if (decision.clearCompleted) {
       clearCompleted(conversation_id);
@@ -350,7 +413,7 @@ const initializeConversationListSyncStore = () => {
     if (isTerminalTurnState(event.state) && activeConversationIdState !== event.session_id) {
       markCompletionUnread(event.session_id);
     }
-    markCompleted(event.session_id);
+    markCompleted(event.session_id, event.turn_id);
     clearGenerating(event.session_id);
     refreshConversations();
   });

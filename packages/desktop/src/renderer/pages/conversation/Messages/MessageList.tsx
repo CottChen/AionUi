@@ -18,10 +18,13 @@ import { useConversationRuntimeView } from '@/renderer/pages/conversation/runtim
 import { getChatSurfaceWidthClass } from '@/renderer/pages/conversation/utils/chatSurfaceWidth';
 import { iconColors } from '@/renderer/styles/colors';
 import { CHAT_MESSAGE_JUMP_EVENT, type ChatMessageJumpDetail } from '@/renderer/utils/chat/chatMinimapEvents';
+import { collectAiCopyRows, type TurnCopyItem } from '@/renderer/utils/chat/turnCopy';
 import { Image } from '@arco-design/web-react';
 import { Down } from '@icon-park/react';
 import MessageAcpPermission from '@renderer/pages/conversation/Messages/acp/MessageAcpPermission';
+import MessageQuestion from './MessageQuestion';
 import MessagePermission from './components/MessagePermission';
+import MessageAcpTerminalOutput from '@renderer/pages/conversation/Messages/acp/MessageAcpTerminalOutput';
 import MessageAcpToolCall from '@renderer/pages/conversation/Messages/acp/MessageAcpToolCall';
 import classNames from 'classnames';
 import React, { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -54,7 +57,6 @@ import type { MessageRatingContext } from './components/MessageRatingActions';
 import MessageThinking from './components/MessageThinking';
 import type { WriteFileResult } from './types';
 import { useAutoScroll } from './useAutoScroll';
-import { useAutoPreviewOfficeFiles } from '@/renderer/hooks/file/useAutoPreviewOfficeFiles';
 import SelectionReplyButton from './components/SelectionReplyButton';
 
 type IMessageVO =
@@ -238,6 +240,7 @@ const MessageItem: React.FC<{
   ratingContext?: MessageRatingContext;
   isLastMessage?: boolean;
   hasForkAnchor?: boolean;
+  turnTexts?: string[];
 }> = React.memo(
   HOC((props) => {
     const { message, highlighted, rowWidthClass } = props as {
@@ -273,6 +276,7 @@ const MessageItem: React.FC<{
       ratingContext,
       isLastMessage,
       hasForkAnchor,
+      turnTexts,
     }: {
       message: TMessage;
       highlighted?: boolean;
@@ -282,6 +286,7 @@ const MessageItem: React.FC<{
       ratingContext?: MessageRatingContext;
       isLastMessage?: boolean;
       hasForkAnchor?: boolean;
+      turnTexts?: string[];
     }) => {
       const { t } = useTranslation();
       switch (message.type) {
@@ -294,6 +299,7 @@ const MessageItem: React.FC<{
               ratingContext={ratingContext}
               isLastMessage={isLastMessage}
               hasForkAnchor={hasForkAnchor}
+              turnTexts={turnTexts}
             ></MessageText>
           );
         case 'tips':
@@ -308,8 +314,12 @@ const MessageItem: React.FC<{
           return <MessagePermission message={message}></MessagePermission>;
         case 'acp_permission':
           return <MessageAcpPermission message={message}></MessageAcpPermission>;
+        case 'ask':
+          return <MessageQuestion message={message}></MessageQuestion>;
         case 'acp_tool_call':
           return <MessageAcpToolCall message={message}></MessageAcpToolCall>;
+        case 'acp_terminal_output':
+          return <MessageAcpTerminalOutput message={message}></MessageAcpTerminalOutput>;
         case 'plan':
           return <MessagePlan message={message}></MessagePlan>;
         case 'thinking':
@@ -332,7 +342,12 @@ const MessageItem: React.FC<{
     prev.showTimestamp === next.showTimestamp &&
     prev.ratingContext === next.ratingContext &&
     prev.isLastMessage === next.isLastMessage &&
-    prev.hasForkAnchor === next.hasForkAnchor
+    prev.hasForkAnchor === next.hasForkAnchor &&
+    // Compare by content: the map is rebuilt per render, so reference equality
+    // would defeat the memo for the one row that carries the copy button.
+    (prev.turnTexts === next.turnTexts ||
+      (prev.turnTexts?.length === next.turnTexts?.length &&
+        (prev.turnTexts ?? []).every((segment, i) => segment === next.turnTexts?.[i])))
 );
 
 const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }> = ({ emptySlot }) => {
@@ -345,7 +360,6 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
   const rowWidthClass = getChatSurfaceWidthClass();
   const loadPreviousMessagePage = useLoadPreviousMessagePage(conversationContext?.conversation_id);
   const loadAnchorMessageWindow = useLoadAnchorMessageWindow(conversationContext?.conversation_id);
-  useAutoPreviewOfficeFiles(conversationContext);
   // While the agent is still streaming, the in-progress turn's last text keeps
   // moving down, so we defer its copy button until the turn finishes to avoid
   // inviting users to copy an incomplete final fragment.
@@ -468,39 +482,14 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
   // last text — not under every intermediate text block.
   // Collect the id of the last AI text in each turn; a turn runs until the next
   // user (right) message. Tool/file/artifact items don't end a turn and, per the
-  // fallback strategy, the copy button stays on the turn's last text even when
-  // followed by tool blocks. While the conversation is still streaming, the
-  // final turn's copy button is withheld; timestamps still render for each text.
-  const aiCopyButtonTextIds = useMemo(() => {
-    const ids = new Set<string>();
-    let pendingTextId: string | undefined;
-    let lastTurnTextId: string | undefined;
-    const flush = () => {
-      if (pendingTextId) ids.add(pendingTextId);
-      pendingTextId = undefined;
-    };
-    for (const item of processedList) {
-      if (
-        'type' in item &&
-        (item.type === 'file_summary' || item.type === 'tool_summary' || item.type === 'artifact')
-      ) {
-        continue;
-      }
-      const message = item as TMessage;
-      if (message.position === 'right') {
-        flush();
-        continue;
-      }
-      if (message.type === 'text') {
-        pendingTextId = message.id;
-      }
-    }
-    lastTurnTextId = pendingTextId;
-    flush();
-    // The final turn is the one that may still be streaming; hide its copy button until done.
-    if (isProcessing && lastTurnTextId) ids.delete(lastTurnTextId);
-    return ids;
-  }, [processedList, isProcessing]);
+  // fallback strategy, the row stays on the turn's last text even when followed
+  // by tool blocks. While the conversation is still streaming, the final turn's
+  // row is withheld (it would otherwise appear then shift down as more text
+  // streams in); earlier, already-finished turns always keep their row.
+  const { copyRowIds: aiCopyRowTextIds, turnTextsById: aiTurnTextsById } = useMemo(
+    () => collectAiCopyRows(processedList as TurnCopyItem[], isProcessing),
+    [processedList, isProcessing]
+  );
 
   const aiRatingContexts = useMemo(() => {
     const contexts = new Map<string, MessageRatingContext>();
@@ -836,8 +825,7 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
     }
     const message = item as TMessage;
     // User messages keep their own copy button; AI text only shows it at the turn end.
-    const showCopyButton =
-      message.position !== 'left' || message.type !== 'text' || aiCopyButtonTextIds.has(message.id);
+    const showCopyButton = message.position !== 'left' || message.type !== 'text' || aiCopyRowTextIds.has(message.id);
     const showTimestamp = message.type !== 'text' || message.created_at != null;
     const ratingContext =
       message.position === 'left' && message.type === 'text' ? aiRatingContexts.get(message.id) : undefined;
@@ -852,6 +840,7 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
         ratingContext={ratingContext}
         isLastMessage={message.id === lastMessageId}
         hasForkAnchor={forkAnchoredIds.has(message.id)}
+        turnTexts={aiTurnTextsById.get(message.id)}
       ></MessageItem>
     );
   };

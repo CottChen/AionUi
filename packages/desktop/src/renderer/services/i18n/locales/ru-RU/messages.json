@@ -81,6 +81,13 @@
     "errorUnsupported": "Этот агент не поддерживает ответвление",
     "errorGeneric": "Не удалось создать ответвление: {{message}}"
   },
+  "askSubmit": "Отправить",
+  "askDecline": "Не отвечать",
+  "askAnswered": "Отвечено",
+  "askDeclined": "Пропущено",
+  "askOther": "Другое",
+  "askOtherPlaceholder": "Введите свой ответ",
+  "requestDetails": "Детали запроса:",
   "rating": {
     "like": "Like",
     "dislike": "Dislike",

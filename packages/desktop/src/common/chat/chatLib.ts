@@ -64,10 +64,12 @@ type TMessageType =
   | 'agent_status'
   | 'permission'
   | 'acp_permission'
+  | 'ask'
   | 'acp_tool_call'
   | 'plan'
   | 'thinking'
-  | 'available_commands';
+  | 'available_commands'
+  | 'acp_terminal_output';
 
 interface IMessage<T extends TMessageType, Content extends Record<string, any>> {
   /**
@@ -195,6 +197,9 @@ export type IMessageTips = IMessage<
     code?: string;
     params?: Record<string, unknown>;
     error?: AgentStreamErrorInfo;
+    /** Stable identity for a tip that supersedes its predecessor — see the
+     *  `supersedes_key` handling in `transformMessage`. */
+    supersedes_key?: string;
   }
 >;
 
@@ -295,9 +300,46 @@ export type IMessageAgentStatus = IMessage<
 
 export type IMessageAcpPermission = IMessage<'acp_permission', AcpPermissionRequest>;
 
+/** One structured question inside an `ask` frame (claude AskUserQuestion shape;
+ *  qwen/grok converged on the same layout — cross-vendor contract). */
+export interface IAskQuestion {
+  question: string;
+  header?: string;
+  /** The ws relay snake_cases every key (normalize_keys_to_snake_case), so the
+   *  wire spelling is multi_select; multiSelect kept for direct payloads. */
+  multiSelect?: boolean;
+  multi_select?: boolean;
+  options: Array<{ label: string; description?: string }>;
+}
+
+/** Structured question card (AgentStreamEvent::Ask, wire tag `ask`). Answered via
+ *  confirmMessage with `{answers:[{question, labels[]}]}` or `{ask_decline:true}`;
+ *  call_id = request_id (the claude control correlation key). */
+export type IMessageAsk = IMessage<
+  'ask',
+  {
+    session_id: string;
+    request_id: string;
+    questions: IAskQuestion[];
+  }
+>;
+
 export type IMessagePermission = IMessage<'permission', IConfirmation>;
 
 export type IMessageAcpToolCall = IMessage<'acp_tool_call', ToolCallUpdate>;
+
+/** Live snapshot of a client-hosted terminal (ACP terminal/*). Stream-only —
+ * never persisted; the card disappears on conversation reload. */
+export interface AcpTerminalOutputContent {
+  terminal_id: string;
+  command: string;
+  /** Cumulative output (backend sends the full buffer each frame). */
+  output: string;
+  truncated: boolean;
+  exit_status?: { exit_code?: number | null; signaled?: boolean } | null;
+}
+
+export type IMessageAcpTerminalOutput = IMessage<'acp_terminal_output', AcpTerminalOutputContent>;
 
 export const mergeAcpToolCallContent = (
   existing: IMessageAcpToolCall['content'],
@@ -377,10 +419,12 @@ export type TMessage =
   | IMessageAgentStatus
   | IMessagePermission
   | IMessageAcpPermission
+  | IMessageAsk
   | IMessageAcpToolCall
   | IMessagePlan
   | IMessageThinking
-  | IMessageAvailableCommands;
+  | IMessageAvailableCommands
+  | IMessageAcpTerminalOutput;
 
 // 统一所有需要用户交互的用户类型
 export interface IConfirmation<Option extends any = any> {
@@ -394,6 +438,9 @@ export interface IConfirmation<Option extends any = any> {
     value: Option;
     params?: Record<string, string>; // Translation interpolation parameters
   }>;
+  /** AskUserQuestion recovery: the bare questions[] payload — when present the
+   *  recovery path rebuilds the real question card instead of a permission card. */
+  questions?: IAskQuestion[];
   /**
    * Command type for exec confirmations (e.g., 'curl', 'npm', 'git')
    * Used for "always allow" permission memory
@@ -664,16 +711,25 @@ const transformMessageInner = (message: IResponseMessage): TMessage | undefined 
         code?: unknown;
         params?: unknown;
         error?: unknown;
+        supersedes_key?: unknown;
       };
       const tipType = data.type ?? 'warning';
       const tipCode = typeof data.code === 'string' ? data.code : undefined;
       const tipParams = isObject(data.params) ? data.params : undefined;
+      // A progress-style tip restates the same fact with a new number (codex
+      // retries: "Reconnecting... 1/5", then 2/5 …). Deriving the message id
+      // from the key makes each update REPLACE its predecessor in the list
+      // instead of appending, so the user watches one card count up rather
+      // than collecting ten near-identical ones. Tips without a key keep a
+      // fresh uuid and are appended as before.
+      const supersedesKey =
+        typeof data.supersedes_key === 'string' && data.supersedes_key ? data.supersedes_key : undefined;
       const structuredError =
         tipType === 'error'
           ? (normalizeAgentStreamError(data.error) ?? normalizeAgentStreamError({ ...data, message: data.content }))
           : undefined;
       return {
-        id: uuid(),
+        id: supersedesKey ? `tip:${supersedesKey}` : uuid(),
         type: 'tips',
         msg_id: message.msg_id,
         position: 'center',
@@ -685,6 +741,7 @@ const transformMessageInner = (message: IResponseMessage): TMessage | undefined 
           ...(tipCode ? { code: tipCode } : {}),
           ...(tipParams ? { params: tipParams } : {}),
           ...(structuredError ? { error: structuredError } : {}),
+          ...(supersedesKey ? { supersedes_key: supersedesKey } : {}),
         },
       };
     }
@@ -755,6 +812,17 @@ const transformMessageInner = (message: IResponseMessage): TMessage | undefined 
         content: message.data as any,
       };
     }
+    case 'ask': {
+      return {
+        id: uuid(),
+        type: 'ask',
+        msg_id: message.msg_id,
+        position: 'left',
+        conversation_id: message.conversation_id,
+        created_at,
+        content: message.data as any,
+      };
+    }
     case 'acp_permission': {
       return {
         id: uuid(),
@@ -764,6 +832,21 @@ const transformMessageInner = (message: IResponseMessage): TMessage | undefined 
         conversation_id: message.conversation_id,
         created_at,
         content: message.data as any,
+      };
+    }
+    case 'acp_terminal_output': {
+      const terminal = message.data as any;
+      return {
+        // Deterministic id per terminal: every frame of a turn shares one
+        // msg_id, so a uuid per frame would stack cards and the msg_id
+        // fallback merge would collapse two terminals into one.
+        id: `term:${message.msg_id}:${terminal?.terminal_id ?? ''}`,
+        type: 'acp_terminal_output',
+        msg_id: message.msg_id,
+        position: 'left',
+        conversation_id: message.conversation_id,
+        created_at,
+        content: terminal,
       };
     }
     case 'acp_tool_call': {
@@ -866,6 +949,18 @@ export const composeMessage = (
     messageHandler('insert', message);
     return list.slice();
   };
+
+  // A superseding tip replaces its predecessor wherever it already sits in the
+  // list, rather than being appended: codex reports a stalled turn as a series
+  // of attempts ("Reconnecting... 1/5", then 2/5 …), and appending each one
+  // buried the conversation under near-identical cards. Matching on the key —
+  // not on list position — keeps working when other messages arrive in between.
+  if (message.type === 'tips' && message.content?.supersedes_key) {
+    const key = message.content.supersedes_key;
+    const existing = list.findIndex((item) => item.type === 'tips' && item.content?.supersedes_key === key);
+    if (existing >= 0) return updateMessage(existing, message);
+    return pushMessage(message);
+  }
 
   if (message.type === 'tool_group') {
     const remainingToolsMap = new Map(message.content.map((t) => [t.call_id, t] as const));

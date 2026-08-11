@@ -81,6 +81,13 @@
     "errorUnsupported": "Dieser Agent unterstützt kein Verzweigen",
     "errorGeneric": "Verzweigen fehlgeschlagen: {{message}}"
   },
+  "askSubmit": "Absenden",
+  "askDecline": "Nicht beantworten",
+  "askAnswered": "Beantwortet",
+  "askDeclined": "Übersprungen",
+  "askOther": "Andere",
+  "askOtherPlaceholder": "Antwort eingeben",
+  "requestDetails": "Anfragedetails:",
   "rating": {
     "like": "Like",
     "dislike": "Dislike",

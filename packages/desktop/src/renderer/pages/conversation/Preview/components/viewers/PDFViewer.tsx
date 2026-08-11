@@ -7,6 +7,7 @@
 import { ipcBridge } from '@/common';
 import { localFileRef, type ChatFileRef } from '@/common/types/chatFile';
 import { buildPdfSrc } from '../../previewUrls';
+import { registerTabReloader } from '../../context/tabReloaderRegistry';
 import { usePreviewToolbarExtras } from '../../context/PreviewToolbarExtrasContext';
 import WebviewHost from '@/renderer/components/media/WebviewHost';
 import { isElectronDesktop } from '@/renderer/utils/platform';
@@ -15,6 +16,13 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next';
 
 interface PDFPreviewProps {
+  /**
+   * Tab this viewer belongs to. When given, the viewer registers how to reload
+   * itself, because a pdf cannot be refreshed by re-reading content: its stream URL
+   * is derived from the file identity and has no timestamp, so the address never
+   * changes and only the webview itself can fetch fresh bytes.
+   */
+  tabId?: string;
   /**
    * ChatFileRef identity — rendered via the backend stream URL (no absolute path
    * exposed to the renderer). Project ref for explorer files, Local otherwise.
@@ -296,14 +304,24 @@ const PdfCanvasDocument: React.FC<{
   );
 };
 
-const PDFPreview: React.FC<PDFPreviewProps> = ({ fileRef, file_path, content, hideToolbar = false }) => {
+const PDFPreview: React.FC<PDFPreviewProps> = ({ tabId, fileRef, file_path, content, hideToolbar = false }) => {
   const { t } = useTranslation();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [electronPdfSrc, setElectronPdfSrc] = useState<string>('');
   const [browserPdfSource, setBrowserPdfSource] = useState<BrowserPdfSource | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [messageApi, messageContextHolder] = Message.useMessage();
   const toolbarExtrasContext = usePreviewToolbarExtras();
+
+  // Expose "reload this document" to the refresh control. Registered from an effect
+  // and removed on unmount, so a closed tab cannot be reloaded through a stale entry.
+  useEffect(() => {
+    if (!tabId) return;
+    return registerTabReloader(tabId, () => {
+      setReloadKey((current) => current + 1);
+    });
+  }, [tabId]);
   const usePortalToolbar = Boolean(toolbarExtrasContext) && !hideToolbar;
   const isElectron = useMemo(() => isElectronDesktop(), []);
   const resolvedFileRef = useMemo(
@@ -386,7 +404,7 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ fileRef, file_path, content, hi
     return () => {
       cancelled = true;
     };
-  }, [content, isElectron, resolvedFileRef, t]);
+  }, [content, isElectron, reloadKey, resolvedFileRef, t]);
 
   const handleElectronPdfError = useCallback(
     (_errorCode: number, errorDescription: string) => {
@@ -476,7 +494,7 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ fileRef, file_path, content, hi
       <div className='flex-1 overflow-hidden bg-bg-1'>
         {isElectron && electronPdfSrc ? (
           <WebviewHost
-            key={electronPdfSrc}
+            key={`${electronPdfSrc}:${reloadKey}`}
             url={electronPdfSrc}
             className='bg-bg-1'
             onDidFinishLoad={handleElectronPdfLoad}
@@ -484,6 +502,7 @@ const PDFPreview: React.FC<PDFPreviewProps> = ({ fileRef, file_path, content, hi
           />
         ) : browserPdfSource ? (
           <PdfCanvasDocument
+            key={reloadKey}
             source={browserPdfSource}
             title={t('preview.pdf.title')}
             loadingLabel={t('preview.loading')}

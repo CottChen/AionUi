@@ -12,10 +12,10 @@
  * a right-click "Remove from project" action; the workspace root is immutable.
  */
 
-import { Alert, Dropdown, Menu, Tree } from '@arco-design/web-react';
+import { Alert, Button, Dropdown, Menu, Tree } from '@arco-design/web-react';
 import { isElectronDesktop } from '@/renderer/utils/platform';
 import type { TreeProps } from '@arco-design/web-react';
-import { Caution } from '@icon-park/react';
+import { Caution, MoreOne } from '@icon-park/react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -49,6 +49,14 @@ export type ExplorerPanelProps = {
    * resolves the pe-ref to an absolute path backend-side; the item is only shown
    * on Electron desktop (WebUI has no local shell / may be remote). Omit to hide. */
   onRevealInFolder?: (peId: string, relativePath: string) => void;
+  /** Copy the node's path relative to its owning pe root to the clipboard. Pure
+   * clipboard (no OS shell / no absolute path), so it works for files and folders
+   * on both Electron and WebUI. Omit to hide the item. */
+  onCopyRelativePath?: (peId: string, relativePath: string, name: string) => void;
+  /** Copy the node's ABSOLUTE device path to the clipboard. The absolute path is
+   * resolved backend-side (the front end never holds it), so this is Electron
+   * desktop-only — a remote WebUI must not expose it. Omit to hide the item. */
+  onCopyAbsolutePath?: (peId: string, relativePath: string) => void;
   /** Import OS files (A-paste) dropped onto a node into that node's directory
    * (a file node routes to its parent dir). `filePaths` are absolute OS paths
    * (Electron only — empty in the browser, where the drop is ignored). Omit to
@@ -70,6 +78,8 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
   onDelete,
   onAddToChat,
   onRevealInFolder,
+  onCopyRelativePath,
+  onCopyAbsolutePath,
   onImportFiles,
   onSearchInFolder,
   onUploadFiles,
@@ -210,7 +220,17 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
       // remote and has no shell permission), so gate the menu item on the runtime.
       const canReveal = Boolean(onRevealInFolder) && isElectronDesktop();
       const folderActions = !isFile && (onSearchInFolder || onUploadFiles);
-      const hasMenu = onAddToChat || canReveal || folderActions || (isRoot ? onRemoveRoot : onRename || onDelete);
+      // Copy-absolute-path is desktop-only: the absolute path is resolved
+      // backend-side and must not be exposed to a remote WebUI.
+      const canCopyAbsolutePath = Boolean(onCopyAbsolutePath) && isElectronDesktop();
+      const showWebActions = !isElectronDesktop();
+      const hasMenu =
+        onAddToChat ||
+        canReveal ||
+        onCopyRelativePath ||
+        canCopyAbsolutePath ||
+        folderActions ||
+        (isRoot ? onRemoveRoot : onRename || onDelete);
       if (!hasMenu) return title;
 
       // Stop menu-item clicks from bubbling. arco renders the droplist as a React
@@ -233,37 +253,60 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
         else if (menuKey === 'revealInFolder') onRevealInFolder?.(peId, rel);
         else if (menuKey === 'searchInFolder' && !isFile) onSearchInFolder?.(peId, rel, name);
         else if (menuKey === 'uploadFiles' && !isFile) onUploadFiles?.(peId, rel);
+        else if (menuKey === 'copyRelativePath') onCopyRelativePath?.(peId, rel, name);
+        else if (menuKey === 'copyAbsolutePath') onCopyAbsolutePath?.(peId, rel);
       };
 
+      const renderMenu = () => (
+        // `explorer-context-menu` opts this menu out of Arco's 200px dropdown
+        // height cap (arco-override.css) so all items show without a scrollbar.
+        <Menu className='explorer-context-menu' onClickMenuItem={onClickMenuItem}>
+          {onAddToChat && <Menu.Item key='addToChat'>{t('conversation.explorer.contextMenu.addToChat')}</Menu.Item>}
+          {canReveal && (
+            <Menu.Item key='revealInFolder'>{t('conversation.workspace.contextMenu.openLocation')}</Menu.Item>
+          )}
+          {onCopyRelativePath && (
+            <Menu.Item key='copyRelativePath'>{t('conversation.explorer.contextMenu.copyRelativePath')}</Menu.Item>
+          )}
+          {canCopyAbsolutePath && (
+            <Menu.Item key='copyAbsolutePath'>{t('conversation.explorer.contextMenu.copyAbsolutePath')}</Menu.Item>
+          )}
+          {!isFile && onSearchInFolder && (
+            <Menu.Item key='searchInFolder'>{t('conversation.workspace.contextMenu.searchInFolder')}</Menu.Item>
+          )}
+          {!isFile && onUploadFiles && <Menu.Item key='uploadFiles'>{t('conversation.workspace.addFile')}</Menu.Item>}
+          {!isRoot && onRename && <Menu.Item key='rename'>{t('conversation.explorer.contextMenu.rename')}</Menu.Item>}
+          {!isRoot && onDelete && <Menu.Item key='delete'>{t('common.delete')}</Menu.Item>}
+          {isRoot && onRemoveRoot && (
+            <Menu.Item key='remove' disabled={!removable}>
+              {t('conversation.explorer.removeFolder')}
+            </Menu.Item>
+          )}
+        </Menu>
+      );
+
+      const rowTitle = showWebActions ? (
+        <span className='flex items-center min-w-0 w-full'>
+          <span className='min-w-0 flex-1'>{title}</span>
+          <span onClick={(event) => event.stopPropagation()} onContextMenu={(event) => event.stopPropagation()}>
+            <Dropdown trigger='click' position='br' droplist={renderMenu()}>
+              <Button
+                type='text'
+                size='mini'
+                className='flex-shrink-0'
+                aria-label={t('common.more')}
+                icon={<MoreOne theme='outline' size='16' />}
+              />
+            </Dropdown>
+          </span>
+        </span>
+      ) : (
+        title
+      );
+
       return (
-        <Dropdown
-          trigger='contextMenu'
-          position='bl'
-          droplist={
-            <Menu onClickMenuItem={onClickMenuItem}>
-              {onAddToChat && <Menu.Item key='addToChat'>{t('conversation.explorer.contextMenu.addToChat')}</Menu.Item>}
-              {canReveal && (
-                <Menu.Item key='revealInFolder'>{t('conversation.workspace.contextMenu.openLocation')}</Menu.Item>
-              )}
-              {!isFile && onSearchInFolder && (
-                <Menu.Item key='searchInFolder'>{t('conversation.workspace.contextMenu.searchInFolder')}</Menu.Item>
-              )}
-              {!isFile && onUploadFiles && (
-                <Menu.Item key='uploadFiles'>{t('conversation.workspace.addFile')}</Menu.Item>
-              )}
-              {!isRoot && onRename && (
-                <Menu.Item key='rename'>{t('conversation.explorer.contextMenu.rename')}</Menu.Item>
-              )}
-              {!isRoot && onDelete && <Menu.Item key='delete'>{t('common.delete')}</Menu.Item>}
-              {isRoot && onRemoveRoot && (
-                <Menu.Item key='remove' disabled={!removable}>
-                  {t('conversation.explorer.removeFolder')}
-                </Menu.Item>
-              )}
-            </Menu>
-          }
-        >
-          {title}
+        <Dropdown trigger='contextMenu' position='bl' droplist={renderMenu()}>
+          {rowTitle}
         </Dropdown>
       );
     },

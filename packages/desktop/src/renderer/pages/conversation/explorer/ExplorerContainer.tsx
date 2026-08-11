@@ -29,17 +29,19 @@ import { isBackendHttpError } from '@/common/adapter/httpBridge';
 import { PROJECT_ERROR_DUPLICATE, PROJECT_ERROR_OVERLAP } from '@/common/types/project';
 import { usePreviewContext } from '@/renderer/pages/conversation/Preview';
 import WorkspaceOpenButton from '@/renderer/pages/conversation/components/ChatLayout/WorkspaceOpenButton';
-import { getContentTypeByExtension } from '@/renderer/pages/conversation/Preview/fileUtils';
+import { getFileTypeInfo } from '@/renderer/utils/file/fileType';
 import { classifyPreviewError, previewErrorToI18nKey } from '@/renderer/utils/previewError';
 import { isElectronDesktop } from '@/renderer/utils/platform';
 import { UPLOAD_ABORTED_ERROR, uploadFileViaHttp } from '@/renderer/services/FileService';
 // PATCH(ELECTRON-3SZ): used only by the preview payload patch below — remove with it.
 import type { PreviewContentType } from '@/common/types/office/preview';
 
+import { copyText } from '@/renderer/utils/ui/clipboard';
 import { emitter } from '@/renderer/utils/emitter';
 import { projectFileRef } from '@/common/types/chatFile';
 import type { ChatFileRef } from '@/common/types/chatFile';
 import type { FileOrFolderItem } from '@/renderer/utils/file/fileTypes';
+import { resolvePreviewPayload } from '@/renderer/utils/file/previewPayload';
 
 import { ExplorerPanel } from './ExplorerPanel';
 import { buildRemoveRequest, buildRenameRequest, parentRel, peKey, type RenameRequest } from './explorerModel';
@@ -49,6 +51,7 @@ import { reveal, select } from './explorerStore';
 import { useCurrentConversation } from './currentConversationStore';
 import { SearchPanel, type SearchFolderTarget } from './search/SearchPanel';
 import type { SearchHit } from './search/searchModel';
+import { ScmPanel } from '../SourceControl/ScmPanel';
 
 export type ExplorerContainerProps = {
   /** Owning project id — scopes the store's fact cache + localStorage UI state. */
@@ -79,6 +82,10 @@ export type ExplorerPreviewPayload = {
     workspace?: string;
     language: string;
     editable?: boolean;
+    oversized?: boolean;
+    sizeBytes?: number;
+    thresholdBytes?: number;
+    lastModified?: number;
   };
 };
 
@@ -104,22 +111,14 @@ export const buildExplorerPreviewPayload = async (
   rootDisplayPath?: string
 ): Promise<ExplorerPreviewPayload> => {
   const name = relativePath.split('/').pop() || relativePath;
-  const contentType = getContentTypeByExtension(name);
+  const { contentType, editable } = getFileTypeInfo(name);
   const fileRef = projectFileRef(peId, relativePath);
   const filePath = joinDisplayPath(rootDisplayPath, relativePath);
 
-  let content = '';
-  if (contentType === 'image') {
-    content = await ipcBridge.fs.readContent.invoke({ file: fileRef, encoding: 'dataurl' });
-  } else if (contentType === 'pdf' || contentType === 'word' || contentType === 'excel' || contentType === 'ppt') {
-    // Binary preview: no content read. pdf renders via the /api/fs/stream URL
-    // built from fileRef; office resolves fileRef server-side for its watch.
-  } else {
-    content = await ipcBridge.fs.readContent.invoke({ file: fileRef, encoding: 'utf8' });
-  }
+  const payload = await resolvePreviewPayload(fileRef, contentType);
 
   return {
-    content,
+    content: payload.content,
     contentType,
     metadata: {
       title: name,
@@ -128,7 +127,27 @@ export const buildExplorerPreviewPayload = async (
       file_path: filePath,
       workspace: rootDisplayPath,
       language: name.split('.').pop() || '',
-      editable: contentType === 'markdown' || contentType === 'image' ? false : undefined,
+      // Taken from the type table, then tightened — never decided here.
+      //
+      // This entry point used to compute editability itself, which made it a second
+      // source for one fact. It happened to agree with the table on everything that
+      // mattered, and "happened to agree" is the whole problem: nothing kept the two in
+      // step, and the day they diverged the symptom would be one file behaving
+      // differently depending on whether it was opened from the tree or from a message.
+      // It also produced a wrong answer that something else then reasoned from —
+      // markdown was marked read-only here, and persistence nearly took that to mean
+      // its content could not have been edited.
+      //
+      // `oversized` still has to be applied on top, because it is a fact about this
+      // read rather than about the type: the file was never fully loaded, so letting a
+      // fragment reach a saveable editor is what destroyed files before. Tightening is
+      // the only direction available here, so this can restrict what the table allows
+      // and can never contradict it.
+      editable: payload.oversized ? false : editable,
+      oversized: payload.oversized,
+      sizeBytes: payload.sizeBytes,
+      thresholdBytes: payload.thresholdBytes,
+      lastModified: payload.lastModified,
     },
   };
 };
@@ -137,9 +156,10 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId,
   const { t } = useTranslation();
   const { openPreview } = usePreviewContext();
   const activeConversationId = useCurrentConversation();
-  const { data, isLoading, mutate } = useSWR(projectId ? `explorer-project/${projectId}` : null, () =>
-    ipcBridge.project.get.invoke({ project_id: projectId })
-  );
+  const { data, isLoading, mutate } = useSWR(projectId ? `explorer-project/${projectId}` : null, (key: string) => {
+    const id = key.slice('explorer-project/'.length);
+    return ipcBridge.project.get.invoke({ project_id: id });
+  });
   const [searchFolderTarget, setSearchFolderTarget] = useState<SearchFolderTarget>();
   const [browserUploadTarget, setBrowserUploadTarget] = useState<{ pe_id: string; relative_path: string }>();
   const browserUploadTriggerRef = useRef<HTMLButtonElement>(null);
@@ -148,15 +168,21 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId,
     setSearchFolderTarget(undefined);
     setBrowserUploadTarget(undefined);
   }, [projectId]);
+  // Apply-time guard: only feed the store roots whose detail actually belongs to
+  // the current project. Combined with the per-project remount (this component is
+  // keyed by `projectId` in ProjectPanelHost), a stale/other-project detail can
+  // never reach the tree — a mismatch yields no roots rather than another
+  // project's (宁空勿画错).
+  const detail = data && data.project_id === projectId ? data : undefined;
 
   // Let the workspace-collapse hook (keyed per-project via workspacePreferenceKey)
   // read + restore this project's panel open/closed preference. The hook starts
   // collapsed and expands on this signal (pref takes priority); without it the
   // panel would stay collapsed on every conversation switch.
   useEffect(() => {
-    if (!projectId || !data) return;
-    dispatchWorkspaceHasFilesEvent(data.explorer.entries.length > 0, undefined, false);
-  }, [projectId, data]);
+    if (!projectId || !detail) return;
+    dispatchWorkspaceHasFilesEvent(detail.explorer.entries.length > 0, undefined, false);
+  }, [projectId, detail]);
 
   // Open a file in the preview panel. The tree only knows `{pe_id, relative_path}`,
   // mapped to a Project ChatFileRef — content is read over `/api/fs/content` (text/
@@ -209,8 +235,10 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId,
   // commands; the change is pushed back as a delta on the parent dir's
   // subscription, so the tree updates itself (single source, no manual refetch).
   // Component switcher tab (host component switcher, this round in-container):
-  // 'files' = the Explorer, 'changes' = source-control placeholder (that lane is
-  // not built yet — the tab exists but shows an empty state).
+  // 'files' = the Explorer, 'changes' = the Source Control panel. Switching tabs
+  // unmounts the inactive one for `changes`, which is safe because the SCM
+  // subscription is owned by its store per project, not by the component's mount
+  // (see ScmPanel's lifecycle note) — a tab switch never drops the backend watch.
   const [activeTab, setActiveTab] = useState<'files' | 'changes'>('files');
   const [renameDialog, setRenameDialog] = useState<RenameRequest | null>(null);
   const [nameValue, setNameValue] = useState('');
@@ -269,6 +297,13 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId,
     emitter.emit('acp.selected.file.append', payload, activeConversationId);
     emitter.emit('codex.selected.file.append', payload, activeConversationId);
     emitter.emit('aionrs.selected.file.append', payload, activeConversationId);
+    // Optimistic success: the emitter is fire-and-forget with no landing ack, so
+    // this reports "dispatched", not "rendered a chip". It is accurate whenever a
+    // send box for this conversation is mounted (the type-matching box consumes
+    // the event synchronously). The chip-drop bugs that made this toast lie for a
+    // folder / pe-root ref (empty-path identity + the folder render filter) are
+    // fixed in SendBox; a genuine no-op only remains in the edge case where no
+    // send box is mounted for the active conversation.
     Message.success(t('conversation.explorer.addedToChat', { name }));
   };
 
@@ -280,6 +315,32 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId,
     void ipcBridge.fs.reveal.invoke({ pe_id: peId, relative_path: rel }).catch(() => {
       Message.error(t('conversation.workspace.contextMenu.revealFailed'));
     });
+  };
+
+  // Copy the node's path relative to its owning pe root — the tree's native
+  // identity (`relative_path`, always `/`-separated, cross-platform). A pe-root
+  // node's relative_path is '' (it IS the root); copy '.' (its own literal
+  // relative path) rather than the display `name`, which may be a custom label or
+  // even the internal pe_id — never a real path. Pure clipboard (no OS shell / no
+  // absolute path), so it works for files and folders on both Electron and WebUI.
+  const handleCopyRelativePath = (_peId: string, rel: string): void => {
+    void copyText(rel === '' ? '.' : rel)
+      .then(() => Message.success(t('conversation.explorer.pathCopied')))
+      .catch(() => Message.error(t('conversation.explorer.copyFailed')));
+  };
+
+  // Copy the node's ABSOLUTE device path. The front end never holds it (project
+  // refs are pe_id + relative_path only) and never receives it: the backend
+  // resolves the path AND writes the clipboard itself (mirrors reveal), returning
+  // void — we only toast on success/failure. Desktop-only: the menu item is
+  // Electron-gated in ExplorerPanel, so this handler only runs there (a remote
+  // WebUI must not surface it). A pe-root node (rel '') resolves to the root
+  // folder's own absolute path server-side.
+  const handleCopyAbsolutePath = (peId: string, rel: string): void => {
+    void ipcBridge.fs.copyAbsolutePath
+      .invoke({ pe_id: peId, relative_path: rel })
+      .then(() => Message.success(t('conversation.explorer.pathCopied')))
+      .catch(() => Message.error(t('conversation.explorer.copyFailed')));
   };
 
   // Search result default action: locate the hit in the tree — switch to the
@@ -342,19 +403,22 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId,
   };
 
   if (!projectId) return null;
-  if (isLoading && !data) return <Spin loading />;
+  // Spin only while the CURRENT project's detail is still loading. A stale value
+  // for a different project (detail undefined) falls through to empty roots, not
+  // another project's tree.
+  if (!detail && isLoading) return <Spin loading />;
 
-  const roots = data ? toRootRefs(data) : [];
+  const roots = detail ? toRootRefs(detail) : [];
   updateProjectRootFallbackPaths(roots);
   // Search roots = the project's pe roots (each folder root, rel=''). fs/search
   // spans all bound folders; the front-end ranks the merged hit stream.
   const searchRoots = roots.map((root) => ({ pe_id: root.pe_id, relative_path: '' }));
   // pe_id → folder name for the search result's `PE · REL` secondary label.
   const searchPeNames = Object.fromEntries(roots.map((root) => [root.pe_id, root.title]));
-  const workspacePeId = data?.explorer.workspace_pe_id;
+  const workspacePeId = detail?.explorer.workspace_pe_id;
   // Absolute path of the workspace root (derived display_path) for the
   // open-externally button.
-  const workspacePath = data?.explorer.entries.find((e) => e.pe_id === workspacePeId)?.display_path;
+  const workspacePath = detail?.explorer.entries.find((e) => e.pe_id === workspacePeId)?.display_path;
 
   const tabButton = (key: 'files' | 'changes', label: string) => (
     <Button
@@ -369,8 +433,7 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId,
 
   return (
     <div className='h-full flex flex-col min-h-0'>
-      {/* Host component-switcher tab bar: 文件 = explorer, 变更 = source-control
-          placeholder (that lane isn't built — tab present, empty state only).
+      {/* Host component-switcher tab bar: 文件 = explorer, 变更 = source control.
           Tabs are left-aligned and scroll horizontally when they overflow; the
           attach + open-externally cluster is pinned right (flex-shrink-0) with
           container padding, so it never scrolls with the tabs nor clips at narrow
@@ -445,6 +508,8 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId,
             onDelete={handleDelete}
             onAddToChat={activeConversationId ? handleAddToChat : undefined}
             onRevealInFolder={handleRevealInFolder}
+            onCopyRelativePath={handleCopyRelativePath}
+            onCopyAbsolutePath={handleCopyAbsolutePath}
             onImportFiles={handleImportFiles}
             onSearchInFolder={handleSearchInFolder}
             onUploadFiles={(peId, rel) => void handleUploadFiles(peId, rel)}
@@ -481,8 +546,8 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId,
         <Button ref={browserUploadTriggerRef} className='!hidden' tabIndex={-1} aria-hidden />
       </Upload>
       {activeTab === 'changes' && (
-        <div className='flex-1 min-h-0 flex items-center justify-center px-16px text-center text-t-secondary text-13px'>
-          {t('conversation.explorer.changesPlaceholder')}
+        <div className='flex-1 min-h-0'>
+          <ScmPanel projectId={projectId} />
         </div>
       )}
       <Modal

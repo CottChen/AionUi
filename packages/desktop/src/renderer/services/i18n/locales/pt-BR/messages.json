@@ -81,6 +81,13 @@
     "errorUnsupported": "Este agente não oferece suporte a bifurcação",
     "errorGeneric": "Falha ao bifurcar: {{message}}"
   },
+  "askSubmit": "Enviar",
+  "askDecline": "Não responder",
+  "askAnswered": "Respondido",
+  "askDeclined": "Ignorado",
+  "askOther": "Outro",
+  "askOtherPlaceholder": "Digite sua resposta",
+  "requestDetails": "Detalhes da solicitação:",
   "rating": {
     "like": "Like",
     "dislike": "Dislike",

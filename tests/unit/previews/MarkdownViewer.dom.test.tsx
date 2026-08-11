@@ -224,7 +224,8 @@ describe('MarkdownViewer', () => {
           language: 'ts',
           targetLine: 10,
           targetColumn: undefined,
-          truncated: false,
+          oversized: false,
+          lastModified: 1_717_000_000,
         }),
         { replace: false }
       );
@@ -255,7 +256,8 @@ describe('MarkdownViewer', () => {
           language: 'ts',
           targetLine: 1,
           targetColumn: undefined,
-          truncated: false,
+          oversized: false,
+          lastModified: 1_717_000_000,
         }),
         { replace: false }
       );
@@ -290,7 +292,9 @@ describe('MarkdownViewer', () => {
           language: 'ts',
           targetLine: 12,
           targetColumn: undefined,
-          truncated: false,
+          targetRevealKey: expect.any(String),
+          oversized: false,
+          lastModified: 1_717_000_000,
         }),
         { replace: false }
       );
@@ -323,7 +327,9 @@ describe('MarkdownViewer', () => {
           language: 'ts',
           targetLine: 12,
           targetColumn: undefined,
-          truncated: false,
+          targetRevealKey: expect.any(String),
+          oversized: false,
+          lastModified: 1_717_000_000,
         }),
         { replace: false }
       );
