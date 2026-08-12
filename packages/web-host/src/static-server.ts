@@ -319,66 +319,12 @@ function spliceToTcpEndpoint(client: Socket, targetPort: number, initialBytes: B
 }
 
 function forwardUpgradeToBackend(client: Socket, targetPort: number, initialBytes: Buffer): void {
-  client.pause();
-  const raw = initialBytes.toString('latin1');
-  const headerEnd = raw.indexOf('\r\n\r\n');
-  const headerBlock = headerEnd >= 0 ? raw.slice(0, headerEnd) : raw;
-  const [requestLine = '', ...headerLines] = headerBlock.split('\r\n');
-  const [method = 'GET', path = '/'] = requestLine.split(/\s+/);
-  const headers: Record<string, string> = {};
-  for (const line of headerLines) {
-    const idx = line.indexOf(':');
-    if (idx <= 0) continue;
-    headers[line.slice(0, idx).trim()] = line.slice(idx + 1).trim();
-  }
-
-  const proxy = http.request({
-    hostname: '127.0.0.1',
-    port: targetPort,
-    path,
-    method,
-    headers: { ...headers, host: `127.0.0.1:${targetPort}` },
-  });
-
-  const tearDown = (): void => {
-    client.destroy();
-    proxy.destroy();
-  };
-
-  proxy.on('upgrade', (res, upstream, head) => {
-    client.write(`HTTP/${res.httpVersion} ${res.statusCode} ${res.statusMessage}\r\n`);
-    for (const [name, value] of Object.entries(res.headers)) {
-      if (Array.isArray(value)) {
-        for (const item of value) client.write(`${name}: ${item}\r\n`);
-      } else if (value !== undefined) {
-        client.write(`${name}: ${value}\r\n`);
-      }
-    }
-    client.write('\r\n');
-    if (head.length > 0) client.write(head);
-    upstream.pipe(client);
-    client.pipe(upstream);
-    client.resume();
-    upstream.on('error', tearDown);
-    client.on('error', tearDown);
-    upstream.on('close', () => client.destroy());
-    client.on('close', () => upstream.destroy());
-  });
-
-  proxy.on('response', (res) => {
-    client.write(`HTTP/${res.httpVersion} ${res.statusCode ?? 502} ${res.statusMessage}\r\n`);
-    for (const [name, value] of Object.entries(res.headers)) {
-      if (Array.isArray(value)) {
-        for (const item of value) client.write(`${name}: ${item}\r\n`);
-      } else if (value !== undefined) {
-        client.write(`${name}: ${value}\r\n`);
-      }
-    }
-    client.write('\r\n');
-    res.pipe(client);
-  });
-  proxy.on('error', tearDown);
-  proxy.end();
+  // Keep the upgraded connection out of Bun's node:http compatibility layer.
+  // Bun 1.3 can relay the upstream 101 response through ClientRequest but drops
+  // frames written by the browser afterwards, leaving fs/scm RPCs permanently
+  // pending. A byte-for-byte TCP splice preserves both directions and lets the
+  // backend own the complete WebSocket handshake and stream.
+  spliceToTcpEndpoint(client, targetPort, initialBytes);
 }
 
 /**

@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { createHash } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
@@ -412,6 +413,86 @@ describe('static-server', () => {
       }, 3000).unref();
     });
     expect(status).toMatch(/HTTP\/1\.1 101/i);
+  });
+
+  it('/ws relays frames from the client after the upgrade', async () => {
+    const backendServer = net.createServer((socket) => {
+      let upgraded = false;
+      socket.on('data', (data) => {
+        if (!upgraded) {
+          const request = data.toString('latin1');
+          const wsKey = request.match(/Sec-WebSocket-Key:\s*([^\r\n]+)/i)?.[1]?.trim() ?? '';
+          const accept = createHash('sha1')
+            .update(wsKey + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11')
+            .digest('base64');
+          socket.write(
+            'HTTP/1.1 101 Switching Protocols\r\n' +
+              'Upgrade: websocket\r\n' +
+              'Connection: Upgrade\r\n' +
+              `Sec-WebSocket-Accept: ${accept}\r\n\r\n`
+          );
+          upgraded = true;
+          return;
+        }
+
+        const payloadLength = data[1] & 0x7f;
+        const mask = data.subarray(2, 6);
+        const payload = Buffer.from(data.subarray(6, 6 + payloadLength));
+        for (let index = 0; index < payload.length; index += 1) {
+          payload[index] ^= mask[index % 4];
+        }
+        socket.write(Buffer.concat([Buffer.from([0x81, payload.length]), payload]));
+      });
+    });
+    await new Promise<void>((resolve) => backendServer.listen(0, '127.0.0.1', resolve));
+    stopBackend = () => new Promise<void>((resolve) => backendServer.close(() => resolve()));
+    const backendPort = (backendServer.address() as AddressInfo).port;
+    handle = await startStaticServer({ staticDir, backendPort, port: 0 });
+
+    const response = await new Promise<string>((resolve, reject) => {
+      const client = net.connect({ host: '127.0.0.1', port: handle?.port }, () => {
+        client.write(
+          'GET /ws HTTP/1.1\r\n' +
+            `Host: 127.0.0.1:${handle?.port}\r\n` +
+            'Upgrade: websocket\r\n' +
+            'Connection: Upgrade\r\n' +
+            'Sec-WebSocket-Version: 13\r\n' +
+            'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n' +
+            '\r\n'
+        );
+      });
+      let upgraded = false;
+      let buffer = Buffer.alloc(0);
+      const timer = setTimeout(() => {
+        client.destroy();
+        reject(new Error('timeout waiting for an echoed WebSocket frame'));
+      }, 3000);
+      client.on('data', (chunk) => {
+        buffer = Buffer.concat([buffer, chunk]);
+        if (!upgraded) {
+          const headerEnd = buffer.indexOf('\r\n\r\n');
+          if (headerEnd < 0) return;
+          buffer = buffer.subarray(headerEnd + 4);
+          upgraded = true;
+          const payload = Buffer.from('client-frame');
+          const mask = Buffer.from([1, 2, 3, 4]);
+          const masked = Buffer.from(payload);
+          for (let index = 0; index < masked.length; index += 1) {
+            masked[index] ^= mask[index % 4];
+          }
+          client.write(Buffer.concat([Buffer.from([0x81, 0x80 | payload.length]), mask, masked]));
+        }
+        if (buffer.length < 2) return;
+        const payloadLength = buffer[1] & 0x7f;
+        if (buffer.length < payloadLength + 2) return;
+        clearTimeout(timer);
+        client.destroy();
+        resolve(buffer.subarray(2, 2 + payloadLength).toString('utf8'));
+      });
+      client.on('error', reject);
+    });
+
+    expect(response).toBe('client-frame');
   });
 
   rawUpgradeIt('/api/stt/stream WebSocket upgrade is spliced to backend and 101 is relayed', async () => {
