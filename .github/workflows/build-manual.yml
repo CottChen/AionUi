@@ -50,6 +50,11 @@ on:
         required: false
         type: string
         default: ''
+      promote_install_artifact_name:
+        description: 'Optional install-web.sh artifact from promote_run_id'
+        required: false
+        type: string
+        default: ''
       release_tag:
         description: 'Release tag used when promoting an existing run'
         required: false
@@ -178,6 +183,53 @@ jobs:
           repository: ${{ github.repository }}
           run-id: ${{ inputs.promote_run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download web install script artifact
+        if: inputs.promote_install_artifact_name != ''
+        uses: actions/download-artifact@v7
+        with:
+          name: ${{ inputs.promote_install_artifact_name }}
+          path: install-script-source
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.promote_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare release-specific web install script
+        if: inputs.promote_install_artifact_name != ''
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TARBALL=$(find release-assets -maxdepth 1 -type f -name 'aionui-web-*.tar.gz' -print -quit)
+          SOURCE_SCRIPT=$(find install-script-source -type f -name 'install-web.sh' -print -quit)
+          if [[ -z "$TARBALL" || -z "$SOURCE_SCRIPT" ]]; then
+            echo "::error::Web promotion requires an aionui-web tarball and install-web.sh"
+            exit 1
+          fi
+
+          TARBALL_NAME=$(basename "$TARBALL")
+          if [[ ! "$TARBALL_NAME" =~ ^aionui-web-(.+)-(darwin|linux|win)-(arm64|x86_64)\.tar\.gz$ ]]; then
+            echo "::error::Unexpected web tarball name: ${TARBALL_NAME}"
+            exit 1
+          fi
+          VERSION="${BASH_REMATCH[1]}"
+          PLATFORM="${BASH_REMATCH[2]}"
+          ARCH="${BASH_REMATCH[3]}"
+          TARGET_SCRIPT="release-assets/install-aionui-web-${VERSION}-${PLATFORM}-${ARCH}.sh"
+
+          sed \
+            -e "s|^VERSION=.*$|VERSION=\"\${VERSION:-${VERSION}}\"|" \
+            -e "s|^MIRROR=.*$|MIRROR=\"\${MIRROR:-https://github.com/${GITHUB_REPOSITORY}/releases/download}\"|" \
+            -e "s|\${MIRROR}/v\${VERSION}/\${TARBALL_NAME}|\${MIRROR}/${RELEASE_TAG}/\${TARBALL_NAME}|g" \
+            -e "s|\${MIRROR}/v\${VERSION}/\${CHECKSUM_NAME}|\${MIRROR}/${RELEASE_TAG}/\${CHECKSUM_NAME}|g" \
+            "$SOURCE_SCRIPT" > "$TARGET_SCRIPT"
+          chmod +x "$TARGET_SCRIPT"
+
+          grep -F "VERSION=\"\${VERSION:-${VERSION}}\"" "$TARGET_SCRIPT"
+          grep -F "${RELEASE_TAG}/\${TARBALL_NAME}" "$TARGET_SCRIPT"
+          grep -F "github.com/${GITHUB_REPOSITORY}/releases/download" "$TARGET_SCRIPT"
 
       - name: Validate release assets and generate checksums
         shell: bash
