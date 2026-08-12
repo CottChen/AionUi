@@ -68,6 +68,53 @@ export type ExplorerPanelProps = {
   onUploadFiles?: (targetPeId: string, targetRelativePath: string) => void;
 };
 
+const isScrollableY = (element: HTMLElement): boolean => {
+  const overflowY = window.getComputedStyle(element).overflowY;
+  return ['auto', 'scroll', 'overlay'].includes(overflowY) && element.scrollHeight > element.clientHeight;
+};
+
+const findTreeScrollContainer = (node: Element, fallbackRoot: HTMLElement): HTMLElement | null => {
+  let current = node.parentElement;
+  while (current) {
+    if (isScrollableY(current)) return current;
+    current = current.parentElement;
+  }
+
+  const mobileContent = fallbackRoot
+    .closest('[data-explorer-mobile-overlay]')
+    ?.querySelector<HTMLElement>('.mobile-workspace-overlay__content');
+  return mobileContent && isScrollableY(mobileContent) ? mobileContent : null;
+};
+
+const scrollTreeNodeIntoView = (node: HTMLElement, fallbackRoot: HTMLElement, center: boolean): boolean => {
+  const nodeRect = node.getBoundingClientRect();
+  if (nodeRect.width === 0 || nodeRect.height === 0) return false;
+
+  const scroller = findTreeScrollContainer(node, fallbackRoot);
+  if (!scroller) {
+    node.scrollIntoView({ block: center ? 'center' : 'nearest', inline: 'nearest' });
+    return true;
+  }
+
+  const scrollerRect = scroller.getBoundingClientRect();
+  if (scrollerRect.width === 0 || scrollerRect.height === 0) return false;
+
+  const margin = 12;
+  let nextTop = scroller.scrollTop;
+
+  if (center) {
+    nextTop += nodeRect.top - scrollerRect.top - (scrollerRect.height - nodeRect.height) / 2;
+  } else if (nodeRect.top < scrollerRect.top + margin) {
+    nextTop += nodeRect.top - scrollerRect.top - margin;
+  } else if (nodeRect.bottom > scrollerRect.bottom - margin) {
+    nextTop += nodeRect.bottom - scrollerRect.bottom + margin;
+  }
+
+  const maxTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+  scroller.scrollTop = Math.min(maxTop, Math.max(0, nextTop));
+  return true;
+};
+
 export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
   projectId,
   roots,
@@ -115,12 +162,31 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
     }
     const shouldCenter = view.revealRequestId > centeredRevealRequestRef.current;
     if (!shouldCenter && scrolledSelectionRef.current === key) return;
-    const node = containerRef.current?.querySelector('.arco-tree-node-selected');
-    if (node) {
-      node.scrollIntoView({ block: shouldCenter ? 'center' : 'nearest', inline: 'nearest' });
-      scrolledSelectionRef.current = key;
-      if (shouldCenter) centeredRevealRequestRef.current = view.revealRequestId;
-    }
+    let cancelled = false;
+    let rafId: number | null = null;
+    let attempts = 0;
+
+    const tryScroll = () => {
+      if (cancelled) return;
+      const root = containerRef.current;
+      const node = root?.querySelector<HTMLElement>('.arco-tree-node-selected');
+      if (root && node && scrollTreeNodeIntoView(node, root, shouldCenter)) {
+        scrolledSelectionRef.current = key;
+        if (shouldCenter) centeredRevealRequestRef.current = view.revealRequestId;
+        return;
+      }
+
+      attempts += 1;
+      if (attempts < 8) {
+        rafId = window.requestAnimationFrame(tryScroll);
+      }
+    };
+
+    rafId = window.requestAnimationFrame(tryScroll);
+    return () => {
+      cancelled = true;
+      if (rafId !== null) window.cancelAnimationFrame(rafId);
+    };
   }, [view.revealRequestId, view.selected, view.treeData]);
 
   // (Re)open the project when it changes. openProject is guarded: same
