@@ -46,7 +46,7 @@ const AgentSessionsPage: React.FC = () => {
       .catch((error) => {
         if (active) {
           setSessions([]);
-          Message.error(t('agent.cliSessions.loadFailed', { error: String(error) }));
+          console.warn(`[agent-sessions] Failed to list ${backend} sessions; showing an empty list.`, error);
         }
       })
       .finally(() => {
