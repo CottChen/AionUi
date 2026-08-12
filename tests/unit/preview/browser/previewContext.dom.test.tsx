@@ -24,7 +24,12 @@ vi.mock('@/common', () => ({
     fileStream: { contentUpdate: { on: () => () => {} } },
     preview: { open: { on: () => () => {} } },
     conversation: { responseStream: { on: () => () => {} } },
-    fs: { getFileContent: { invoke: vi.fn() }, writeFile: { invoke: vi.fn() } },
+    fs: {
+      getContentMetadata: { invoke: vi.fn().mockResolvedValue(null) },
+      getFileContent: { invoke: vi.fn() },
+      readContent: { invoke: vi.fn().mockResolvedValue(null) },
+      writeFile: { invoke: vi.fn() },
+    },
   },
 }));
 

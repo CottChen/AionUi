@@ -76,6 +76,19 @@ See the `testing` skill (`.claude/skills/testing/SKILL.md`) for complete workflo
 
 ## Workflow
 
+### GitHub Artifact Promotion
+
+- GitHub Actions artifacts and Release assets use separate storage; a Release cannot reference an Actions artifact directly and must transfer its files once.
+- When promoting a completed manual build, prefer the `build-manual.yml` promotion mode (`promote_run_id`, `promote_artifact_name`, `release_tag`) so `actions/download-artifact` and Release upload both run on a GitHub runner. Do not download the artifact locally unless the user explicitly requests a local copy.
+- After promotion, verify the Release target commit, asset names and sizes, upload state, and SHA-256 digest through the GitHub API.
+
+### AionCore Migration Safety
+
+- Treat `package.json#aioncoreVersion` as a release contract. Before packaging an AionUi upstream merge, merge the matching AionCore tag into the fork branch and build from that exact fork commit; never reuse an older successful AionCore artifact only because its platform matches.
+- Fork-only SQL migrations use the reserved `900xxx` range. Never reuse an upstream sequential migration number or edit an already released migration in place, because sqlx records both version and checksum.
+- Preserve the `900023` assistant-workspace repair when merging AionCore. It reconciles the historical fork migration-21 checksum collision and protects workspace settings across the upstream user-scope rebuild.
+- Before release, run the migration-version uniqueness test and fixture-based upgrade tests, including the `2.1.39` fork database path. Frontend/type tests are not evidence that an installed database can start.
+
 ### Scope & Enforcement
 
 - **Hard blockers**: process boundary violations, TypeScript errors, failing tests, unsafe IPC usage, missing i18n for new or changed user-facing text, and raw interactive HTML in new UI.

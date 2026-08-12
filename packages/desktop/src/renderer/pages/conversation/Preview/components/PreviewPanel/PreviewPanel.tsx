@@ -1111,6 +1111,10 @@ const PreviewPanel: React.FC = () => {
           onSwitchTab={switchTab}
           onCloseTab={handleCloseTab}
           onContextMenu={handleTabContextMenu}
+          onCloseLeft={handleCloseLeft}
+          onCloseRight={handleCloseRight}
+          onCloseOthers={handleCloseOthers}
+          onCloseAll={handleCloseAll}
           onClosePanel={handleClosePanel}
           // 只要面板里已经有任意 tab（文件或浏览器），就露出「新建浏览器 tab」的加号，
           // 不必等用户先手动开过一次浏览器。面板本身为空时才隐藏，避免出现一个没有

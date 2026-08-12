@@ -5,8 +5,9 @@
  */
 
 import { iconColors } from '@/renderer/styles/colors';
-import { Close, Plus } from '@icon-park/react';
+import { Button, Dropdown, Menu } from '@arco-design/web-react';
 import { IconShrink } from '@arco-design/web-react/icon';
+import { Close, MoreOne, Plus } from '@icon-park/react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TabFadeState } from '../../hooks/useTabOverflow';
@@ -110,6 +111,26 @@ interface PreviewTabsProps {
   onContextMenu: (e: React.MouseEvent, tabId: string) => void;
 
   /**
+   * Close tabs to the left of the given tab
+   */
+  onCloseLeft?: (tabId: string) => void;
+
+  /**
+   * Close tabs to the right of the given tab
+   */
+  onCloseRight?: (tabId: string) => void;
+
+  /**
+   * Close other tabs
+   */
+  onCloseOthers?: (tabId: string) => void;
+
+  /**
+   * Close all tabs
+   */
+  onCloseAll?: () => void;
+
+  /**
    * 关闭预览面板回调
    * Close preview panel callback
    */
@@ -141,11 +162,54 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
   onSwitchTab,
   onCloseTab,
   onContextMenu,
+  onCloseLeft,
+  onCloseRight,
+  onCloseOthers,
+  onCloseAll,
   onClosePanel,
   onNewBrowserTab,
 }) => {
   const { t } = useTranslation();
   const { left: showLeftFade, right: showRightFade } = tabFadeState;
+  const activeIndex = tabs.findIndex((tab) => tab.id === activeTabId);
+  const hasActiveTab = activeIndex >= 0;
+  const hasLeftTabs = activeIndex > 0;
+  const hasRightTabs = activeIndex >= 0 && activeIndex < tabs.length - 1;
+  const hasOtherTabs = tabs.length > 1;
+  const showTabActions = tabs.length > 0 && (onCloseLeft || onCloseRight || onCloseOthers || onCloseAll);
+
+  const handleTabAction = (key: string) => {
+    if (!activeTabId) return;
+    if (key === 'closeLeft' && hasLeftTabs) onCloseLeft?.(activeTabId);
+    else if (key === 'closeRight' && hasRightTabs) onCloseRight?.(activeTabId);
+    else if (key === 'closeOthers' && hasOtherTabs) onCloseOthers?.(activeTabId);
+    else if (key === 'closeAll' && hasActiveTab) onCloseAll?.();
+  };
+
+  const renderTabActionsMenu = () => (
+    <Menu onClickMenuItem={handleTabAction}>
+      {onCloseLeft && (
+        <Menu.Item key='closeLeft' disabled={!hasLeftTabs}>
+          {t('preview.closeLeft')}
+        </Menu.Item>
+      )}
+      {onCloseRight && (
+        <Menu.Item key='closeRight' disabled={!hasRightTabs}>
+          {t('preview.closeRight')}
+        </Menu.Item>
+      )}
+      {onCloseOthers && (
+        <Menu.Item key='closeOthers' disabled={!hasOtherTabs}>
+          {t('preview.closeOthers')}
+        </Menu.Item>
+      )}
+      {onCloseAll && (
+        <Menu.Item key='closeAll' disabled={!hasActiveTab}>
+          {t('preview.closeAll')}
+        </Menu.Item>
+      )}
+    </Menu>
+  );
 
   return (
     <div
@@ -258,6 +322,21 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
             </div>
           )}
         </div>
+
+        {/* Tab actions menu / 标签页操作菜单 */}
+        {showTabActions && (
+          <div className='flex items-center h-full px-4px flex-shrink-0'>
+            <Dropdown trigger='click' position='br' droplist={renderTabActionsMenu()}>
+              <Button
+                type='text'
+                size='mini'
+                className='!w-24px !h-24px !p-0'
+                aria-label={t('common.more')}
+                icon={<MoreOne theme='outline' size='16' fill={iconColors.secondary} />}
+              />
+            </Dropdown>
+          </div>
+        )}
 
         {/* 收起面板按钮 / Collapse panel button */}
         {onClosePanel && (

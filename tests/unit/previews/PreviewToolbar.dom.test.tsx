@@ -15,6 +15,22 @@ vi.mock('@icon-park/react', () => ({
 }));
 
 vi.mock('@arco-design/web-react', () => ({
+  Button: ({
+    children,
+    icon,
+    onClick,
+    title,
+  }: {
+    children?: React.ReactNode;
+    icon?: React.ReactNode;
+    onClick?: React.MouseEventHandler<HTMLButtonElement>;
+    title?: string;
+  }) => (
+    <button type='button' title={title} onClick={onClick}>
+      {icon}
+      {children}
+    </button>
+  ),
   Dropdown: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
 }));
 

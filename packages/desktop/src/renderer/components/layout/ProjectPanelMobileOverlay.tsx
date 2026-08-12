@@ -19,6 +19,7 @@
 import React, { useRef } from 'react';
 
 import { ExplorerContainer } from '@/renderer/pages/conversation/explorer/ExplorerContainer';
+import '@/renderer/pages/conversation/components/ChatLayout/chat-layout.css';
 
 export type ProjectPanelMobileOverlayProps = {
   projectId: string;
@@ -47,12 +48,11 @@ export const ProjectPanelMobileOverlay: React.FC<ProjectPanelMobileOverlayProps>
         data-explorer-mobile-overlay
         data-mount-id={mountIdRef.current}
         data-collapsed={collapsed ? 'true' : 'false'}
-        className='!bg-1 relative'
+        className='!bg-1 relative mobile-workspace-overlay'
         style={{
           position: 'fixed',
           right: 0,
           top: 0,
-          height: '100vh',
           width: `${Math.round(widthPx)}px`,
           zIndex: 100,
           transform: collapsed ? 'translateX(100%)' : 'translateX(0)',
@@ -61,7 +61,9 @@ export const ProjectPanelMobileOverlay: React.FC<ProjectPanelMobileOverlayProps>
           borderLeft: '1px solid var(--bg-3)',
         }}
       >
-        <ExplorerContainer projectId={projectId} onPreviewOpen={onCollapse} />
+        <div className='mobile-workspace-overlay__content'>
+          <ExplorerContainer projectId={projectId} onPreviewOpen={onCollapse} />
+        </div>
       </div>
 
       {/* Floating collapse handle */}
