@@ -327,7 +327,7 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId,
     setActiveTab('files');
     setSearchClearRequestKey((previous) => (previous ?? 0) + 1);
     reveal({ pe_id: target.pe_id, relative_path: parentRel(target.relative_path) });
-    select(peKey(target.pe_id, target.relative_path));
+    select(peKey(target.pe_id, target.relative_path), { reveal: true });
   }, [detail, projectId, revealRequest, t]);
 
   const handleRename = (peId: string, rel: string, name: string): void => {
@@ -436,7 +436,7 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId,
   const handleRevealHit = (hit: SearchHit): void => {
     setActiveTab('files');
     reveal({ pe_id: hit.pe_id, relative_path: parentRel(hit.relative_path) });
-    select(peKey(hit.pe_id, hit.relative_path));
+    select(peKey(hit.pe_id, hit.relative_path), { reveal: true });
   };
 
   // Search result explicit add-to-chat: a hit is always a file; route through the

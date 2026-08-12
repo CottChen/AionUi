@@ -771,6 +771,20 @@ describe('openProject same-project guard (zero-flicker remount)', () => {
 });
 
 describe('selection + misc edge paths', () => {
+  it('increments the locate request even when the selected key does not change', async () => {
+    const h = makePort({ [peKey('pe1', '')]: [file('a.ts')] });
+    configureExplorerStore(h.port);
+    openProject('proj-sel', roots);
+    await flush();
+
+    select(peKey('pe1', 'a.ts'), { reveal: true });
+    const firstRequest = getExplorerSnapshot().revealRequestId;
+    select(peKey('pe1', 'a.ts'), { reveal: true });
+
+    expect(getExplorerSnapshot().selected).toBe(peKey('pe1', 'a.ts'));
+    expect(getExplorerSnapshot().revealRequestId).toBe(firstRequest + 1);
+  });
+
   it('restores the persisted selection when the project is reopened', async () => {
     const h = makePort({ [peKey('pe1', '')]: [file('a.ts')] });
     configureExplorerStore(h.port);

@@ -47,6 +47,10 @@ export type ExplorerView = {
   projectId: string | null;
   treeData: TreeNode[];
   selected: PeKey | null;
+  /** Increments for every programmatic locate request, including repeated
+   * requests for the already-selected file. The tree consumes this to center
+   * the target after its asynchronously expanded ancestors render. */
+  revealRequestId: number;
   error?: string;
   /** Expanded dir keys — drives arco Tree's controlled `expandedKeys` so the
    *  visual expand state stays in sync with the store (which owns subscriptions). */
@@ -66,10 +70,11 @@ let roots: RootRef[] = [];
 let cache: FactCache = new Map();
 let expanded = new Set<PeKey>();
 let selected: PeKey | null = null;
+let revealRequestId = 0;
 let current = new Set<PeKey>();
 let error: string | undefined;
 
-let snapshot: ExplorerView = { projectId: null, treeData: [], selected: null, expanded: [] };
+let snapshot: ExplorerView = { projectId: null, treeData: [], selected: null, revealRequestId: 0, expanded: [] };
 let reconcileScheduled = false;
 
 // ── persistence (per-project UI state) ──────────────────────────────────────
@@ -137,7 +142,14 @@ const persistUi = (opts?: { guardEmptyOverwrite?: boolean }): void => {
 // ── snapshot + notify ────────────────────────────────────────────────────────
 
 const rebuildSnapshot = (): void => {
-  snapshot = { projectId, treeData: buildTreeData(cache, expanded, roots), selected, expanded: [...expanded], error };
+  snapshot = {
+    projectId,
+    treeData: buildTreeData(cache, expanded, roots),
+    selected,
+    revealRequestId,
+    expanded: [...expanded],
+    error,
+  };
 };
 
 const commit = (): void => {
@@ -303,6 +315,7 @@ export const openProject = (id: string, projectRoots: RootRef[]): void => {
   roots = projectRoots;
   cache = new Map();
   current = new Set();
+  revealRequestId = 0;
   error = undefined;
   // Restore UI state, but prune any keys whose pe_id is no longer a root of this
   // project (e.g. a folder was removed, or a pe was swapped out). Otherwise stale
@@ -354,8 +367,9 @@ export const reveal = (target: DirRef): void => {
   scheduleReconcile();
 };
 
-export const select = (key: PeKey | null): void => {
+export const select = (key: PeKey | null, options?: { reveal?: boolean }): void => {
   selected = key;
+  if (key && options?.reveal) revealRequestId += 1;
   persistUi();
   commit();
 };
@@ -398,6 +412,7 @@ export const resetExplorerStoreForTest = (): void => {
   current = new Set();
   error = undefined;
   reconcileScheduled = false;
-  snapshot = { projectId: null, treeData: [], selected: null, expanded: [] };
+  revealRequestId = 0;
+  snapshot = { projectId: null, treeData: [], selected: null, revealRequestId: 0, expanded: [] };
   listeners.clear();
 };

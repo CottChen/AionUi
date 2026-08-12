@@ -92,16 +92,18 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
   // once when a selection's node first appears, not on every tree delta).
   const containerRef = useRef<HTMLDivElement>(null);
   const scrolledSelectionRef = useRef<string | null>(null);
+  const centeredRevealRequestRef = useRef(0);
 
   // Wire the WS runtime once.
   useEffect(() => {
     initExplorerRuntime();
   }, []);
 
-  // Bring the selected node into view — e.g. after a search reveal expands a
-  // deep path, the newly-selected file may be off-screen. Runs when the
-  // selection changes and again as treeData fills in (reveal subscribes async),
-  // scrolling once the selected node is actually in the DOM.
+  // Bring the selected node into view once it is actually in the DOM. Ordinary
+  // row selection uses the smallest possible scroll. A programmatic locate
+  // request centers the node so its surrounding files remain visible, and its
+  // request id means locating the already-selected file works again after the
+  // user has manually scrolled elsewhere.
   // NOTE: the tree is not virtualized, so every node is a real DOM element and
   // scrollIntoView works. If virtual scrolling is enabled later, switch to
   // arco's scrollTo API (the off-screen node won't be in the DOM).
@@ -111,13 +113,15 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
       scrolledSelectionRef.current = null;
       return;
     }
-    if (scrolledSelectionRef.current === key) return;
+    const shouldCenter = view.revealRequestId > centeredRevealRequestRef.current;
+    if (!shouldCenter && scrolledSelectionRef.current === key) return;
     const node = containerRef.current?.querySelector('.arco-tree-node-selected');
     if (node) {
-      node.scrollIntoView({ block: 'nearest' });
+      node.scrollIntoView({ block: shouldCenter ? 'center' : 'nearest', inline: 'nearest' });
       scrolledSelectionRef.current = key;
+      if (shouldCenter) centeredRevealRequestRef.current = view.revealRequestId;
     }
-  }, [view.selected, view.treeData]);
+  }, [view.revealRequestId, view.selected, view.treeData]);
 
   // (Re)open the project when it changes. openProject is guarded: same
   // project+roots is a cheap no-op (survives conversation-switch remounts).

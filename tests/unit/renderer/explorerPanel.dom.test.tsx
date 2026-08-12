@@ -141,7 +141,27 @@ describe('ExplorerPanel reveal highlight + scroll-into-view', () => {
       select(peKey('pe1', 'a.ts'));
       await flush();
     });
-    expect(scrollSpy).toHaveBeenCalledWith({ block: 'nearest' });
+    expect(scrollSpy).toHaveBeenCalledWith({ block: 'nearest', inline: 'nearest' });
+  });
+
+  it('centers every locate request, including a repeat for the selected file', async () => {
+    const scrollSpy = vi.fn();
+    Element.prototype.scrollIntoView = scrollSpy;
+    configureExplorerStore(makePort({ [peKey('pe1', '')]: [file('a.ts')] }));
+    render(<ExplorerPanel projectId='p1' roots={[{ pe_id: 'pe1', title: 'app', role: 'workspace' }]} />);
+    await screen.findByText('a.ts');
+
+    await act(async () => {
+      select(peKey('pe1', 'a.ts'), { reveal: true });
+      await flush();
+    });
+    await act(async () => {
+      select(peKey('pe1', 'a.ts'), { reveal: true });
+      await flush();
+    });
+
+    expect(scrollSpy).toHaveBeenCalledTimes(2);
+    expect(scrollSpy).toHaveBeenLastCalledWith({ block: 'center', inline: 'nearest' });
   });
 
   it('does not re-scroll when only treeData changes, but re-scrolls on a new selection', async () => {
