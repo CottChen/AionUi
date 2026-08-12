@@ -345,7 +345,10 @@ const subscribeRepos = async (repoIds: string[]): Promise<void> => {
  * flicker the panel). A repeated call for the already-open project is a no-op.
  */
 export const openScmProject = async (id: string): Promise<void> => {
-  if (projectId === id) return;
+  // A failed first load must be retryable when the Changes tab remounts. The
+  // previous unconditional same-project guard made an initial transport failure
+  // permanent for the lifetime of the page.
+  if (projectId === id && loadState !== 'error') return;
   // Release the previous project's repos (switch project = release, per
   // source-control.md §生命周期).
   if (projectId !== null) releaseSubscriptions();
@@ -630,7 +633,22 @@ export const fetchScmDiff = async (params: {
 export const onScmReconnect = (): void => {
   subscribed = new Set();
   appliedSeq = new Map();
-  if (repositories.length > 0) void subscribeRepos(repositories.map((r) => r.repo_id));
+  if (repositories.length > 0) {
+    void subscribeRepos(repositories.map((r) => r.repo_id));
+    return;
+  }
+
+  // If the connection dropped during the initial repository listing there is
+  // nothing to re-subscribe. Retry the project declaration after the rejected
+  // request's catch handler has moved loading -> error.
+  const id = projectId;
+  if (id) {
+    queueMicrotask(() => {
+      if (projectId !== id || repositories.length > 0) return;
+      loadState = 'error';
+      void openScmProject(id);
+    });
+  }
 };
 
 // ── React binding ───────────────────────────────────────────────────────────

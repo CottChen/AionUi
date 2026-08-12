@@ -1272,6 +1272,7 @@ export type I18nKey =
   | 'preview.collapsePanel'
   | 'preview.confirmExit'
   | 'preview.continueEdit'
+  | 'preview.csv.truncated'
   | 'preview.downloadCode'
   | 'preview.downloadDiff'
   | 'preview.downloadFile'

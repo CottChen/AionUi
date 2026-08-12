@@ -27,7 +27,11 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-import { WORKSPACE_TOGGLE_EVENT, dispatchWorkspaceStateEvent } from '@/renderer/utils/workspace/workspaceEvents';
+import {
+  WORKSPACE_REVEAL_FILE_EVENT,
+  WORKSPACE_TOGGLE_EVENT,
+  dispatchWorkspaceStateEvent,
+} from '@/renderer/utils/workspace/workspaceEvents';
 
 const COLLAPSE_KEY_PREFIX = 'project-panel-collapse:';
 
@@ -96,6 +100,25 @@ export function useProjectPanelCollapse({
     };
     window.addEventListener(WORKSPACE_TOGGLE_EVENT, handleToggle);
     return () => window.removeEventListener(WORKSPACE_TOGGLE_EVENT, handleToggle);
+  }, [active, projectId, isMobile]);
+
+  // A preview reveal is an explicit request to show the target in the project
+  // panel. On mobile this opens the overlay; on desktop it restores the column.
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const handleReveal = () => {
+      if (!active || !projectId) return;
+      setCollapsed(false);
+      if (!isMobile) {
+        try {
+          localStorage.setItem(collapseKey(projectId), 'expanded');
+        } catch {
+          // ignore persistence errors
+        }
+      }
+    };
+    window.addEventListener(WORKSPACE_REVEAL_FILE_EVENT, handleReveal);
+    return () => window.removeEventListener(WORKSPACE_REVEAL_FILE_EVENT, handleReveal);
   }, [active, projectId, isMobile]);
 
   // Broadcast collapse state so the mac Titlebar workspace button's icon stays in

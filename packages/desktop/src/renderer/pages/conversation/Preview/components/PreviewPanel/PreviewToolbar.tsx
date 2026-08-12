@@ -187,6 +187,7 @@ const PreviewToolbar: React.FC<PreviewToolbarProps> = ({
 }) => {
   const { t } = useTranslation();
   const isDiff = content_type === 'diff';
+  const isCsv = content_type === 'csv';
   const preferActionButtonsInFront = Boolean(leftExtra);
   // 下载的隐藏规则看的是「文件是否在磁盘上」，用 hasFilePath 而不是
   // showOpenInSystemButton（后者已包含纯 fileRef 的情况）。
@@ -206,7 +207,7 @@ const PreviewToolbar: React.FC<PreviewToolbarProps> = ({
       <div className='flex items-center justify-between gap-8px w-full' style={{ minWidth: 'max-content' }}>
         {/* 左侧：Tabs（Markdown/HTML）+ 文件名 / Left: Tabs (Markdown/HTML) + Filename */}
         <div className='flex items-center h-full gap-8px'>
-          {(isMarkdown || isHTML || isDiff) && !hasNoRenderableContent && (
+          {(isMarkdown || isHTML || isDiff || isCsv) && !hasNoRenderableContent && (
             <>
               <div className='flex items-center h-full gap-0'>
                 <div
@@ -234,7 +235,7 @@ const PreviewToolbar: React.FC<PreviewToolbarProps> = ({
                   {t('preview.preview')}
                 </div>
               </div>
-              {!isDiff && (
+              {(isMarkdown || isHTML) && (
                 <div
                   className={`flex items-center px-8px py-3px rd-4px cursor-pointer transition-colors duration-150 ${isSplitScreenEnabled ? toolbarBtnActive : 'text-t-secondary hover:bg-bg-3'}`}
                   onClick={() => {

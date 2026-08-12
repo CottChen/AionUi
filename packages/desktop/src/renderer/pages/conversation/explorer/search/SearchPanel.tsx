@@ -52,6 +52,8 @@ export type SearchPanelProps = {
   onAddHit?: (hit: SearchHit) => void;
   /** Folder selected through the Explorer context menu for scoped search. */
   folderTarget?: SearchFolderTarget;
+  /** Changing this token exits search so an external tree reveal is visible. */
+  clearRequestKey?: number;
   /** The Explorer tree — kept mounted underneath; shown only while the query is empty. */
   children: React.ReactNode;
 };
@@ -62,6 +64,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   onRevealHit,
   onAddHit,
   folderTarget,
+  clearRequestKey,
   children,
 }) => {
   const { t } = useTranslation();
@@ -75,6 +78,12 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   const { view, runSearch, cancel } = useFileSearch(PANEL_SEARCH_OWNER, effectiveRoots, mode);
   const queryRef = useLatestRef(query);
   const modeRef = useLatestRef(mode);
+
+  useEffect(() => {
+    if (clearRequestKey === undefined) return;
+    setQuery('');
+    cancel();
+  }, [cancel, clearRequestKey]);
 
   useEffect(() => {
     if (!folderTarget) return;

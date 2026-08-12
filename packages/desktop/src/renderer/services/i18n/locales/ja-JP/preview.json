@@ -107,6 +107,9 @@
       "installHint": "officecli が必要です。自動的にインストールされます。"
     }
   },
+  "csv": {
+    "truncated": "プレビューの応答性を保つため、最初の {{rows}} 行と {{columns}} 列のみ表示しています。"
+  },
   "pdf": {
     "title": "PDF ドキュメント",
     "pathMissing": "PDF ファイルパスが空です",

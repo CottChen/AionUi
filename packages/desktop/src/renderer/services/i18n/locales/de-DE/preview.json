@@ -107,6 +107,9 @@
       "installHint": "Erfordert officecli. Wird automatisch installiert."
     }
   },
+  "csv": {
+    "truncated": "Für eine flüssige Vorschau werden nur die ersten {{rows}} Zeilen und {{columns}} Spalten angezeigt."
+  },
   "pdf": {
     "title": "PDF-Dokument",
     "pathMissing": "PDF-Dateipfad fehlt",

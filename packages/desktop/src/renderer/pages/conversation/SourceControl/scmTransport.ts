@@ -31,6 +31,8 @@ import {
 
 const SCM_EVENT = 'scm';
 const RECONNECT_EVENT = 'realtime.reconnected';
+const DISCONNECT_EVENT = 'realtime.disconnected';
+const SCM_REQUEST_TIMEOUT_MS = 10000;
 
 /** Action → wire method. `discard` maps to `scm/discard` (revert on the engine side). */
 const ACTION_METHOD: Record<ScmActionKind, string> = {
@@ -45,6 +47,7 @@ export function createWsScmTransport(): MonitorTransport {
     send: (frame) => wsSend(SCM_EVENT, frame),
     onFrame: (cb) => wsEmitter<unknown>(SCM_EVENT).on(cb),
     onReconnect: (cb) => wsEmitter(RECONNECT_EVENT).on(cb),
+    onDisconnect: (cb) => wsEmitter(DISCONNECT_EVENT).on(cb),
   };
 }
 
@@ -67,17 +70,23 @@ export function initScmRuntime(): MonitorClient {
 
   configureScmStore({
     listRepositories: async (projectId) =>
-      (await scm.request('scm/listRepositories', { project_id: projectId })) as { repositories: ScmRepository[] },
+      (await scm.request('scm/listRepositories', { project_id: projectId }, SCM_REQUEST_TIMEOUT_MS)) as {
+        repositories: ScmRepository[];
+      },
     subscribe: async (repoIds) =>
-      (await scm.request('scm/subscribe', { repositories: repoIds })) as { statuses: ScmStatus[] },
+      (await scm.request('scm/subscribe', { repositories: repoIds }, SCM_REQUEST_TIMEOUT_MS)) as {
+        statuses: ScmStatus[];
+      },
     unsubscribe: (repoIds) => {
       scm.notify('scm/unsubscribe', { repositories: repoIds });
     },
-    status: async (repoId) => (await scm.request('scm/status', { repository: repoId })) as ScmStatus,
-    diff: async (params) => (await scm.request('scm/diff', params)) as ScmDiffResult,
+    status: async (repoId) =>
+      (await scm.request('scm/status', { repository: repoId }, SCM_REQUEST_TIMEOUT_MS)) as ScmStatus,
+    diff: async (params) => (await scm.request('scm/diff', params, SCM_REQUEST_TIMEOUT_MS)) as ScmDiffResult,
     // One method per action — the wire has no "action" parameter, and that is what
     // makes a failure attributable to a side without a per-failure flag.
-    act: async (action, params) => (await scm.request(ACTION_METHOD[action], params)) as ScmActionResult,
+    act: async (action, params) =>
+      (await scm.request(ACTION_METHOD[action], params, SCM_REQUEST_TIMEOUT_MS)) as ScmActionResult,
   });
 
   return scm;

@@ -22,11 +22,15 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
-import { dispatchWorkspaceHasFilesEvent } from '@/renderer/utils/workspace/workspaceEvents';
+import {
+  WORKSPACE_REVEAL_FILE_EVENT,
+  dispatchWorkspaceHasFilesEvent,
+  type WorkspaceRevealFileDetail,
+} from '@/renderer/utils/workspace/workspaceEvents';
 
 import { ipcBridge } from '@/common';
 import { isBackendHttpError } from '@/common/adapter/httpBridge';
-import { PROJECT_ERROR_DUPLICATE, PROJECT_ERROR_OVERLAP } from '@/common/types/project';
+import { PROJECT_ERROR_DUPLICATE, PROJECT_ERROR_OVERLAP, type ProjectEntryDto } from '@/common/types/project';
 import { usePreviewContext } from '@/renderer/pages/conversation/Preview';
 import WorkspaceOpenButton from '@/renderer/pages/conversation/components/ChatLayout/WorkspaceOpenButton';
 import { getFileTypeInfo } from '@/renderer/utils/file/fileType';
@@ -47,7 +51,7 @@ import { ExplorerPanel } from './ExplorerPanel';
 import { buildRemoveRequest, buildRenameRequest, parentRel, peKey, type RenameRequest } from './explorerModel';
 import { initExplorerRuntime, updateProjectRootFallbackPaths } from './monitorTransport';
 import { toRootRefs } from './projectRoots';
-import { reveal, select } from './explorerStore';
+import { openProject, reveal, select } from './explorerStore';
 import { useCurrentConversation } from './currentConversationStore';
 import { SearchPanel, type SearchFolderTarget } from './search/SearchPanel';
 import type { SearchHit } from './search/searchModel';
@@ -65,6 +69,60 @@ const pathToFileUri = (p: string): string => {
   const normalized = p.replace(/\\/g, '/');
   const withLeadingSlash = normalized.startsWith('/') ? normalized : `/${normalized}`;
   return `file://${encodeURI(withLeadingSlash)}`;
+};
+
+const normalizeRevealPath = (value: string): string => {
+  let path = value;
+  if (/^file:\/\//i.test(value)) {
+    try {
+      const url = new URL(value);
+      path = decodeURIComponent(url.pathname);
+      if (url.host) path = `//${url.host}${path}`;
+      else if (/^\/[a-zA-Z]:\//.test(path)) path = path.slice(1);
+    } catch {
+      // Keep the original value; the containment check below will reject it.
+    }
+  }
+  const normalized = path.replace(/\\/g, '/');
+  return normalized.length > 1 ? normalized.replace(/\/+$/, '') : normalized;
+};
+
+const comparableRevealPath = (value: string): string => {
+  const normalized = normalizeRevealPath(value);
+  return /^[a-zA-Z]:\//.test(normalized) ? normalized.toLowerCase() : normalized;
+};
+
+export type ProjectRevealTarget = { pe_id: string; relative_path: string };
+
+/** Map a preview's device path to the most-specific project root identity. */
+export const resolveProjectRevealTarget = (
+  entries: ProjectEntryDto[],
+  detail: WorkspaceRevealFileDetail
+): ProjectRevealTarget | null => {
+  const targetPath = normalizeRevealPath(detail.filePath);
+  const comparableTarget = comparableRevealPath(targetPath);
+  const comparableWorkspace = detail.workspace ? comparableRevealPath(detail.workspace) : undefined;
+
+  const matches = entries.flatMap((entry) => {
+    const rootPath = normalizeRevealPath(entry.display_path);
+    if (!rootPath) return [];
+    const comparableRoot = comparableRevealPath(rootPath);
+    const isRoot = comparableTarget === comparableRoot;
+    if (!isRoot && !comparableTarget.startsWith(`${comparableRoot}/`)) return [];
+    return [
+      {
+        pe_id: entry.pe_id,
+        relative_path: isRoot ? '' : targetPath.slice(rootPath.length + 1),
+        rootLength: comparableRoot.length,
+        workspaceMatch: comparableWorkspace === comparableRoot,
+      },
+    ];
+  });
+
+  const match = matches.toSorted(
+    (a, b) => Number(b.workspaceMatch) - Number(a.workspaceMatch) || b.rootLength - a.rootLength
+  )[0];
+  return match ? { pe_id: match.pe_id, relative_path: match.relative_path } : null;
 };
 
 /** Args passed to `openPreview` for an Explorer-opened file. */
@@ -162,12 +220,25 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId,
   });
   const [searchFolderTarget, setSearchFolderTarget] = useState<SearchFolderTarget>();
   const [browserUploadTarget, setBrowserUploadTarget] = useState<{ pe_id: string; relative_path: string }>();
+  const [activeTab, setActiveTab] = useState<'files' | 'changes'>('files');
+  const [revealRequest, setRevealRequest] = useState<WorkspaceRevealFileDetail>();
+  const [searchClearRequestKey, setSearchClearRequestKey] = useState<number>();
   const browserUploadTriggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     setSearchFolderTarget(undefined);
     setBrowserUploadTarget(undefined);
+    setRevealRequest(undefined);
   }, [projectId]);
+
+  useEffect(() => {
+    const handleRevealFile = (event: Event): void => {
+      const request = (event as CustomEvent<WorkspaceRevealFileDetail>).detail;
+      if (request?.filePath) setRevealRequest(request);
+    };
+    window.addEventListener(WORKSPACE_REVEAL_FILE_EVENT, handleRevealFile);
+    return () => window.removeEventListener(WORKSPACE_REVEAL_FILE_EVENT, handleRevealFile);
+  }, []);
   // Apply-time guard: only feed the store roots whose detail actually belongs to
   // the current project. Combined with the per-project remount (this component is
   // keyed by `projectId` in ProjectPanelHost), a stale/other-project detail can
@@ -239,10 +310,25 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId,
   // unmounts the inactive one for `changes`, which is safe because the SCM
   // subscription is owned by its store per project, not by the component's mount
   // (see ScmPanel's lifecycle note) — a tab switch never drops the backend watch.
-  const [activeTab, setActiveTab] = useState<'files' | 'changes'>('files');
   const [renameDialog, setRenameDialog] = useState<RenameRequest | null>(null);
   const [nameValue, setNameValue] = useState('');
   const [nameSubmitting, setNameSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!revealRequest || !detail) return;
+    setRevealRequest(undefined);
+    const target = resolveProjectRevealTarget(detail.explorer.entries, revealRequest);
+    if (!target) {
+      Message.warning(t('conversation.workspace.revealInWorkspace.notInProject'));
+      return;
+    }
+
+    openProject(projectId, toRootRefs(detail));
+    setActiveTab('files');
+    setSearchClearRequestKey((previous) => (previous ?? 0) + 1);
+    reveal({ pe_id: target.pe_id, relative_path: parentRel(target.relative_path) });
+    select(peKey(target.pe_id, target.relative_path));
+  }, [detail, projectId, revealRequest, t]);
 
   const handleRename = (peId: string, rel: string, name: string): void => {
     setRenameDialog({ peId, targetDir: parentRel(rel), origRel: rel });
@@ -495,6 +581,7 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId,
           roots={searchRoots}
           peNames={searchPeNames}
           folderTarget={searchFolderTarget}
+          clearRequestKey={searchClearRequestKey}
           onRevealHit={handleRevealHit}
           onAddHit={activeConversationId ? handleAddHit : undefined}
         >

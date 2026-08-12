@@ -61,6 +61,8 @@ export const RPC_RECONNECTED = -2;
 export const RPC_MALFORMED_RESPONSE = -3;
 /** A streaming request abandoned by the caller (superseded — no terminal coming). */
 export const RPC_ABANDONED = -4;
+/** A request stayed unanswered past its caller-defined deadline. */
+export const RPC_TIMEOUT = -5;
 
 /**
  * The transport the client rides. `send` returns false when the socket is not
@@ -72,6 +74,7 @@ export type MonitorTransport = {
   send: (frame: unknown) => boolean;
   onFrame: (cb: (frame: unknown) => void) => () => void;
   onReconnect: (cb: () => void) => () => void;
+  onDisconnect?: (cb: () => void) => () => void;
 };
 
 export type MonitorClientOptions = {
@@ -85,6 +88,7 @@ export type MonitorClientOptions = {
 type Pending = {
   resolve: (result: unknown) => void;
   reject: (err: RpcError) => void;
+  timeout?: ReturnType<typeof setTimeout>;
 };
 
 type MaybeFrame = {
@@ -164,6 +168,9 @@ export class MonitorClient {
     this.onReconnectCb = options.onReconnect;
     this.disposers.push(this.transport.onFrame((frame) => this.handleFrame(frame)));
     this.disposers.push(this.transport.onReconnect(() => this.handleReconnect()));
+    if (this.transport.onDisconnect) {
+      this.disposers.push(this.transport.onDisconnect(() => this.handleDisconnect()));
+    }
   }
 
   /**
@@ -171,8 +178,8 @@ export class MonitorClient {
    * error response). Rejects immediately if the socket is not OPEN — the caller
    * treats that as "will re-declare on reconnect" and moves on.
    */
-  request(method: string, params?: unknown): Promise<unknown> {
-    return this.requestWithId(method, params).result;
+  request(method: string, params?: unknown, timeoutMs?: number): Promise<unknown> {
+    return this.requestWithId(method, params, timeoutMs).result;
   }
 
   /**
@@ -184,7 +191,7 @@ export class MonitorClient {
    * matches. The id is assigned even when the socket is offline (the `result`
    * promise still rejects with `RPC_DISCONNECTED`).
    */
-  requestWithId(method: string, params?: unknown): { id: RpcId; result: Promise<unknown> } {
+  requestWithId(method: string, params?: unknown, timeoutMs?: number): { id: RpcId; result: Promise<unknown> } {
     const id = this.nextId++;
     const result = new Promise<unknown>((resolve, reject) => {
       const ok = this.transport.send({ jsonrpc: '2.0', id, method, params });
@@ -199,7 +206,20 @@ export class MonitorClient {
         reject(new RpcError({ code: RPC_DISCONNECTED, message: 'monitor transport not connected', transport: true }));
         return;
       }
-      this.pending.set(id, { resolve, reject });
+      const pending: Pending = { resolve, reject };
+      if (timeoutMs !== undefined) {
+        pending.timeout = setTimeout(() => {
+          if (!this.pending.delete(id)) return;
+          reject(
+            new RpcError({
+              code: RPC_TIMEOUT,
+              message: `${method} timed out after ${timeoutMs}ms`,
+              transport: true,
+            })
+          );
+        }, timeoutMs);
+      }
+      this.pending.set(id, pending);
     });
     return { id, result };
   }
@@ -221,6 +241,7 @@ export class MonitorClient {
     const entry = this.pending.get(id);
     if (!entry) return;
     this.pending.delete(id);
+    if (entry.timeout !== undefined) clearTimeout(entry.timeout);
     entry.reject(new RpcError({ code: RPC_ABANDONED, message: 'streaming request superseded', transport: true }));
   }
 
@@ -242,6 +263,7 @@ export class MonitorClient {
       const entry = this.pending.get(frame.id);
       if (!entry) return; // unknown/duplicate id → ignore
       this.pending.delete(frame.id);
+      if (entry.timeout !== undefined) clearTimeout(entry.timeout);
       if (frame.error) {
         entry.reject(new RpcError(frame.error));
       } else {
@@ -266,6 +288,7 @@ export class MonitorClient {
       const entry = this.pending.get(frame.id);
       if (entry) {
         this.pending.delete(frame.id);
+        if (entry.timeout !== undefined) clearTimeout(entry.timeout);
         entry.reject(
           new RpcError({
             code: RPC_MALFORMED_RESPONSE,
@@ -285,9 +308,18 @@ export class MonitorClient {
     this.onReconnectCb?.();
   }
 
+  private handleDisconnect(): void {
+    // Waiting until the next successful open can strand every loading state for
+    // the full reconnect backoff (or forever when the browser is offline).
+    this.rejectAllPending(new RpcError({ code: RPC_RECONNECTED, message: 'monitor connection lost', transport: true }));
+  }
+
   private rejectAllPending(err: RpcError): void {
     const entries = [...this.pending.values()];
     this.pending.clear();
-    for (const entry of entries) entry.reject(err);
+    for (const entry of entries) {
+      if (entry.timeout !== undefined) clearTimeout(entry.timeout);
+      entry.reject(err);
+    }
   }
 }

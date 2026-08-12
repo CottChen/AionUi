@@ -194,6 +194,10 @@ export const startSearch = (
     },
     (err: unknown) => {
       if (activeSearchId !== id) return; // superseded/abandoned — ignore its rejection
+      // A deadline or connection error settles the frontend request without a
+      // server terminal. Ask a still-live backend to stop scanning; when the
+      // socket is already gone this notification is simply dropped.
+      port?.cancel(id);
       activeSearchId = null; // terminal (error): reject any late match for this id
       status = 'error';
       error = err instanceof Error ? err.message : String(err);

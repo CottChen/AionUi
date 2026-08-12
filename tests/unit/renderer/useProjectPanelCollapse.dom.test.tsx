@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useProjectPanelCollapse } from '@/renderer/hooks/ui/useProjectPanelCollapse';
 import {
+  WORKSPACE_REVEAL_FILE_EVENT,
   WORKSPACE_STATE_EVENT,
   WORKSPACE_TOGGLE_EVENT,
   type WorkspaceStateDetail,
@@ -63,6 +64,20 @@ describe('useProjectPanelCollapse (P3 host collapse)', () => {
     fireToggle(); // open the overlay
     expect(result.current.collapsed).toBe(false);
     expect(localStorage.getItem('project-panel-collapse:p3')).toBeNull(); // mobile is ephemeral
+  });
+
+  it('opens the mobile project overlay when preview requests a file reveal', () => {
+    const { result } = renderHook(() => useProjectPanelCollapse({ projectId: 'p3', isMobile: true, active: true }));
+
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent(WORKSPACE_REVEAL_FILE_EVENT, {
+          detail: { workspace: '/project', filePath: '/project/readme.md' },
+        })
+      );
+    });
+
+    expect(result.current.collapsed).toBe(false);
   });
 
   it('ignores the toggle when not active (non-project conversation → ChatLayout owns it)', () => {

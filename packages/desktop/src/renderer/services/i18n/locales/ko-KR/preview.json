@@ -107,6 +107,9 @@
       "installHint": "officecli가 필요합니다. 자동으로 설치됩니다."
     }
   },
+  "csv": {
+    "truncated": "미리보기 성능을 위해 처음 {{rows}}개 행과 {{columns}}개 열만 표시합니다."
+  },
   "pdf": {
     "title": "PDF 문서",
     "pathMissing": "PDF 파일 경로가 누락되었습니다",

@@ -311,6 +311,8 @@ describe('GuidPage', () => {
     capturedGuidInputCardProps.length = 0;
     capturedGuidSendDeps.length = 0;
     useGuidAssistantSelectionMock.mockClear();
+    guidInputMock.input = '';
+    sendMock.sendMessageHandler.mockClear();
     resolveGuidAssistantDefaultsMock.mockReturnValue({
       disabledBuiltinSkillIds: [],
       skillIds: [],
@@ -451,6 +453,32 @@ describe('GuidPage', () => {
     expect(latestGuidInputCardProps).not.toHaveProperty('mentionOpen');
     expect(latestGuidInputCardProps).not.toHaveProperty('mentionSelectorBadge');
     expect(latestGuidInputCardProps).not.toHaveProperty('mentionDropdown');
+  });
+
+  it('keeps Enter as a line break and submits only with Ctrl+Enter', () => {
+    guidInputMock.input = 'Send this message';
+    sendMock.sendMessageHandler.mockClear();
+    render(<GuidPage />);
+    const onKeyDown = capturedGuidInputCardProps.at(-1)?.onKeyDown as (event: React.KeyboardEvent) => void;
+    const enterPreventDefault = vi.fn();
+    const submitPreventDefault = vi.fn();
+
+    onKeyDown({
+      key: 'Enter',
+      ctrlKey: false,
+      shiftKey: false,
+      preventDefault: enterPreventDefault,
+    } as React.KeyboardEvent);
+    onKeyDown({
+      key: 'Enter',
+      ctrlKey: true,
+      shiftKey: false,
+      preventDefault: submitPreventDefault,
+    } as React.KeyboardEvent);
+
+    expect(enterPreventDefault).not.toHaveBeenCalled();
+    expect(sendMock.sendMessageHandler).toHaveBeenCalledOnce();
+    expect(submitPreventDefault).toHaveBeenCalledOnce();
   });
 
   it('ignores legacy selectedAgentKey navigation state when preselecting an assistant', () => {

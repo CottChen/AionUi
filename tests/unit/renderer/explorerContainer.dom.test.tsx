@@ -29,7 +29,10 @@ vi.mock('@/common', () => ({
   ipcBridge: { project: { get: { invoke: (p: { project_id: string }) => projectGet(p) } } },
 }));
 
-import { ExplorerContainer } from '@/renderer/pages/conversation/explorer/ExplorerContainer';
+import {
+  ExplorerContainer,
+  resolveProjectRevealTarget,
+} from '@/renderer/pages/conversation/explorer/ExplorerContainer';
 import { resetExplorerStoreForTest } from '@/renderer/pages/conversation/explorer/explorerStore';
 
 const entry = (over: Partial<ProjectEntryDto>): ProjectEntryDto => ({
@@ -194,5 +197,40 @@ describe('ExplorerContainer data integration', () => {
     // The fetched detail belongs to 'other-project', not 'p1' → dropped, no roots.
     await new Promise((r) => setTimeout(r, 30));
     expect(screen.queryByText('Ghost Root')).not.toBeInTheDocument();
+  });
+});
+
+describe('project preview path mapping', () => {
+  it('maps a macOS file path to its project root and relative path', () => {
+    const entries = [entry({ pe_id: 'peA', display_path: '/Users/me/project' })];
+
+    expect(
+      resolveProjectRevealTarget(entries, {
+        workspace: '/Users/me/project',
+        filePath: '/Users/me/project/docs/readme.md',
+      })
+    ).toEqual({ pe_id: 'peA', relative_path: 'docs/readme.md' });
+  });
+
+  it('uses the most-specific matching root and supports Windows path casing', () => {
+    const entries = [
+      entry({ pe_id: 'peA', display_path: 'C:\\Work' }),
+      entry({ pe_id: 'peB', display_path: 'C:\\Work\\Project' }),
+    ];
+
+    expect(
+      resolveProjectRevealTarget(entries, {
+        workspace: 'c:/work/project',
+        filePath: 'c:/WORK/Project/src/main.ts',
+      })
+    ).toEqual({ pe_id: 'peB', relative_path: 'src/main.ts' });
+  });
+
+  it('rejects a file outside every project root', () => {
+    expect(
+      resolveProjectRevealTarget([entry({ display_path: '/Users/me/project' })], {
+        filePath: '/Users/me/other/readme.md',
+      })
+    ).toBeNull();
   });
 });

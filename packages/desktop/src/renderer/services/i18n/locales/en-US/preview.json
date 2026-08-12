@@ -107,6 +107,9 @@
       "installHint": "Requires officecli. It will be installed automatically."
     }
   },
+  "csv": {
+    "truncated": "Showing only the first {{rows}} rows and {{columns}} columns to keep the preview responsive."
+  },
   "pdf": {
     "title": "PDF Document",
     "pathMissing": "PDF file path is missing",

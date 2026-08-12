@@ -107,6 +107,9 @@
       "installHint": "officecli gereklidir. Otomatik olarak yüklenecektir."
     }
   },
+  "csv": {
+    "truncated": "Önizlemeyi hızlı tutmak için yalnızca ilk {{rows}} satır ve {{columns}} sütun gösteriliyor."
+  },
   "pdf": {
     "title": "PDF Belgesi",
     "pathMissing": "PDF dosya yolu eksik",

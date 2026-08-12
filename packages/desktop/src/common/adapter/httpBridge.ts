@@ -377,6 +377,7 @@ export function stubProvider<Data, Params = undefined>(name: string, defaultValu
 
 type WsCallback = (data: unknown) => void;
 const REALTIME_RECONNECTED_EVENT = 'realtime.reconnected';
+const REALTIME_DISCONNECTED_EVENT = 'realtime.disconnected';
 const wsListeners = new Map<string, Set<WsCallback>>();
 let ws: WebSocket | null = null;
 let wsReconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -434,6 +435,7 @@ function ensureWs(): void {
     console.debug('[ensureWs] CLOSED code=' + e.code + ' reason=' + e.reason);
     if (ws === current) {
       ws = null;
+      dispatchWsEvent(REALTIME_DISCONNECTED_EVENT, { timestamp: Date.now(), code: e.code });
       scheduleWsReconnect();
     }
   });

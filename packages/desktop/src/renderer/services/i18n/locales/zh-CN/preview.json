@@ -107,6 +107,9 @@
       "installHint": "需要 officecli，将自动安装。"
     }
   },
+  "csv": {
+    "truncated": "为保持流畅，仅显示前 {{rows}} 行和 {{columns}} 列。"
+  },
   "pdf": {
     "title": "PDF 文档",
     "pathMissing": "PDF 文件路径为空",

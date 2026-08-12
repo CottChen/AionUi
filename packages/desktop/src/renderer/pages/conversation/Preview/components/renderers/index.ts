@@ -13,4 +13,5 @@
  */
 
 export { default as HTMLRenderer } from './HTMLRenderer';
+export { default as CsvTableRenderer } from './CsvTableRenderer';
 export { default as SelectionToolbar } from './SelectionToolbar';

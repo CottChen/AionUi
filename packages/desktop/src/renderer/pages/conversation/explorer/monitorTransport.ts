@@ -33,16 +33,11 @@ import {
 
 const FS_EVENT = 'fs';
 const RECONNECT_EVENT = 'realtime.reconnected';
-const SUBSCRIBE_TIMEOUT_MS = 5000;
+const DISCONNECT_EVENT = 'realtime.disconnected';
+const SUBSCRIBE_TIMEOUT_MS = 1200;
+const SEARCH_TIMEOUT_MS = 30000;
 
 const rootFallbackPaths = new Map<string, string>();
-
-const delayReject = (ms: number): Promise<never> =>
-  new Promise((_, reject) => {
-    window.setTimeout(() => reject(new Error(`fs monitor request timed out after ${ms}ms`)), ms);
-  });
-
-const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> => Promise.race([promise, delayReject(ms)]);
 
 const joinDisplayPath = (root: string, relativePath: string): string => {
   if (!relativePath) return root;
@@ -85,6 +80,7 @@ export function createWsMonitorTransport(): MonitorTransport {
     send: (frame) => wsSend(FS_EVENT, frame),
     onFrame: (cb) => wsEmitter<unknown>(FS_EVENT).on(cb),
     onReconnect: (cb) => wsEmitter(RECONNECT_EVENT).on(cb),
+    onDisconnect: (cb) => wsEmitter(DISCONNECT_EVENT).on(cb),
   };
 }
 
@@ -205,8 +201,9 @@ export function initExplorerRuntime(): MonitorClient {
   configureExplorerStore({
     subscribe: async (refs: DirRef[]): Promise<SubscribeResult> => {
       try {
-        const result = (await withTimeout(
-          monitor.request('fs/subscribe', { targets: refs }),
+        const result = (await monitor.request(
+          'fs/subscribe',
+          { targets: refs },
           SUBSCRIBE_TIMEOUT_MS
         )) as MonitorRequestResult;
         return { snapshots: result.snapshots };
@@ -232,7 +229,7 @@ export function initExplorerRuntime(): MonitorClient {
 
   configureSearchStore({
     search: (params) => {
-      const { id, result } = monitor.requestWithId('fs/search', params);
+      const { id, result } = monitor.requestWithId('fs/search', params, SEARCH_TIMEOUT_MS);
       return { id, result: result as Promise<SearchResult> };
     },
     cancel: (searchId): void => {

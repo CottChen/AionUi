@@ -32,6 +32,7 @@ import DiffPreview from '../viewers/DiffViewer';
 import ExcelPreview from '../viewers/ExcelViewer';
 import HTMLEditor from '../editors/HTMLEditor';
 import HTMLRenderer from '../renderers/HTMLRenderer';
+import CsvTableRenderer from '../renderers/CsvTableRenderer';
 import ImagePreview from '../viewers/ImageViewer';
 import MarkdownEditor from '../editors/MarkdownEditor';
 import MarkdownPreview from '../viewers/MarkdownViewer';
@@ -972,10 +973,32 @@ const PreviewPanel: React.FC = () => {
           onViewModeChange={setViewMode}
         />
       );
-    } else if (content_type === 'code' || content_type === 'csv') {
+    } else if (content_type === 'csv') {
+      if (viewMode === 'preview') {
+        return (
+          <div className='flex-1 overflow-hidden'>
+            <CsvTableRenderer content={content} />
+          </div>
+        );
+      }
+
+      return (
+        <div className='flex-1 overflow-hidden'>
+          <CodeEditor
+            key={activeTabId ?? undefined}
+            value={content}
+            onChange={handleContentChange}
+            language={metadata?.language}
+            fileName={metadata?.file_name}
+            readOnly={isEditable === false}
+            targetLine={metadata?.targetLine}
+            targetColumn={metadata?.targetColumn}
+            targetRevealKey={metadata?.targetRevealKey}
+          />
+        </div>
+      );
+    } else if (content_type === 'code') {
       // 统一：始终可编辑的 CodeEditor（看=改）/ Unified: always-editable CodeEditor (view = edit)
-      // csv 走同一分支：它本来就是纯文本，只是恰好有表格结构。
-      // csv shares this branch: it is plain text that happens to be tabular.
       return (
         <div className='flex-1 overflow-hidden'>
           <CodeEditor

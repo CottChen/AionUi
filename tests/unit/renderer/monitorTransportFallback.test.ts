@@ -35,7 +35,11 @@ import {
 } from '@/renderer/pages/conversation/explorer/monitorTransport';
 
 const flush = async () => {
-  for (let i = 0; i < 8; i += 1) await Promise.resolve();
+  for (let i = 0; i < 8; i += 1) {
+    // Sequential ticks drain reconcile -> request -> fallback -> snapshot.
+    // eslint-disable-next-line no-await-in-loop
+    await Promise.resolve();
+  }
 };
 
 describe('monitorTransport HTTP fallback', () => {
@@ -74,7 +78,7 @@ describe('monitorTransport HTTP fallback', () => {
 
     openProject('p1', [{ pe_id: 'pe1', title: 'repo', displayPath: '/repo', role: 'workspace' }]);
     await flush();
-    await vi.advanceTimersByTimeAsync(5000);
+    await vi.advanceTimersByTimeAsync(1200);
     await flush();
 
     expect(mocks.wsSend).toHaveBeenCalledWith(

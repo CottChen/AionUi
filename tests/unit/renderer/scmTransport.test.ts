@@ -73,6 +73,14 @@ describe('SCM WS transport envelope', () => {
     expect(onReconnect).toHaveBeenCalledOnce();
   });
 
+  it('subscribes to the shared disconnect event', () => {
+    const onDisconnect = vi.fn();
+    createWsScmTransport().onDisconnect?.(onDisconnect);
+
+    feed('realtime.disconnected', undefined);
+    expect(onDisconnect).toHaveBeenCalledOnce();
+  });
+
   it('stops delivering frames after unsubscribing', () => {
     const seen: unknown[] = [];
     const off = createWsScmTransport().onFrame((f) => seen.push(f));

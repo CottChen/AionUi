@@ -17,7 +17,7 @@ const SessionList: React.FC<SessionListProps> = ({ sessions, selectedId, loading
 
   if (loading) {
     return (
-      <div className='h-full min-h-180px flex items-center justify-center'>
+      <div className='h-full min-h-180px overflow-y-auto overscroll-contain touch-pan-y flex items-center justify-center'>
         <Spin dot />
       </div>
     );
@@ -25,14 +25,18 @@ const SessionList: React.FC<SessionListProps> = ({ sessions, selectedId, loading
 
   if (sessions.length === 0) {
     return (
-      <div className='h-full min-h-180px flex items-center justify-center px-20px'>
+      <div className='h-full min-h-180px overflow-y-auto overscroll-contain touch-pan-y flex items-center justify-center px-20px'>
         <Empty description={t('agent.cliSessions.empty')} />
       </div>
     );
   }
 
   return (
-    <div className='flex flex-col gap-2px p-6px'>
+    <div
+      data-testid='cli-session-list-scroll'
+      className='h-full min-h-0 overflow-y-auto overscroll-contain touch-pan-y flex flex-col gap-2px p-6px'
+      style={{ WebkitOverflowScrolling: 'touch' }}
+    >
       {sessions.map((session) => (
         <Button
           key={session.id}

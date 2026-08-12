@@ -377,13 +377,18 @@ describe('httpBridge', () => {
       suspendWebSocket();
 
       const events: unknown[] = [];
+      const disconnects: unknown[] = [];
       const unsubscribe = wsEmitter('realtime.reconnected').on((payload: unknown) => events.push(payload));
+      const unsubscribeDisconnect = wsEmitter('realtime.disconnected').on((payload: unknown) =>
+        disconnects.push(payload)
+      );
       reconnectWebSocket();
 
       FakeWebSocket.instances[0].dispatchOpen();
       expect(events).toEqual([{ timestamp: expect.any(Number), initial: true }]);
 
       FakeWebSocket.instances[0].dispatchClose();
+      expect(disconnects).toEqual([{ timestamp: expect.any(Number), code: 1006 }]);
       vi.advanceTimersByTime(1000);
       FakeWebSocket.instances[1].dispatchOpen();
 
@@ -393,6 +398,7 @@ describe('httpBridge', () => {
       suspendWebSocket();
       vi.clearAllTimers();
       unsubscribe();
+      unsubscribeDisconnect();
       vi.useRealTimers();
     });
 

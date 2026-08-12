@@ -297,14 +297,15 @@ const GuidPage: React.FC = () => {
 
   const handleInputKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
-      if (slashController.onKeyDown(event)) {
-        return;
-      }
-
-      if (event.key === 'Enter' && !event.shiftKey) {
+      if (event.key === 'Enter' && event.ctrlKey) {
         event.preventDefault();
         if (!guidInput.input.trim()) return;
         send.sendMessageHandler();
+        return;
+      }
+
+      if (slashController.onKeyDown(event)) {
+        return;
       }
     },
     [guidInput.input, send.sendMessageHandler, slashController]

@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import { Message } from '@arco-design/web-react';
 import { SWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -130,7 +130,8 @@ vi.mock('@/common', () => ({
 }));
 
 import { ExplorerContainer } from '@/renderer/pages/conversation/explorer/ExplorerContainer';
-import { resetExplorerStoreForTest } from '@/renderer/pages/conversation/explorer/explorerStore';
+import { getExplorerSnapshot, resetExplorerStoreForTest } from '@/renderer/pages/conversation/explorer/explorerStore';
+import { dispatchWorkspaceRevealFileEvent } from '@/renderer/utils/workspace/workspaceEvents';
 
 const entry = (over: Partial<ProjectEntryDto>): ProjectEntryDto => ({
   pe_id: 'peA',
@@ -197,6 +198,36 @@ const clickAdd = async () => {
   await screen.findByTestId('roots');
   fireEvent.click(screen.getByLabelText('conversation.explorer.addFolder'));
 };
+
+describe('ExplorerContainer preview reveal', () => {
+  it('exits search, switches to files, expands ancestors, and selects the previewed file', async () => {
+    renderIt();
+    await screen.findByTestId('roots');
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'readme' } });
+
+    act(() => {
+      dispatchWorkspaceRevealFileEvent({ workspace: '/x', filePath: '/x/docs/readme.md' });
+    });
+
+    await waitFor(() => expect(getExplorerSnapshot().selected).toBe('peA\0docs/readme.md'));
+    expect(getExplorerSnapshot().expanded).toEqual(expect.arrayContaining(['peA\0', 'peA\0docs']));
+    expect(screen.getByRole('textbox')).toHaveValue('');
+  });
+
+  it('warns instead of selecting when the previewed file is outside the project', async () => {
+    renderIt();
+    await screen.findByTestId('roots');
+
+    act(() => {
+      dispatchWorkspaceRevealFileEvent({ workspace: '/other', filePath: '/other/readme.md' });
+    });
+
+    await waitFor(() =>
+      expect(Message.warning).toHaveBeenCalledWith('conversation.workspace.revealInWorkspace.notInProject')
+    );
+    expect(getExplorerSnapshot().selected).toBeNull();
+  });
+});
 
 describe('ExplorerContainer attach/remove', () => {
   it('attaches a picked directory as a file:// URI and revalidates the tree', async () => {

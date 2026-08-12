@@ -236,6 +236,20 @@ describe('openScmProject', () => {
     expect(getScmSnapshot().error).toBe('backend down');
   });
 
+  it('retries the same project after its initial repository listing failed', async () => {
+    h.failList('socket closed');
+    await openScmProject('p1');
+
+    const recovered = makeHarness();
+    recovered.setRepos([repo()]);
+    configureScmStore(recovered.port);
+    await openScmProject('p1');
+
+    expect(recovered.listCalls).toEqual(['p1']);
+    expect(getScmSnapshot().loadState).toBe('ready');
+    expect(getScmSnapshot().repositories).toHaveLength(1);
+  });
+
   it('keeps the panel usable when subscribe fails (list already applied)', async () => {
     h.setRepos([repo()]);
     h.failSubscribe('socket closed');

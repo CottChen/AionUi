@@ -7,6 +7,7 @@ import {
   RPC_DISCONNECTED,
   RPC_MALFORMED_RESPONSE,
   RPC_RECONNECTED,
+  RPC_TIMEOUT,
   RpcError,
 } from '@/renderer/pages/conversation/explorer/monitorClient';
 
@@ -15,6 +16,7 @@ type Harness = {
   sent: unknown[];
   feed: (frame: unknown) => void;
   reconnect: () => void;
+  disconnect: () => void;
   setSendOk: (ok: boolean) => void;
 };
 
@@ -22,6 +24,7 @@ function makeHarness(): Harness {
   const sent: unknown[] = [];
   let frameCb: ((f: unknown) => void) | undefined;
   let reconnectCb: (() => void) | undefined;
+  let disconnectCb: (() => void) | undefined;
   let sendOk = true;
   return {
     transport: {
@@ -41,10 +44,17 @@ function makeHarness(): Harness {
           reconnectCb = undefined;
         };
       },
+      onDisconnect: (cb) => {
+        disconnectCb = cb;
+        return () => {
+          disconnectCb = undefined;
+        };
+      },
     },
     sent,
     feed: (frame) => frameCb?.(frame),
     reconnect: () => reconnectCb?.(),
+    disconnect: () => disconnectCb?.(),
     setSendOk: (ok) => {
       sendOk = ok;
     },
@@ -106,6 +116,7 @@ describe('MonitorClient request/response pairing', () => {
     const h = makeHarness();
     const client = new MonitorClient({ transport: h.transport, onNotification: () => {} });
     expect(() => h.feed({ jsonrpc: '2.0', id: 999, result: {} })).not.toThrow();
+    void client;
   });
 
   it('rejects (not leaks) a pending request when the matching frame has neither result nor error', async () => {
@@ -134,10 +145,11 @@ describe('MonitorClient notifications', () => {
   it('routes id-less frames to onNotification', () => {
     const h = makeHarness();
     const onNotification = vi.fn();
-    new MonitorClient({ transport: h.transport, onNotification });
+    const client = new MonitorClient({ transport: h.transport, onNotification });
 
     h.feed({ jsonrpc: '2.0', method: 'fs/delta', params: { target: { pe_id: 'pe1', relative_path: 'src' } } });
     expect(onNotification).toHaveBeenCalledWith('fs/delta', { target: { pe_id: 'pe1', relative_path: 'src' } });
+    void client;
   });
 
   it('notify sends a frame without an id', () => {
@@ -173,6 +185,35 @@ describe('MonitorClient reconnect', () => {
 
     await expect(promise).rejects.toMatchObject({ code: RPC_RECONNECTED });
     expect(onReconnect).toHaveBeenCalledOnce();
+  });
+
+  it('rejects in-flight requests immediately when the socket closes', async () => {
+    const h = makeHarness();
+    const onReconnect = vi.fn();
+    const client = new MonitorClient({ transport: h.transport, onNotification: () => {}, onReconnect });
+
+    const promise = client.request('fs/search');
+    h.disconnect();
+
+    await expect(promise).rejects.toMatchObject({ code: RPC_RECONNECTED, message: 'monitor connection lost' });
+    expect(onReconnect).not.toHaveBeenCalled();
+  });
+});
+
+describe('MonitorClient request timeout', () => {
+  it('rejects an unanswered request at its deadline and ignores a late response', async () => {
+    vi.useFakeTimers();
+    const h = makeHarness();
+    const client = new MonitorClient({ transport: h.transport, onNotification: () => {} });
+    const promise = client.request('scm/listRepositories', {}, 1000);
+    const id = (h.sent[0] as { id: number }).id;
+
+    const rejection = expect(promise).rejects.toMatchObject({ code: RPC_TIMEOUT, transport: true });
+    await vi.advanceTimersByTimeAsync(1000);
+    await rejection;
+
+    expect(() => h.feed({ jsonrpc: '2.0', id, result: { repositories: [] } })).not.toThrow();
+    vi.useRealTimers();
   });
 });
 
