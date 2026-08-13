@@ -8,6 +8,8 @@
 #   VERSION=1.0.0 bash install-web.sh
 #   # Or install to custom directory:
 #   INSTALL_DIR=/opt/aionui-web bash install-web.sh
+#   # Or use a mirror site:
+#   MIRROR=https://mirror.example.com/AionUi/releases/download bash install-web.sh
 # ============================================================================
 
 set -euo pipefail
@@ -91,7 +93,8 @@ Usage: install-web.sh [OPTIONS]
 
 Options:
   --version <version>       Specify version to install (default: latest or CI-embedded)
-  --mirror <url>            Specify mirror URL (default: GitHub releases)
+  --mirror <url>            Specify mirror URL root ending at releases/download
+                            (default: GitHub releases)
   --install-dir <path>      Specify installation directory (default: ~/.local/share/aionui-web)
   --no-symlink              Do not create symlink in ~/.local/bin
   --no-path                 Do not add PATH to shell profile
@@ -111,6 +114,9 @@ Examples:
 
   # Install to custom directory
   INSTALL_DIR=/opt/aionui-web bash install-web.sh
+
+  # Use a mirror site instead of GitHub releases
+  MIRROR=https://mirror.example.com/AionUi/releases/download bash install-web.sh
 
   # Use local file mirror (for offline installation)
   MIRROR=file:///path/to/releases bash install-web.sh
@@ -455,6 +461,12 @@ print_summary() {
             echo "    export PATH=\"~/.local/bin:\$PATH\""
         fi
     fi
+    echo ""
+    echo -e "  ${BOLD}🔐 First login:${NC}"
+    echo ""
+    echo "    On first start, AionUi prints the admin username and initial password"
+    echo "    in this terminal. Keep the terminal output and change the password"
+    echo "    after logging in."
     echo ""
     echo -e "  ${BOLD}📖 Documentation:${NC}  https://github.com/iOfficeAI/AionUi"
     echo -e "  ${BOLD}🐛 Report issues:${NC}  https://github.com/iOfficeAI/AionUi/issues"
