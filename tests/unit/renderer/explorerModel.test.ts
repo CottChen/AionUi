@@ -23,6 +23,11 @@ import {
 const set = (...keys: PeKey[]): Set<PeKey> => new Set(keys);
 const file = (name: string): Entry => ({ name, kind: 'file' });
 const dir = (name: string): Entry => ({ name, kind: 'dir' });
+const symlink = (name: string, targetIsDir = false): Entry => ({
+  name,
+  kind: 'symlink',
+  symlink_target_is_dir: targetIsDir,
+});
 
 // ── PeKey identity ──────────────────────────────────────────────────────────
 
@@ -126,6 +131,13 @@ describe('applyDelta', () => {
         ?.map((e) => e.name)
         .toSorted()
     ).toEqual(['a.ts', 'b.ts', 'sub']);
+  });
+
+  it('preserves the directory hint for an added symlink', () => {
+    const next = applyDelta(base(), key, [
+      { op: 'added', name: 'linked-dir', kind: 'symlink', symlink_target_is_dir: true },
+    ]);
+    expect(next.get(key)?.find((entry) => entry.name === 'linked-dir')?.symlink_target_is_dir).toBe(true);
   });
 
   it('removed drops the entry', () => {
@@ -288,18 +300,17 @@ describe('buildTreeData', () => {
     expect(tree.map((n) => n.key)).toEqual([peKey('pe1', ''), peKey('pe2', '')]);
   });
 
-  // Tripwire: children display order is directories-first (symlinks grouped with
-  // files), each group by name case-insensitively — regardless of the backend's
+  // Tripwire: children display order is directories-first (including directory
+  // symlinks), each group by name case-insensitively — regardless of the backend's
   // snapshot order. Mutation-verified: removing the dir-priority makes dirs
   // interleave with files (2 assertions fail); replacing the case-insensitive
   // name compare with a naive codepoint compare (uppercase before lowercase)
   // reorders the file group and fails the expected order below.
-  const symlink = (name: string): Entry => ({ name, kind: 'symlink' });
-
-  it('orders children directories-first, then files/symlinks, each case-insensitive by name', () => {
+  it('orders directories and directory symlinks before file entries', () => {
     const scrambled: Entry[] = [
       file('Banana.txt'),
       dir('src'),
+      symlink('linked-assets', true),
       file('apple.md'),
       dir('Zebra'),
       symlink('link.sh'),
@@ -310,13 +321,25 @@ describe('buildTreeData', () => {
     const tree = buildTreeData(cache, set(peKey('pe1', '')), roots);
     const titles = (tree[0].children ?? []).map((n) => n.title);
 
-    // dirs (case-insensitive alpha), then files+symlink (case-insensitive alpha)
-    expect(titles).toEqual(['assets', 'src', 'Zebra', 'apple.md', 'Banana.txt', 'link.sh', 'README.md']);
+    // dirs and directory symlinks, then files and file symlinks.
+    expect(titles).toEqual([
+      'assets',
+      'linked-assets',
+      'src',
+      'Zebra',
+      'apple.md',
+      'Banana.txt',
+      'link.sh',
+      'README.md',
+    ]);
 
     // Explicit group boundary: every dir precedes every non-dir.
-    const kindByTitle = new Map(scrambled.map((e) => [e.name, e.kind]));
-    const lastDirIdx = titles.map((t) => kindByTitle.get(t) === 'dir').lastIndexOf(true);
-    const firstNonDirIdx = titles.findIndex((t) => kindByTitle.get(t) !== 'dir');
+    const isDirectoryTitle = (title: string): boolean => {
+      const entry = scrambled.find((candidate) => candidate.name === title);
+      return entry?.kind === 'dir' || entry?.symlink_target_is_dir === true;
+    };
+    const lastDirIdx = titles.map(isDirectoryTitle).lastIndexOf(true);
+    const firstNonDirIdx = titles.findIndex((title) => !isDirectoryTitle(title));
     expect(lastDirIdx).toBeLessThan(firstNonDirIdx);
   });
 
@@ -359,6 +382,20 @@ describe('edge coverage', () => {
     const cache: FactCache = new Map([[peKey('pe1', ''), [{ name: 'link', kind: 'symlink' }]]]);
     const tree = buildTreeData(cache, set(peKey('pe1', '')), roots);
     expect(tree[0].children?.[0]).toMatchObject({ key: peKey('pe1', 'link'), title: 'link', isLeaf: true });
+  });
+
+  it('buildTreeData expands a symlink that targets a directory', () => {
+    const cache: FactCache = new Map([
+      [peKey('pe1', ''), [{ name: 'linked-dir', kind: 'symlink', symlink_target_is_dir: true }]],
+      [peKey('pe1', 'linked-dir'), [file('inside.txt')]],
+    ]);
+    const tree = buildTreeData(cache, set(peKey('pe1', ''), peKey('pe1', 'linked-dir')), roots);
+    expect(tree[0].children?.[0]).toEqual({
+      key: peKey('pe1', 'linked-dir'),
+      title: 'linked-dir',
+      isLeaf: false,
+      children: [{ key: peKey('pe1', 'linked-dir/inside.txt'), title: 'inside.txt', isLeaf: true }],
+    });
   });
 
   it('buildTreeData descends an expanded excluded directory (manual expand is not blocked)', () => {

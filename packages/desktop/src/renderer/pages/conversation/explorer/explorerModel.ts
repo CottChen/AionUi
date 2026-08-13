@@ -23,6 +23,7 @@ export type Entry = {
   name: string;
   kind: EntryKind;
   symlink_target?: string;
+  symlink_target_is_dir?: boolean;
   excluded?: boolean;
 };
 
@@ -132,7 +133,7 @@ export function applySnapshot(cache: FactCache, key: PeKey, entries: Entry[]): F
 }
 
 export type Change =
-  | { op: 'added'; name: string; kind: EntryKind; excluded?: boolean }
+  | { op: 'added'; name: string; kind: EntryKind; symlink_target_is_dir?: boolean; excluded?: boolean }
   | { op: 'removed'; name: string }
   | { op: 'renamed'; from: string; to: string }
   /**
@@ -164,6 +165,9 @@ export function applyDelta(cache: FactCache, key: PeKey, changes: Change[]): Fac
     switch (change.op) {
       case 'added': {
         const entry: Entry = { name: change.name, kind: change.kind };
+        if (change.symlink_target_is_dir !== undefined) {
+          entry.symlink_target_is_dir = change.symlink_target_is_dir;
+        }
         if (change.excluded) entry.excluded = true;
         entries = entries.filter((e) => e.name !== change.name);
         entries.push(entry);
@@ -311,22 +315,26 @@ export type RootRef = {
  * Project the fact cache + expanded set into arco `Tree` data. Starts at each
  * pe root; an expanded directory pulls its one level of children from the cache
  * and recurses; an unexpanded directory is not descended (lazy). Node key is the
- * PeKey. `isLeaf` from `kind === 'file'`.
+ * PeKey. Directory symlinks stay symlinks on the wire but project as folders.
  */
 /**
- * Display order for a directory's children: directories first, then everything
- * else (files, symlinks — grouped with files, matching the `isLeaf = !isDir`
- * projection), each group sorted by name case-insensitively (locale-aware,
+ * Display order for a directory's children: directories (including directory
+ * symlinks) first, then files and file symlinks. Each group is sorted by name
+ * case-insensitively (locale-aware,
  * `sensitivity: 'base'`). Applied at projection time so both snapshots and
  * delta-added nodes land in the right place with no extra ordering to maintain
  * in the fact cache. Does not reorder pe roots (kept in their backend
  * `order_index`).
  */
 function compareEntriesForDisplay(a: Entry, b: Entry): number {
-  const aDir = a.kind === 'dir';
-  const bDir = b.kind === 'dir';
+  const aDir = isDirectoryEntry(a);
+  const bDir = isDirectoryEntry(b);
   if (aDir !== bDir) return aDir ? -1 : 1;
   return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+}
+
+function isDirectoryEntry(entry: Entry): boolean {
+  return entry.kind === 'dir' || (entry.kind === 'symlink' && entry.symlink_target_is_dir === true);
 }
 
 export function buildTreeData(cache: FactCache, expanded: ReadonlySet<PeKey>, roots: RootRef[]): TreeNode[] {
@@ -341,7 +349,7 @@ export function buildTreeData(cache: FactCache, expanded: ReadonlySet<PeKey>, ro
       .toSorted(compareEntriesForDisplay)
       .map((entry) => {
         const childRel = joinRel(dirRel, entry.name);
-        const isDir = entry.kind === 'dir';
+        const isDir = isDirectoryEntry(entry);
         const node: TreeNode = {
           key: peKey(peId, childRel),
           title: entry.name,

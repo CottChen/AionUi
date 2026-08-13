@@ -89,6 +89,11 @@ See the `testing` skill (`.claude/skills/testing/SKILL.md`) for complete workflo
 - Preserve the `900023` assistant-workspace repair when merging AionCore. It reconciles the historical fork migration-21 checksum collision and protects workspace settings across the upstream user-scope rebuild.
 - Before release, run the migration-version uniqueness test and fixture-based upgrade tests, including the `2.1.39` fork database path. Frontend/type tests are not evidence that an installed database can start.
 
+### Explorer Symlink Compatibility
+
+- The realtime project explorer must distinguish directory symlinks from file or broken symlinks. Preserve `symlink_target_is_dir` across AionCore snapshots/deltas and AionUi cache projection; directory symlinks are expandable, while file and broken symlinks remain leaves.
+- Replacing `/api/fs/dir` or any filesystem data source requires parity tests for directory symlinks. Keep realpath scope validation on access, and package the matching forked AionCore commit with every release that changes this contract.
+
 ### Scope & Enforcement
 
 - **Hard blockers**: process boundary violations, TypeScript errors, failing tests, unsafe IPC usage, missing i18n for new or changed user-facing text, and raw interactive HTML in new UI.
