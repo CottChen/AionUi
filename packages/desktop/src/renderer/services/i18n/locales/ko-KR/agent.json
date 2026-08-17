@@ -78,6 +78,11 @@
     "parent": "Parent",
     "children": "Child sessions ({{count}})",
     "turns": "Turns ({{count}})",
-    "turnNumber": "Turn {{number}}"
+    "turnNumber": "Turn {{number}}",
+    "initialTask": "하위 에이전트 초기 작업",
+    "agentType": "에이전트 유형",
+    "forkContext": "부모 세션 컨텍스트",
+    "contextIncluded": "포함됨",
+    "contextNotIncluded": "포함되지 않음"
   }
 }

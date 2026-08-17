@@ -869,7 +869,12 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
             onScroll={handleMessageListScroll}
             onWheel={handleWheel}
           >
-            <div ref={setContentRef} data-testid='message-list-content' style={{ overflowAnchor: 'none' }}>
+            <div
+              ref={setContentRef}
+              className='message-anchor-gutter'
+              data-testid='message-list-content'
+              style={{ overflowAnchor: 'none' }}
+            >
               <div className='h-10px' />
               {processedList.map((item, index) => (
                 <React.Fragment key={getProcessedItemAnchorId(item) || index}>{renderItem(index, item)}</React.Fragment>

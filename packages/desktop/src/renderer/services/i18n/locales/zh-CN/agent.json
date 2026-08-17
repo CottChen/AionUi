@@ -78,6 +78,11 @@
     "parent": "父会话",
     "children": "子会话（{{count}}）",
     "turns": "轮次（{{count}}）",
-    "turnNumber": "第 {{number}} 轮"
+    "turnNumber": "第 {{number}} 轮",
+    "initialTask": "子 Agent 初始任务",
+    "agentType": "Agent 类型",
+    "forkContext": "父会话上下文",
+    "contextIncluded": "已包含",
+    "contextNotIncluded": "未包含"
   }
 }

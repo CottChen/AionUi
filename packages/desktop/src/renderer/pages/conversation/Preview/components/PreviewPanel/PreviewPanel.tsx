@@ -22,7 +22,6 @@ import {
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { toLocalFileHref } from '@/renderer/components/Markdown/markdownUtils';
 import { dispatchWorkspaceRevealFileEvent } from '@/renderer/utils/workspace/workspaceEvents';
-import { isElectronDesktop } from '@/renderer/utils/platform';
 import { PreviewToolbarExtrasProvider, type PreviewToolbarExtras } from '../../context/PreviewToolbarExtrasContext';
 import { usePreviewContext } from '../../context/PreviewContext';
 import { useResizableSplit } from '@/renderer/hooks/ui/useResizableSplit';

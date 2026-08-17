@@ -78,6 +78,11 @@
     "parent": "Parent",
     "children": "Child sessions ({{count}})",
     "turns": "Turns ({{count}})",
-    "turnNumber": "Turn {{number}}"
+    "turnNumber": "Turn {{number}}",
+    "initialTask": "Исходная задача дочернего агента",
+    "agentType": "Тип агента",
+    "forkContext": "Контекст родительского сеанса",
+    "contextIncluded": "Включен",
+    "contextNotIncluded": "Не включен"
   }
 }

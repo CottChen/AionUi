@@ -36,12 +36,24 @@
   max-width: 100%;
 }
 
+/* Narrow chat columns still expose the message anchor rail. Reserve a compact
+   gutter inside the scroll content so the rail never covers message text on
+   phones or when Explorer/Preview narrows the desktop chat column. */
+.message-anchor-gutter {
+  box-sizing: border-box;
+  padding-left: 32px;
+}
+
 @container (min-width: 720px) {
   .chat-surface-fluid {
     width: calc(100% - clamp(80px, 10cqw, 240px));
     max-width: none;
     margin-left: auto;
     margin-right: auto;
+  }
+
+  .message-anchor-gutter {
+    padding-left: 0;
   }
 }
 

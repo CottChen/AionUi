@@ -78,6 +78,11 @@
     "parent": "Parent",
     "children": "Child sessions ({{count}})",
     "turns": "Turns ({{count}})",
-    "turnNumber": "Turn {{number}}"
+    "turnNumber": "Turn {{number}}",
+    "initialTask": "وظیفه اولیه عامل فرزند",
+    "agentType": "نوع عامل",
+    "forkContext": "زمینه نشست والد",
+    "contextIncluded": "شامل شده",
+    "contextNotIncluded": "شامل نشده"
   }
 }

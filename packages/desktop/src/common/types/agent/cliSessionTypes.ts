@@ -30,14 +30,22 @@ export type AgentSessionItem = {
 
 export type AgentSessionTurn = {
   id: string;
+  model?: string;
   started_at?: string;
   completed_at?: string;
   items: AgentSessionItem[];
+};
+
+export type AgentSessionChildTask = {
+  prompt: string;
+  agent_type?: string;
+  fork_context?: boolean;
 };
 
 export type AgentSessionSnapshot = {
   session: AgentSessionSummary;
   turns: AgentSessionTurn[];
   children: AgentSessionSummary[];
+  child_task?: AgentSessionChildTask;
   truncated: boolean;
 };

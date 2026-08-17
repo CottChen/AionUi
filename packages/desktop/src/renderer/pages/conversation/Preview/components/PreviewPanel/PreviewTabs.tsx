@@ -5,6 +5,7 @@
  */
 
 import { iconColors } from '@/renderer/styles/colors';
+import { isElectronDesktop } from '@/renderer/utils/platform';
 import { Button, Dropdown, Menu } from '@arco-design/web-react';
 import { IconShrink } from '@arco-design/web-react/icon';
 import { Close, MoreOne, Plus } from '@icon-park/react';
@@ -137,9 +138,9 @@ interface PreviewTabsProps {
   onClosePanel?: () => void;
 
   /**
-   * 新建浏览器 tab 回调；仅在已有浏览器 tab 时提供，避免在纯文档场景出现无意义的加号
-   * New browser tab callback. Only supplied when a browser tab already exists, so
-   * the plus button never appears in a document-only panel.
+   * 新建浏览器 tab 回调。WebUI 即使收到回调也不会显示入口，因为普通浏览器不支持 Electron webview。
+   * New browser tab callback. WebUI never exposes it even when supplied because
+   * regular browsers cannot render Electron webviews.
    */
   onNewBrowserTab?: () => void;
 }
@@ -312,7 +313,7 @@ const PreviewTabs: React.FC<PreviewTabsProps> = ({
           )}
 
           {/* 新建浏览器 tab / New browser tab */}
-          {onNewBrowserTab && (
+          {onNewBrowserTab && isElectronDesktop() && (
             <div
               className='flex items-center justify-center w-24px h-24px ml-4px rd-4px cursor-pointer flex-shrink-0 hover:bg-bg-3 transition-colors'
               onClick={onNewBrowserTab}

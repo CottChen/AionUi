@@ -118,10 +118,23 @@ const SessionDetail: React.FC<SessionDetailProps> = ({ snapshot, loading, isMobi
 
   const visibleTimeline = useMemo(() => {
     if (!snapshot) return { hiddenCount: 0, turns: [] };
-    const totalItems = snapshot.turns.reduce((total, turn) => total + turn.items.length, 0);
+    let initialTaskPrompt = snapshot.child_task?.prompt;
+    const timelineTurns = snapshot.turns
+      .map((turn) => ({
+        ...turn,
+        items: turn.items.filter((item) => {
+          if (initialTaskPrompt && item.kind === 'user_message' && item.text === initialTaskPrompt) {
+            initialTaskPrompt = undefined;
+            return false;
+          }
+          return true;
+        }),
+      }))
+      .filter((turn) => turn.items.length > 0);
+    const totalItems = timelineTurns.reduce((total, turn) => total + turn.items.length, 0);
     const hiddenCount = Math.max(0, totalItems - visibleItemLimit);
     let remainingToSkip = hiddenCount;
-    const turns = snapshot.turns
+    const turns = timelineTurns
       .map((turn, turnIndex) => {
         const skip = Math.min(remainingToSkip, turn.items.length);
         remainingToSkip -= skip;
@@ -199,6 +212,30 @@ const SessionDetail: React.FC<SessionDetailProps> = ({ snapshot, loading, isMobi
           </div>
         </div>
 
+        {snapshot.child_task ? (
+          <section className='border-b border-border-2 py-18px'>
+            <h3 className='m-0 mb-10px text-13px font-700 text-t-primary'>{t('agent.cliSessions.initialTask')}</h3>
+            <div className='mb-12px grid gap-x-24px gap-y-4px md:grid-cols-2'>
+              <MetaRow label={t('agent.cliSessions.agentType')} value={snapshot.child_task.agent_type} />
+              <MetaRow
+                label={t('agent.cliSessions.forkContext')}
+                value={
+                  snapshot.child_task.fork_context === undefined
+                    ? undefined
+                    : t(
+                        snapshot.child_task.fork_context
+                          ? 'agent.cliSessions.contextIncluded'
+                          : 'agent.cliSessions.contextNotIncluded'
+                      )
+                }
+              />
+            </div>
+            <pre className='m-0 max-h-420px overflow-auto whitespace-pre-wrap break-words rd-4px bg-fill-1 p-12px font-sans text-13px leading-21px text-t-primary'>
+              {snapshot.child_task.prompt}
+            </pre>
+          </section>
+        ) : null}
+
         {snapshot.children.length > 0 ? (
           <section className='border-b border-border-2 py-18px'>
             <h3 className='m-0 mb-8px text-13px font-700 text-t-primary'>
@@ -254,6 +291,7 @@ const SessionDetail: React.FC<SessionDetailProps> = ({ snapshot, loading, isMobi
                       {t('agent.cliSessions.turnNumber', { number: turnNumber })}
                     </span>
                     <span className='font-mono'>{turn.id}</span>
+                    {turn.model ? <Tag size='small'>{turn.model}</Tag> : null}
                     {turn.started_at ? <span>{formatSessionTimestamp(turn.started_at)}</span> : null}
                   </div>
                   <div className='flex flex-col gap-14px'>

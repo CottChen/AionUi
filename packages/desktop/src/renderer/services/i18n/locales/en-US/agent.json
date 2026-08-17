@@ -78,6 +78,11 @@
     "parent": "Parent",
     "children": "Child sessions ({{count}})",
     "turns": "Turns ({{count}})",
-    "turnNumber": "Turn {{number}}"
+    "turnNumber": "Turn {{number}}",
+    "initialTask": "Initial child task",
+    "agentType": "Agent type",
+    "forkContext": "Parent context",
+    "contextIncluded": "Included",
+    "contextNotIncluded": "Not included"
   }
 }

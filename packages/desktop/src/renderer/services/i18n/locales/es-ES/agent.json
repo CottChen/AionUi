@@ -78,6 +78,11 @@
     "parent": "Parent",
     "children": "Child sessions ({{count}})",
     "turns": "Turns ({{count}})",
-    "turnNumber": "Turn {{number}}"
+    "turnNumber": "Turn {{number}}",
+    "initialTask": "Tarea inicial del agente secundario",
+    "agentType": "Tipo de agente",
+    "forkContext": "Contexto de la sesión principal",
+    "contextIncluded": "Incluido",
+    "contextNotIncluded": "No incluido"
   }
 }

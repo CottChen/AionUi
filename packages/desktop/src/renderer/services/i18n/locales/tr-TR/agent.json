@@ -78,6 +78,11 @@
     "parent": "Parent",
     "children": "Child sessions ({{count}})",
     "turns": "Turns ({{count}})",
-    "turnNumber": "Turn {{number}}"
+    "turnNumber": "Turn {{number}}",
+    "initialTask": "Alt ajan ilk görevi",
+    "agentType": "Ajan türü",
+    "forkContext": "Üst oturum bağlamı",
+    "contextIncluded": "Dahil",
+    "contextNotIncluded": "Dahil değil"
   }
 }

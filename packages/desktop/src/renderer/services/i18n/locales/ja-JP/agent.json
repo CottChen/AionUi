@@ -78,6 +78,11 @@
     "parent": "Parent",
     "children": "Child sessions ({{count}})",
     "turns": "Turns ({{count}})",
-    "turnNumber": "Turn {{number}}"
+    "turnNumber": "Turn {{number}}",
+    "initialTask": "子エージェントの初期タスク",
+    "agentType": "エージェント種別",
+    "forkContext": "親セッションのコンテキスト",
+    "contextIncluded": "含まれる",
+    "contextNotIncluded": "含まれない"
   }
 }

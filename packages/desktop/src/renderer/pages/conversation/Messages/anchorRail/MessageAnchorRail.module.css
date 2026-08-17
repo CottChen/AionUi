@@ -4,25 +4,13 @@
    The selected tick lifts (longer + darker) and its neighbours trail off, which
    is what makes the selection legible while scrubbing up and down. */
 
-/* The rail lives in the chat column's side gutter, and that gutter only exists
-   once the column is wide enough — see `.chat-surface-fluid` in messages.css,
-   which is gated on the same container width. So gate the rail on the very same
-   query rather than re-deriving the breakpoint in JS: below it there is nowhere
-   to park the rail and it would sit on top of the message text.
-   Default to hidden so a narrow column never flashes an overlapping rail. */
+/* Narrow columns use a compact rail and reserve matching space through
+   `.message-anchor-gutter` in messages.css. Wide columns restore the larger
+   hover treatment inside the side gutter created by `.chat-surface-fluid`. */
 .rail {
-  display: none;
-}
-
-/* Ticks hug the very left edge so all of this width is free for them to grow
-   rightwards into. The wider the travel between rest and selected, the more
-   obvious the hover feedback. */
-@container (min-width: 720px) {
-  .rail {
-    display: block;
-    width: 32px;
-    pointer-events: none;
-  }
+  display: block;
+  width: 32px;
+  pointer-events: none;
 }
 
 /* The generous hover target, and the scroll host for long conversations. Ticks
@@ -63,13 +51,12 @@
   position: absolute;
   /* `top` is set inline: the button travels with the tick stack so the two read
      as one group, rather than being stranded at the rail's top edge. */
-  /* Centres the glyph on the tick column's axis. Ticks span 2px–8px, so their
-     centre is x=5; the glyph is 11px inside a 16px box, so the box starts at
-     5 - 16/2 = -3. Anything less pushes the magnifier right of the column and it
-     visibly juts out of the stack. */
-  left: -3px;
-  width: 16px;
-  height: 16px;
+  /* The compact button shares the tick column's centre and keeps a practical
+     touch target. The wide container override restores the smaller desktop
+     treatment used with hover previews. */
+  left: 0;
+  width: 24px;
+  height: 24px;
   padding: 0;
   display: flex;
   align-items: center;
@@ -104,7 +91,7 @@
    height; its `height` is set inline from the tick count and the fixed gap. */
 .ticks {
   position: relative;
-  margin-left: 2px;
+  margin-left: 9px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -129,17 +116,17 @@
 /* Distance-based falloff: the hovered tick is unmistakably the selection, the
    two ticks either side hint at the neighbourhood being scrubbed. */
 .tickActive {
-  width: 26px;
+  width: 20px;
   background: var(--color-text-1);
 }
 
 .tickNear {
-  width: 18px;
+  width: 14px;
   background: color-mix(in srgb, var(--color-text-2) 78%, transparent);
 }
 
 .tickFar {
-  width: 12px;
+  width: 10px;
   background: color-mix(in srgb, var(--color-text-3) 62%, transparent);
 }
 
@@ -148,7 +135,7 @@
    chrome. Non-interactive — the wheel already scrolls. */
 .scrollHint {
   position: absolute;
-  left: 2px;
+  left: 9px;
   width: 6px;
   display: flex;
   flex-direction: column;
@@ -186,7 +173,7 @@
   position: absolute;
   left: 36px;
   z-index: 30;
-  display: flex;
+  display: none;
   flex-direction: column;
   gap: 4px;
   width: max-content;
@@ -200,6 +187,38 @@
   box-shadow: var(--aion-overlay-shadow);
   pointer-events: auto;
   cursor: pointer;
+}
+
+@container (min-width: 720px) {
+  .searchButton {
+    left: -3px;
+    width: 16px;
+    height: 16px;
+  }
+
+  .ticks {
+    margin-left: 2px;
+  }
+
+  .tickActive {
+    width: 26px;
+  }
+
+  .tickNear {
+    width: 18px;
+  }
+
+  .tickFar {
+    width: 12px;
+  }
+
+  .scrollHint {
+    left: 2px;
+  }
+
+  .card {
+    display: flex;
+  }
 }
 
 .cardQuestion,

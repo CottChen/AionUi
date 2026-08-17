@@ -311,10 +311,9 @@ test.describe('Message anchor rail', () => {
 
     const height = page.viewportSize()?.height ?? 900;
 
-    // ...and the header keeps it even once the rail steps aside, so narrowing the
-    // column can never leave search unreachable.
+    // Narrow columns retain both the compact rail and the header entry.
     await page.setViewportSize({ width: 900, height });
-    await expect(rail).toBeHidden({ timeout: 10_000 });
+    await expect(rail).toBeVisible({ timeout: 10_000 });
     await expect(page.locator('.chat-layout-header')).toBeVisible();
     await expect(page.locator('.conversation-minimap-trigger')).toHaveCount(1, { timeout: 10_000 });
 
@@ -322,21 +321,25 @@ test.describe('Message anchor rail', () => {
     await expect(rail).toBeVisible({ timeout: 10_000 });
   });
 
-  test('steps aside when the chat column is too narrow to host it', async ({ page }) => {
+  test('uses a reserved compact gutter when the chat column is narrow', async ({ page }) => {
     const rail = page.locator('[data-testid="message-anchor-rail"]');
     await expect(rail).toBeVisible({ timeout: 15_000 });
 
     const height = page.viewportSize()?.height ?? 900;
 
-    // A preview/workspace split (or just a small window) squeezes the chat column
-    // below the width at which it grows a side gutter. With no gutter the rail
-    // would sit on top of the message text, so it must disappear instead.
+    // A preview/workspace split (or a phone-sized window) squeezes the chat
+    // column below the wide gutter threshold. The compact rail remains usable.
     await page.setViewportSize({ width: 560, height });
-    await expect(rail).toBeHidden({ timeout: 10_000 });
-
-    // ...and come back once there is room again.
-    await page.setViewportSize({ width: WIDE_VIEWPORT_WIDTH, height });
     await expect(rail).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('[data-testid="message-anchor-rail-search"]')).toBeVisible();
+
+    const railBox = await rail.boundingBox();
+    const firstMessageBox = await page.locator('.message-item').first().boundingBox();
+    expect(railBox).not.toBeNull();
+    expect(firstMessageBox).not.toBeNull();
+    if (railBox && firstMessageBox) {
+      expect(railBox.x + railBox.width).toBeLessThanOrEqual(firstMessageBox.x);
+    }
   });
 
   test('keeps tick spacing comfortable and scrolls a long conversation instead of compressing', async ({ page }) => {

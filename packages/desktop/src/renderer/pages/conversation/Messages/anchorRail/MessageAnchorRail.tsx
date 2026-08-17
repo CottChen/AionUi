@@ -8,7 +8,7 @@ import { useConversationContextSafe } from '@/renderer/hooks/context/Conversatio
 import { dispatchChatMessageJump, dispatchChatSearchPanelOpen } from '@/renderer/utils/chat/chatMinimapEvents';
 import { IconSearch } from '@arco-design/web-react/icon';
 import classNames from 'classnames';
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMessageList } from '../hooks';
 import type { MessageAnchorItem } from './anchors';
@@ -83,10 +83,8 @@ const MessageAnchorRail: React.FC = () => {
   const [scrollTop, setScrollTop] = useState(0);
 
   // The rail is absolutely positioned, so measure its parent to learn how much
-  // height the tick stack has to spread over. Whether the rail is shown at all
-  // stays a CSS decision (see the container query in the stylesheet), not a JS
-  // one — the header keeps its own search trigger unconditionally, so nothing
-  // outside the rail needs to know when the container query hides it.
+  // height the tick stack has to spread over. CSS adapts the rail between compact
+  // and wide layouts; the component stays mounted in both.
   useEffect(() => {
     const host = railNode?.parentElement;
     if (!railNode || !host || typeof ResizeObserver === 'undefined') return;
@@ -186,6 +184,17 @@ const MessageAnchorRail: React.FC = () => {
     [selectAtPointer]
   );
 
+  const handleRailClick = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      const viewport = viewportRef.current;
+      if (!viewport) return;
+      const offsetY = event.clientY - viewport.getBoundingClientRect().top + viewport.scrollTop;
+      const index = resolveTickIndexAtOffset(offsetY, anchors.length);
+      if (index !== null) jumpToAnchor(anchors[index]);
+    },
+    [anchors, jumpToAnchor]
+  );
+
   // Keep a keyboard-focused tick on screen: tabbing through a scrolled rail must
   // not leave the selection somewhere the user cannot see.
   const revealIndex = useCallback(
@@ -241,7 +250,7 @@ const MessageAnchorRail: React.FC = () => {
           pointerYRef.current = null;
           setActiveIndex(null);
         }}
-        onClick={() => jumpToAnchor(activeAnchor)}
+        onClick={handleRailClick}
       >
         <div className={styles.ticks} style={{ height: stackHeight, rowGap: TICK_GAP }}>
           {anchors.map((anchor, index) => (
