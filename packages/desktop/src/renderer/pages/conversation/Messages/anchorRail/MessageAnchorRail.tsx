@@ -5,6 +5,7 @@
  */
 
 import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
+import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { dispatchChatMessageJump, dispatchChatSearchPanelOpen } from '@/renderer/utils/chat/chatMinimapEvents';
 import { IconSearch } from '@arco-design/web-react/icon';
 import classNames from 'classnames';
@@ -15,6 +16,7 @@ import type { MessageAnchorItem } from './anchors';
 import { useConversationAnchors } from './useConversationAnchors';
 import {
   needsScroll,
+  resolveAnchorActivation,
   resolveScrollTopForIndex,
   resolveSearchButtonTop,
   resolveStackTop,
@@ -62,6 +64,7 @@ const MessageAnchorRail: React.FC = () => {
   const { t } = useTranslation();
   const messages = useMessageList();
   const conversationContext = useConversationContextSafe();
+  const isMobile = useLayoutContext()?.isMobile ?? false;
   const conversationId = conversationContext?.conversation_id;
 
   // Covers the whole conversation, not just the pages the chat area has loaded, so
@@ -167,12 +170,13 @@ const MessageAnchorRail: React.FC = () => {
 
   const handlePointerMove = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
+      if (isMobile) return;
       const viewport = viewportRef.current;
       if (!viewport) return;
       pointerYRef.current = event.clientY - viewport.getBoundingClientRect().top;
       selectAtPointer();
     },
-    [selectAtPointer]
+    [isMobile, selectAtPointer]
   );
 
   const handleScroll = useCallback(
@@ -184,19 +188,8 @@ const MessageAnchorRail: React.FC = () => {
     [selectAtPointer]
   );
 
-  const handleRailClick = useCallback(
-    (event: React.MouseEvent<HTMLDivElement>) => {
-      const viewport = viewportRef.current;
-      if (!viewport) return;
-      const offsetY = event.clientY - viewport.getBoundingClientRect().top + viewport.scrollTop;
-      const index = resolveTickIndexAtOffset(offsetY, anchors.length);
-      if (index !== null) jumpToAnchor(anchors[index]);
-    },
-    [anchors, jumpToAnchor]
-  );
-
-  // Keep a keyboard-focused tick on screen: tabbing through a scrolled rail must
-  // not leave the selection somewhere the user cannot see.
+  // Keep a selected/focused tick on screen. This is shared by keyboard focus
+  // and the first tap on touch layouts.
   const revealIndex = useCallback(
     (index: number) => {
       const viewport = viewportRef.current;
@@ -204,6 +197,26 @@ const MessageAnchorRail: React.FC = () => {
       viewport.scrollTop = resolveScrollTopForIndex(index, anchors.length, viewportHeight);
     },
     [anchors.length, scrollable, viewportHeight]
+  );
+
+  const handleRailClick = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      const viewport = viewportRef.current;
+      if (!viewport) return;
+      const offsetY = event.clientY - viewport.getBoundingClientRect().top + viewport.scrollTop;
+      const index = resolveTickIndexAtOffset(offsetY, anchors.length);
+      if (index === null) return;
+
+      // Touch layouts have no hover preview. The first tap selects the turn and
+      // opens its summary; tapping the selected turn again performs the jump.
+      if (resolveAnchorActivation(isMobile, activeIndex, index) === 'preview') {
+        setActiveIndex(index);
+        revealIndex(index);
+        return;
+      }
+      jumpToAnchor(anchors[index]);
+    },
+    [activeIndex, anchors, isMobile, jumpToAnchor, revealIndex]
   );
 
   // A single anchor carries no navigational value — the whole turn is already on
@@ -247,6 +260,7 @@ const MessageAnchorRail: React.FC = () => {
         onScroll={handleScroll}
         onPointerMove={handlePointerMove}
         onPointerLeave={() => {
+          if (isMobile) return;
           pointerYRef.current = null;
           setActiveIndex(null);
         }}

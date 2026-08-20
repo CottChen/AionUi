@@ -238,3 +238,13 @@
 .cardAnswer {
   -webkit-line-clamp: 3;
 }
+
+/* A narrow desktop chat column still has precise hover input, so opening the
+   project explorer must not remove the turn summary. Touch layouts show the
+   same summary after the first tap instead of relying on hover. */
+@media (hover: hover) and (pointer: fine), (hover: none), (pointer: coarse), (max-width: 767px) {
+  .card {
+    display: flex;
+    max-width: min(320px, calc(100vw - 76px));
+  }
+}

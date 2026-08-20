@@ -11,6 +11,7 @@ import type {
   AgentSessionSummary,
 } from '@/common/types/agent/cliSessionTypes';
 import { useLayoutContext } from '@renderer/hooks/context/LayoutContext';
+import { useResizableSplit } from '@renderer/hooks/ui/useResizableSplit';
 import SettingsPageHeader from '@renderer/pages/settings/components/SettingsPageHeader';
 import SessionDetail from './SessionDetail';
 import SessionList from './SessionList';
@@ -30,6 +31,13 @@ const AgentSessionsPage: React.FC = () => {
   const [listLoading, setListLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [refreshToken, setRefreshToken] = useState(0);
+  const { splitRatio: listWidth, createDragHandle: createListDragHandle } = useResizableSplit({
+    unit: 'px',
+    defaultWidth: 300,
+    minWidth: 240,
+    maxWidth: 520,
+    storageKey: 'agent-sessions-list-width-px',
+  });
 
   useEffect(() => {
     setSessionIdInput(selectedId || '');
@@ -122,12 +130,31 @@ const AgentSessionsPage: React.FC = () => {
     );
     if (isMobile) return selectedId ? detail : list;
     return (
-      <div className='h-full min-h-0 grid grid-cols-[300px_minmax(0,1fr)]'>
-        <aside className='min-h-0 overflow-y-auto border-r border-border-2'>{list}</aside>
+      <div
+        data-testid='cli-session-split'
+        className='h-full min-h-0 grid'
+        style={{ gridTemplateColumns: `${listWidth}px minmax(0, 1fr)` }}
+      >
+        <aside className='relative min-h-0 border-r border-border-2'>
+          {list}
+          {createListDragHandle({ className: 'cli-session-list-resizer right-[-6px]' })}
+        </aside>
         <main className='min-h-0'>{detail}</main>
       </div>
     );
-  }, [backend, detailLoading, isMobile, listLoading, navigate, openSession, selectedId, sessions, snapshot]);
+  }, [
+    backend,
+    createListDragHandle,
+    detailLoading,
+    isMobile,
+    listLoading,
+    listWidth,
+    navigate,
+    openSession,
+    selectedId,
+    sessions,
+    snapshot,
+  ]);
 
   return (
     <div className='h-full min-h-0 w-full bg-1 flex flex-col overflow-hidden'>

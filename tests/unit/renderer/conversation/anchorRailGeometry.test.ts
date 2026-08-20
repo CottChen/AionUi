@@ -11,6 +11,7 @@ import {
   TICK_GAP,
   TICK_HEIGHT,
   needsScroll,
+  resolveAnchorActivation,
   resolveScrollTopForIndex,
   resolveSearchButtonTop,
   resolveStackTop,
@@ -189,6 +190,21 @@ describe('resolveTickIndexAtOffset', () => {
     // so the tail of a long conversation could not be hovered at all.
     const count = 200;
     expect(resolveTickIndexAtOffset(tickCenterOffset(count - 1), count)).toBe(count - 1);
+  });
+});
+
+describe('resolveAnchorActivation', () => {
+  it('previews an unselected turn before jumping on mobile', () => {
+    expect(resolveAnchorActivation(true, null, 2)).toBe('preview');
+    expect(resolveAnchorActivation(true, 1, 2)).toBe('preview');
+  });
+
+  it('jumps after the mobile turn is already selected', () => {
+    expect(resolveAnchorActivation(true, 2, 2)).toBe('jump');
+  });
+
+  it('keeps desktop clicks as direct jumps', () => {
+    expect(resolveAnchorActivation(false, null, 2)).toBe('jump');
   });
 });
 

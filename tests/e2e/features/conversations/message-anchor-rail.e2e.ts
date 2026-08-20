@@ -331,7 +331,14 @@ test.describe('Message anchor rail', () => {
     // column below the wide gutter threshold. The compact rail remains usable.
     await page.setViewportSize({ width: 560, height });
     await expect(rail).toBeVisible({ timeout: 10_000 });
-    await expect(page.locator('[data-testid="message-anchor-rail-search"]')).toBeVisible();
+    const search = page.locator('[data-testid="message-anchor-rail-search"]');
+    await expect(search).toBeVisible();
+
+    // Mobile ChatLayout has no desktop title header, but it must keep the hidden
+    // minimap controller mounted so the rail search request still opens a panel.
+    await search.click();
+    await expect(page.locator('.conversation-minimap-panel')).toBeVisible({ timeout: 10_000 });
+    await page.keyboard.press('Escape');
 
     const railBox = await rail.boundingBox();
     const firstMessageBox = await page.locator('.message-item').first().boundingBox();
@@ -339,6 +346,15 @@ test.describe('Message anchor rail', () => {
     expect(firstMessageBox).not.toBeNull();
     if (railBox && firstMessageBox) {
       expect(railBox.x + railBox.width).toBeLessThanOrEqual(firstMessageBox.x);
+    }
+
+    // A desktop with Explorer open can have the same narrow chat column. Precise
+    // hover input must still show the turn summary instead of losing the card at
+    // the old 720px container threshold.
+    const firstTickBox = await page.locator('[data-testid="message-anchor-tick"]').first().boundingBox();
+    if (railBox && firstTickBox) {
+      await page.mouse.move(railBox.x + railBox.width / 2, firstTickBox.y + firstTickBox.height / 2);
+      await expect(page.locator('[data-testid="message-anchor-preview"]')).toBeVisible({ timeout: 10_000 });
     }
   });
 

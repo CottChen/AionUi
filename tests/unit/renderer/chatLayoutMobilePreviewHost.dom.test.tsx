@@ -37,6 +37,16 @@ vi.mock('@/renderer/pages/conversation/components/ChatTitleEditor', () => ({
   default: () => <div>title</div>,
 }));
 
+vi.mock('@/renderer/pages/conversation/components/ConversationTitleMinimap', () => ({
+  default: ({ conversation_id, hideTrigger }: { conversation_id?: string; hideTrigger?: boolean }) => (
+    <div
+      data-testid='conversation-minimap-controller'
+      data-conversation-id={conversation_id}
+      data-hide-trigger={String(Boolean(hideTrigger))}
+    />
+  ),
+}));
+
 vi.mock('@/renderer/components/agent/AgentBadge', () => ({
   AgentLogoIcon: () => <div>logo</div>,
 }));
@@ -81,7 +91,12 @@ import ChatLayout from '@/renderer/pages/conversation/components/ChatLayout';
 
 function renderChatLayout(previewHosted: boolean) {
   return render(
-    <ChatLayout previewHosted={previewHosted} sider={<div>sider</div>} workspaceEnabled={false}>
+    <ChatLayout
+      conversation_id='conversation-mobile'
+      previewHosted={previewHosted}
+      sider={<div>sider</div>}
+      workspaceEnabled={false}
+    >
       <div>chat body</div>
     </ChatLayout>
   );
@@ -97,6 +112,15 @@ describe('ChatLayout mobile preview host fallback', () => {
     renderChatLayout(true);
     // The regression target: preview must render inside ChatLayout on mobile.
     expect(screen.getByTestId('preview-panel')).toBeInTheDocument();
+  });
+
+  it('keeps the hidden conversation search controller mounted on mobile', () => {
+    mockIsMobile = true;
+    renderChatLayout(true);
+
+    const controller = screen.getByTestId('conversation-minimap-controller');
+    expect(controller).toHaveAttribute('data-conversation-id', 'conversation-mobile');
+    expect(controller).toHaveAttribute('data-hide-trigger', 'true');
   });
 
   it('yields the preview to the Layout host on desktop for hoisted conversations (no double render)', () => {

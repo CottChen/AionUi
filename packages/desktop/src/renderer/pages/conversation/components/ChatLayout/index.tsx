@@ -4,6 +4,7 @@ import FlexFullContainer from '@/renderer/components/layout/FlexFullContainer';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { useResizableSplit } from '@/renderer/hooks/ui/useResizableSplit';
 import ChatTitleEditor from '@/renderer/pages/conversation/components/ChatTitleEditor';
+import ConversationTitleMinimap from '@/renderer/pages/conversation/components/ConversationTitleMinimap';
 import MobileWorkspaceOverlay from './MobileWorkspaceOverlay';
 import WorkspacePanelHeader from './WorkspacePanelHeader';
 import { useContainerWidth } from '@/renderer/pages/conversation/hooks/useContainerWidth';
@@ -222,9 +223,14 @@ const ChatLayout: React.FC<{
 
   const headerBlock = (
     <>
-      {layout?.isMobile
-        ? mobileActionsSlot && props.headerExtra && createPortal(props.headerExtra, mobileActionsSlot)
-        : desktopHeader}
+      {layout?.isMobile ? (
+        <>
+          <ConversationTitleMinimap conversation_id={conversation_id} hideTrigger />
+          {mobileActionsSlot && props.headerExtra && createPortal(props.headerExtra, mobileActionsSlot)}
+        </>
+      ) : (
+        desktopHeader
+      )}
       {props.tabsSlot}
     </>
   );
