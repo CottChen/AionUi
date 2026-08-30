@@ -1,5 +1,17 @@
 # GPT Workflows
 
+## 手动构建与可选发布
+
+`build-manual.yml` 同时支持只构建和构建后直接发布：
+
+- `publish_release=false`：默认行为，仅保留 7 天的 Actions artifact。
+- `publish_release=true`：GitHub runner 下载本次构建 artifact，校验安装包，生成 `SHA256SUMS.txt` 并创建 Release。
+- `release_tag`、`release_name`：可选；tag 留空时自动生成 `v<version>-dev-manual-<platform>-<commit>`。
+- `release_prerelease`：默认开启，平台定向构建应保持 prerelease。
+- `aioncore_run_id`：需要打包 fork 定制 AionCore 时填写对应的成功 Manual Build run ID。
+
+发布 job 会拒绝复用指向其他提交的 tag。Linux x64 发布还会校验 DEB 的版本和 `amd64` 架构。平台定向发布优先使用包含 `-dev-` 的 tag，避免触发全平台正式构建。
+
 本项目使用 GPT 驱动的 GitHub Actions 工作流辅助 PR 审查。
 
 ## 架构概览

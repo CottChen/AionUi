@@ -27,6 +27,13 @@ on:
         description: 'Optional AionCore Manual Build workflow run id to bundle instead of the pinned release'
         type: string
         default: ''
+    outputs:
+      commit-short:
+        description: 'Short commit hash used by the build matrix'
+        value: ${{ jobs.build.outputs.commit-short }}
+      commit-sha:
+        description: 'Full commit hash used by the build matrix'
+        value: ${{ jobs.build.outputs.commit-sha }}
 
 env:
   BUN_INSTALL_REGISTRY: 'https://registry.npmjs.org/'
@@ -81,6 +88,7 @@ jobs:
 
     outputs:
       commit-short: ${{ steps.commit.outputs.short }}
+      commit-sha: ${{ steps.commit.outputs.sha }}
 
     strategy:
       fail-fast: false
@@ -97,8 +105,10 @@ jobs:
         shell: bash
         run: |
           SHORT=$(git rev-parse --short HEAD)
+          SHA=$(git rev-parse HEAD)
           echo "short=$SHORT" >> $GITHUB_OUTPUT
-          echo "Commit: $SHORT"
+          echo "sha=$SHA" >> $GITHUB_OUTPUT
+          echo "Commit: $SHA ($SHORT)"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

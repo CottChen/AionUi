@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.1.55 (2026-08-30)
+
+### Build
+
+#### Features
+
+- **release:** optionally publish manual build artifacts directly from GitHub Actions
+- **release:** verify Linux DEB metadata and generate checksums before publication
+
+---
+
 ## 2.1.54 (2026-08-30)
 
 ### Desktop

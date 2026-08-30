@@ -114,6 +114,13 @@ Any step that fails aborts the push. Fix the issue, commit, then retry.
 
 > **Note for AI agents**: `just push` uses `--quiet` for lint — only errors cause failure. The project has many pre-existing lint _warnings_ which do NOT indicate failure. Judge success by exit code, not by output volume.
 
+### Manual Builds And Selective Releases
+
+- Use `.github/workflows/build-manual.yml` for a platform-selective build. Keep `publish_release=false` when only an Actions artifact is needed.
+- Set `publish_release=true` to let the GitHub runner verify installers, generate `SHA256SUMS.txt`, and publish the Release directly. Do not download and re-upload the artifact locally unless the workflow cannot publish or the user explicitly requests local inspection.
+- For fork-specific AionCore changes, pass the successful AionCore Manual Build run ID through `aioncore_run_id` and record it in the published release notes.
+- Prefer a prerelease tag containing `-dev-` for a platform-selective release so the all-platform tag workflow remains skipped. Never reuse a tag that points to a different commit.
+
 ### Before PR (optional stricter check)
 
 `prek` replicates the **exact CI pipeline** (includes end-of-file, trailing whitespace checks on all file types):

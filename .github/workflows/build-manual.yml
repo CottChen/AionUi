@@ -35,6 +35,26 @@ on:
         required: false
         type: string
         default: ''
+      publish_release:
+        description: 'Publish successful build artifacts to a GitHub Release'
+        required: false
+        type: boolean
+        default: false
+      release_tag:
+        description: 'Optional release tag; blank generates v<version>-dev-manual-<platform>-<commit>'
+        required: false
+        type: string
+        default: ''
+      release_name:
+        description: 'Optional release title; blank uses AionUi <version> <platform>'
+        required: false
+        type: string
+        default: ''
+      release_prerelease:
+        description: 'Mark the published release as a prerelease'
+        required: false
+        type: boolean
+        default: true
 
 env:
   BUN_INSTALL_REGISTRY: 'https://registry.npmjs.org/'
@@ -91,3 +111,149 @@ jobs:
       append_commit_hash: true
       upload_installers_only: true
     secrets: inherit
+
+  publish-release:
+    name: Publish Release
+    needs: [prepare-matrix, build-pipeline]
+    if: ${{ inputs.publish_release && needs.build-pipeline.result == 'success' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout exact build commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.build-pipeline.outputs.commit-sha }}
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v7
+        with:
+          pattern: '*-build-*'
+          path: release-assets
+          merge-multiple: true
+
+      - name: Resolve release metadata
+        id: release
+        shell: bash
+        env:
+          INPUT_TAG: ${{ inputs.release_tag }}
+          INPUT_NAME: ${{ inputs.release_name }}
+          PLATFORM: ${{ inputs.platform }}
+          COMMIT_SHORT: ${{ needs.build-pipeline.outputs.commit-short }}
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="${INPUT_TAG:-v${VERSION}-dev-manual-${PLATFORM}-${COMMIT_SHORT}}"
+          NAME="${INPUT_NAME:-AionUi ${VERSION} ${PLATFORM}}"
+
+          if [[ ! "$TAG" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "::error::Release tag may only contain letters, numbers, dots, underscores, and hyphens"
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Verify installers and generate checksums
+        shell: bash
+        env:
+          PLATFORM: ${{ inputs.platform }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          mapfile -d '' ASSETS < <(
+            find release-assets -maxdepth 1 -type f \
+              \( -name '*.deb' -o -name '*.dmg' -o -name '*.exe' -o -name '*.msi' \) \
+              -print0 | sort -z
+          )
+          if [ "${#ASSETS[@]}" -eq 0 ]; then
+            echo "::error::No installer assets were downloaded"
+            exit 1
+          fi
+
+          if [ "$PLATFORM" = 'linux-x64' ]; then
+            mapfile -t DEBS < <(find release-assets -maxdepth 1 -type f -name '*.deb' | sort)
+            if [ "${#DEBS[@]}" -ne 1 ]; then
+              echo "::error::Expected exactly one Linux x64 DEB, found ${#DEBS[@]}"
+              exit 1
+            fi
+            DEB_VERSION=$(dpkg-deb -f "${DEBS[0]}" Version)
+            DEB_ARCH=$(dpkg-deb -f "${DEBS[0]}" Architecture)
+            test "$DEB_VERSION" = "$VERSION"
+            test "$DEB_ARCH" = 'amd64'
+          fi
+
+          (
+            cd release-assets
+            find . -maxdepth 1 -type f \
+              \( -name '*.deb' -o -name '*.dmg' -o -name '*.exe' -o -name '*.msi' \) \
+              -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+          )
+          cat release-assets/SHA256SUMS.txt
+
+      - name: Verify an existing tag targets this build
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          EXPECTED_SHA: ${{ needs.build-pipeline.outputs.commit-sha }}
+        run: |
+          set -euo pipefail
+          if ! REF_JSON=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" 2>/dev/null); then
+            echo "Release tag does not exist yet; it will be created"
+            exit 0
+          fi
+
+          TARGET_TYPE=$(jq -r '.object.type' <<< "$REF_JSON")
+          TARGET_SHA=$(jq -r '.object.sha' <<< "$REF_JSON")
+          if [ "$TARGET_TYPE" = 'tag' ]; then
+            TARGET_SHA=$(gh api "repos/${GITHUB_REPOSITORY}/git/tags/${TARGET_SHA}" --jq '.object.sha')
+          fi
+          if [ "$TARGET_SHA" != "$EXPECTED_SHA" ]; then
+            echo "::error::Existing tag ${RELEASE_TAG} targets ${TARGET_SHA}, expected ${EXPECTED_SHA}"
+            exit 1
+          fi
+
+      - name: Write release notes
+        shell: bash
+        env:
+          PLATFORM: ${{ inputs.platform }}
+          COMMIT_SHA: ${{ needs.build-pipeline.outputs.commit-sha }}
+          CORE_RUN_ID: ${{ inputs.aioncore_run_id }}
+          BUILD_RUN_ID: ${{ github.run_id }}
+        run: |
+          {
+            echo "Manual ${PLATFORM} build produced and published entirely by GitHub Actions."
+            echo
+            echo "- AionUi commit: \`${COMMIT_SHA}\`"
+            echo "- AionUi Actions run: \`${BUILD_RUN_ID}\`"
+            if [ -n "$CORE_RUN_ID" ]; then
+              echo "- AionCore Actions run: \`${CORE_RUN_ID}\`"
+            else
+              echo "- AionCore source: package.json pinned release"
+            fi
+          } > release-notes.md
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release.outputs.tag }}
+          target_commitish: ${{ needs.build-pipeline.outputs.commit-sha }}
+          name: ${{ steps.release.outputs.name }}
+          body_path: release-notes.md
+          prerelease: ${{ inputs.release_prerelease }}
+          fail_on_unmatched_files: false
+          files: |
+            release-assets/*.deb
+            release-assets/*.dmg
+            release-assets/*.exe
+            release-assets/*.msi
+            release-assets/SHA256SUMS.txt
+
+      - name: Write release summary
+        shell: bash
+        run: |
+          echo "## Published Release" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Tag: \`${{ steps.release.outputs.tag }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Commit: \`${{ needs.build-pipeline.outputs.commit-sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- URL: https://github.com/${GITHUB_REPOSITORY}/releases/tag/${{ steps.release.outputs.tag }}" >> "$GITHUB_STEP_SUMMARY"
