@@ -50,6 +50,7 @@ const WorkspaceToolbar: React.FC<WorkspaceToolbarProps> = ({
   handleUploadDeviceFiles,
   setShowHostFileSelector,
 }) => {
+  const isDesktop = isElectronDesktop();
   const workspaceUploadMenu = (
     <Menu
       onClickMenuItem={(key) => {
@@ -107,10 +108,24 @@ const WorkspaceToolbar: React.FC<WorkspaceToolbarProps> = ({
           </span>
         </div>
         <div className='workspace-toolbar-actions flex items-center gap-8px flex-shrink-0'>
-          {!isElectronDesktop() && (
+          {isDesktop ? (
+            <Tooltip content={t('common.fileAttach.addFiles')}>
+              <span>
+                <Plus
+                  data-testid='workspace-upload-button'
+                  className='workspace-toolbar-icon-btn lh-[1] flex cursor-pointer'
+                  theme='outline'
+                  size='16'
+                  fill={iconColors.secondary}
+                  onClick={handleSelectHostFiles}
+                />
+              </span>
+            </Tooltip>
+          ) : (
             <Dropdown droplist={workspaceUploadMenu} trigger='click' position='bl'>
               <span>
                 <Plus
+                  data-testid='workspace-upload-button'
                   className='workspace-toolbar-icon-btn lh-[1] flex cursor-pointer'
                   theme='outline'
                   size='16'

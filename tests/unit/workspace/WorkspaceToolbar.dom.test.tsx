@@ -19,6 +19,10 @@ vi.mock('@/renderer/components/media/UploadProgressBar', () => ({
   default: () => null,
 }));
 
+vi.mock('@/renderer/components/base', () => ({
+  AionSearchInput: () => null,
+}));
+
 vi.mock('@icon-park/react', () => ({
   Down: () => <span />,
   Plus: ({ onClick, ...props }: { onClick?: () => void; 'data-testid'?: string }) => (
@@ -31,12 +35,17 @@ vi.mock('@arco-design/web-react', () => {
   const Menu = Object.assign(({ children }: { children?: ReactNode }) => <div>{children}</div>, {
     Item: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   });
+  const Select = Object.assign(({ children }: { children?: ReactNode }) => <div>{children}</div>, {
+    Option: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+    OptGroup: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+  });
 
   return {
     Button: ({ children }: { children?: ReactNode }) => <button type='button'>{children}</button>,
     Dropdown: ({ children }: { children?: ReactNode }) => <>{children}</>,
     Menu,
     Popover: ({ children }: { children?: ReactNode }) => <>{children}</>,
+    Select,
     Tooltip: ({ children }: { children?: ReactNode }) => <>{children}</>,
   };
 });

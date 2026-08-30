@@ -6,7 +6,6 @@ import { useTranslation } from 'react-i18next';
 import { ipcBridge } from '@/common';
 import type { TTeam } from '@/common/types/team/teamTypes';
 import type { TeamAssistantInput } from '@/common/adapter/teamMapper';
-import { useAuth } from '@renderer/hooks/context/AuthContext';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import AionModal from '@renderer/components/base/AionModal';
 import { WorkspaceFolderSelect } from '@renderer/components/workspace';
@@ -34,7 +33,6 @@ type Props = {
 
 const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
   const { t, i18n } = useTranslation();
-  const { user } = useAuth();
   const layout = useLayoutContext();
   const isMobile = layout?.isMobile ?? false;
   const { assistants: allAssistants } = useTeamAssistantOptions(i18n?.language ?? 'en-US');
@@ -92,7 +90,6 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
       Message.warning(t('team.create.selectOneLeader', { defaultValue: 'Select one Team Leader' }));
       return;
     }
-    const user_id = user?.id ?? 'system_default_user';
     setLoading(true);
     try {
       const resolvedModels = await Promise.all(
@@ -119,7 +116,6 @@ const TeamCreateModal: React.FC<Props> = ({ visible, onClose, onCreated }) => {
       }));
 
       const team = await ipcBridge.team.create.invoke({
-        user_id,
         name,
         workspace,
         workspace_mode: 'shared',
