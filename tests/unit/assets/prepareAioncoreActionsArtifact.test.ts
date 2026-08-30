@@ -6,6 +6,7 @@ import { delimiter, dirname, join } from 'node:path';
 const {
   getActionsArtifactName,
   getActionsArtifactMissingMessage,
+  getActionsRepository,
   prepareAioncore,
 } = require('../../../packages/shared-scripts/src/prepare-aioncore');
 
@@ -98,6 +99,7 @@ chmod +x "$out/aioncore"
 
 afterEach(() => {
   delete process.env.AIONUI_BACKEND_RUN_ID;
+  delete process.env.AIONUI_BACKEND_REPOSITORY;
   delete process.env.AIONUI_BACKEND_LOCAL_BINARY;
   rmSync(join(tmpdir(), 'aioncore-prepare', 'v0.1.46'), { recursive: true, force: true });
   rmSync(join(tmpdir(), 'aioncore-prepare-actions', '123'), { recursive: true, force: true });
@@ -113,6 +115,12 @@ describe('prepare-aioncore GitHub Actions artifact resolver', () => {
     ['linux', 'arm64', 'aioncore-manual-linux-arm64'],
   ])('maps %s-%s to %s', (platform, arch, artifactName) => {
     expect(getActionsArtifactName(platform, arch)).toBe(artifactName);
+  });
+
+  it('uses an explicit repository for fork workflow artifacts', () => {
+    expect(getActionsRepository()).toBe('iOfficeAI/AionCore');
+    process.env.AIONUI_BACKEND_REPOSITORY = 'CottChen/AionCore';
+    expect(getActionsRepository()).toBe('CottChen/AionCore');
   });
 
   it('explains which AionCore manual artifact is missing for the requested platform', () => {

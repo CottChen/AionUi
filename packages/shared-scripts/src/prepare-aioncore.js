@@ -23,6 +23,7 @@ const { verifyBundledAioncoreResources } = require('./verify-bundled-aioncore-re
 
 const GITHUB_OWNER = 'iOfficeAI';
 const GITHUB_REPO = 'AionCore';
+const DEFAULT_ACTIONS_REPOSITORY = `${GITHUB_OWNER}/${GITHUB_REPO}`;
 
 const ACTIONS_ARTIFACT_TARGETS = {
   'darwin-arm64': {
@@ -100,6 +101,14 @@ function getActionsArtifactName(platform, arch) {
 
 function getActionsManualPlatform(platform, arch) {
   return getActionsTarget(platform, arch)?.manualPlatform || `${platform}-${arch}`;
+}
+
+function getActionsRepository() {
+  const repository = (process.env.AIONUI_BACKEND_REPOSITORY || DEFAULT_ACTIONS_REPOSITORY).trim();
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)) {
+    throw new Error(`Invalid AIONUI_BACKEND_REPOSITORY: ${repository}`);
+  }
+  return repository;
 }
 
 function getActionsArtifactMissingMessage({ runId, platform, arch, expectedArtifactName, availableArtifactNames }) {
@@ -333,9 +342,8 @@ function downloadFileWithAuth(url, outputPath) {
 }
 
 function listActionsArtifacts(runId) {
-  const response = githubApiGetJson(
-    `repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/runs/${runId}/artifacts?per_page=100`
-  );
+  const repository = getActionsRepository();
+  const response = githubApiGetJson(`repos/${repository}/actions/runs/${runId}/artifacts?per_page=100`);
   return Array.isArray(response?.artifacts) ? response.artifacts : [];
 }
 
@@ -373,7 +381,7 @@ function downloadAndExtractActionsArtifact(platform, arch, runId) {
 
   const downloadUrl =
     artifact.archive_download_url ||
-    `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/artifacts/${artifact.id}/zip`;
+    `https://api.github.com/repos/${getActionsRepository()}/actions/artifacts/${artifact.id}/zip`;
   console.log(`  Downloading aioncore from AionCore run ${runId} artifact ${expectedArtifactName}`);
   downloadFileWithAuth(downloadUrl, artifactZipPath);
   extractArchive(artifactZipPath, artifactExtractDir, platform);
@@ -586,6 +594,7 @@ function prepareAioncore(options) {
 module.exports = {
   getActionsArtifactMissingMessage,
   getActionsArtifactName,
+  getActionsRepository,
   prepareAioncore,
   verifyPreparedAioncoreBundle,
 };
