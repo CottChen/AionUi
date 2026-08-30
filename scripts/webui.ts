@@ -13,6 +13,7 @@
  *   AIONUI_ALLOW_REMOTE   : "1"/"true" to expose to LAN
  *   AIONUI_DATA_DIR       : override userData path (default Electron-compatible)
  *   AIONUI_LOG_DIR        : override log dir (default <dataDir>/logs)
+ *   AIONUI_UPLOAD_MAX_SIZE_MB : maximum upload request size in MiB (default 30)
  *   AIONUI_STATIC_DIR     : override static dir (default out/renderer)
  *   AIONUI_BACKEND_BIN    : absolute path to aioncore binary (else PATH lookup)
  *   AIONUI_BACKEND_BUNDLED_DIR : dir containing bundled-aioncore/<plat-arch>/binary
