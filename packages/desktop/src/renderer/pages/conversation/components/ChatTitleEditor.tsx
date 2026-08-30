@@ -1,4 +1,5 @@
 import ConversationTitleMinimap from '@/renderer/pages/conversation/components/ConversationTitleMinimap';
+import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { Input } from '@arco-design/web-react';
 import classNames from 'classnames';
 import React from 'react';
@@ -34,6 +35,7 @@ const ChatTitleEditor: React.FC<ChatTitleEditorProps> = ({
   leading,
 }) => {
   const { t } = useTranslation();
+  const isMobile = Boolean(useLayoutContext()?.isMobile);
 
   return (
     <div
@@ -103,7 +105,14 @@ const ChatTitleEditor: React.FC<ChatTitleEditorProps> = ({
         )}
       </div>
       {!editingTitle && (
-        <div className='w-0 flex items-center overflow-hidden opacity-0 transition-all duration-180 group-hover:w-40px group-hover:opacity-100 group-focus-within:w-40px group-focus-within:opacity-100'>
+        <div
+          className={classNames(
+            'flex shrink-0 items-center overflow-hidden transition-all duration-180',
+            isMobile
+              ? 'w-40px opacity-100'
+              : 'w-0 opacity-0 group-hover:w-40px group-hover:opacity-100 group-focus-within:w-40px group-focus-within:opacity-100'
+          )}
+        >
           <span className='h-16px w-1px shrink-0 rounded-full bg-[color:color-mix(in_srgb,var(--color-text-4)_44%,transparent)]' />
           <div className='ml-4px mr-4px flex items-center justify-center'>
             <ConversationTitleMinimap conversation_id={conversation_id} />

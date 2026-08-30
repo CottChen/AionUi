@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.1.54 (2026-08-30)
+
+### Desktop
+
+#### Bug Fixes
+
+- **conversation:** keep the existing conversation search entry visible on mobile
+
+### Core (based on v0.1.50)
+
+#### Features
+
+- **file:** allow the upload body limit to be configured with a CLI option or environment variable
+
+---
+
 ## [2.1.39](https://github.com/iOfficeAI/AionUi/compare/v2.1.38...v2.1.39) (2026-07-21)
 
 ### Desktop
