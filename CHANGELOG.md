@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.1.56 (2026-08-30)
+
+### Core (based on v0.1.50)
+
+#### Bug Fixes
+
+- **skill:** synchronize the catalog with user-scoped databases that use partial unique indexes
+
+---
+
 ## 2.1.55 (2026-08-30)
 
 ### Build
