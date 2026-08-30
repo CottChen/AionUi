@@ -25,6 +25,7 @@ import ToolsModalContent from './contents/ToolsModalContent';
 import WebuiModalContent from './contents/WebuiModalContent';
 import { SettingsTabNavigateProvider, SettingsViewModeProvider } from './settingsViewContext';
 import { LEGACY_ANCHOR_REMAP } from '@/renderer/pages/settings/components/SettingsSider';
+import { useAuth } from '@/renderer/hooks/context/AuthContext';
 
 // ==================== 常量定义 / Constants ====================
 
@@ -138,6 +139,8 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onCancel, defaul
   const [isMobile, setIsMobile] = useState(false);
   const resizeTimerRef = useRef<number | undefined>(undefined);
   const extensionTabs = useExtensionSettingsTabs();
+  const { user } = useAuth();
+  const isAdmin = user?.isAdmin === true;
 
   /**
    * 处理窗口尺寸变化，更新移动端状态
@@ -189,20 +192,22 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onCancel, defaul
     type MenuItem = { key: string; label: string; icon: React.ReactNode };
 
     // Modal built-in tabs (subset — no display/agent route pages)
-    const builtinItems: MenuItem[] = [
-      {
-        key: 'model',
-        label: t('settings.model'),
-        icon: <LinkCloud theme='outline' size='20' fill={iconColors.secondary} />,
-      },
-      {
-        key: 'tools',
-        label: t('settings.tools'),
-        icon: <Toolkit theme='outline' size='20' fill={iconColors.secondary} />,
-      },
-    ];
+    const builtinItems: MenuItem[] = isAdmin
+      ? [
+          {
+            key: 'model',
+            label: t('settings.model'),
+            icon: <LinkCloud theme='outline' size='20' fill={iconColors.secondary} />,
+          },
+          {
+            key: 'tools',
+            label: t('settings.tools'),
+            icon: <Toolkit theme='outline' size='20' fill={iconColors.secondary} />,
+          },
+        ]
+      : [];
 
-    if (isDesktop) {
+    if (isDesktop || !isAdmin) {
       builtinItems.push({
         key: 'webui',
         label: t('settings.webui'),
@@ -210,14 +215,27 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onCancel, defaul
       });
     }
 
-    builtinItems.push(
-      {
-        key: 'system',
-        label: t('settings.system'),
-        icon: <Computer theme='outline' size='20' fill={iconColors.secondary} />,
-      },
-      { key: 'about', label: t('settings.about'), icon: <Info theme='outline' size='20' fill={iconColors.secondary} /> }
-    );
+    if (isAdmin) {
+      builtinItems.push(
+        {
+          key: 'system',
+          label: t('settings.system'),
+          icon: <Computer theme='outline' size='20' fill={iconColors.secondary} />,
+        },
+        {
+          key: 'about',
+          label: t('settings.about'),
+          icon: <Info theme='outline' size='20' fill={iconColors.secondary} />,
+        }
+      );
+    } else {
+      builtinItems.push({
+        key: 'about',
+        label: t('settings.about'),
+        icon: <Info theme='outline' size='20' fill={iconColors.secondary} />,
+      });
+      return builtinItems;
+    }
 
     // Extension tabs — position anchoring
     const beforeMap = new Map<string, IExtensionSettingsTab[]>();
@@ -274,7 +292,13 @@ const SettingsModal: React.FC<SettingsModalProps> = ({ visible, onCancel, defaul
     }
 
     return builtinItems;
-  }, [t, isDesktop, extensionTabs, resolveExtTabName]);
+  }, [t, isDesktop, isAdmin, extensionTabs, resolveExtTabName]);
+
+  useEffect(() => {
+    if (!menuItems.some((item) => item.key === activeTab)) {
+      setActiveTab(menuItems[0]?.key ?? 'about');
+    }
+  }, [activeTab, menuItems]);
 
   // Track which extension tabs have been visited (lazy mount + keep-alive)
   const [mountedExtTabs, setMountedExtTabs] = useState<Set<string>>(new Set());

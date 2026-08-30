@@ -53,6 +53,16 @@ const ProtectedLayout: React.FC<{ layout: React.ReactElement }> = ({ layout }) =
   return React.cloneElement(layout);
 };
 
+const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
+  return user?.isAdmin === true ? children : <Navigate to='/settings/webui' replace />;
+};
+
+const SettingsIndexRedirect: React.FC = () => {
+  const { user } = useAuth();
+  return <Navigate to={user?.isAdmin === true ? '/settings/agent' : '/settings/webui'} replace />;
+};
+
 const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
   const { status } = useAuth();
 
@@ -71,18 +81,27 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
             path='/team/:id'
             element={TEAM_MODE_ENABLED ? withRouteFallback(TeamIndex) : <Navigate to='/guid' replace />}
           />
-          <Route path='/settings/model' element={withRouteFallback(ModeSettings)} />
-          <Route path='/assistants' element={withRouteFallback(AssistantSettings)} />
+          <Route path='/settings/model' element={<AdminRoute>{withRouteFallback(ModeSettings)}</AdminRoute>} />
+          <Route path='/assistants' element={<AdminRoute>{withRouteFallback(AssistantSettings)}</AdminRoute>} />
           {/* Assistants moved out of Settings to a top-level entry; keep a redirect
               so old deep links / back-nav still land on the new page. */}
           <Route path='/settings/assistants' element={<Navigate to='/assistants' replace />} />
-          <Route path='/settings/agent' element={withRouteFallback(AgentSettings)} />
-          <Route path='/settings/agent/:id/repair' element={withRouteFallback(AgentRepairPage)} />
+          <Route path='/settings/agent' element={<AdminRoute>{withRouteFallback(AgentSettings)}</AdminRoute>} />
+          <Route
+            path='/settings/agent/:id/repair'
+            element={<AdminRoute>{withRouteFallback(AgentRepairPage)}</AdminRoute>}
+          />
           {/* Skills and Tools are top-level settings entries. */}
-          <Route path='/settings/skills' element={withRouteFallback(SkillsSettings)} />
-          <Route path='/settings/skills/import-history' element={withRouteFallback(SkillsSettings)} />
-          <Route path='/settings/skills/detail/:skillName' element={withRouteFallback(SkillDetailPage)} />
-          <Route path='/settings/tools' element={withRouteFallback(ToolsSettings)} />
+          <Route path='/settings/skills' element={<AdminRoute>{withRouteFallback(SkillsSettings)}</AdminRoute>} />
+          <Route
+            path='/settings/skills/import-history'
+            element={<AdminRoute>{withRouteFallback(SkillsSettings)}</AdminRoute>}
+          />
+          <Route
+            path='/settings/skills/detail/:skillName'
+            element={<AdminRoute>{withRouteFallback(SkillDetailPage)}</AdminRoute>}
+          />
+          <Route path='/settings/tools' element={<AdminRoute>{withRouteFallback(ToolsSettings)}</AdminRoute>} />
           {/* Legacy routes — the previous combined "Capabilities" page is now two pages. */}
           <Route path='/settings/capabilities' element={<CapabilitiesRedirect />} />
           <Route
@@ -90,17 +109,23 @@ const PanelRoute: React.FC<{ layout: React.ReactElement }> = ({ layout }) => {
             element={<Navigate to='/settings/skills/import-history' replace />}
           />
           <Route path='/settings/skills-hub' element={<Navigate to='/settings/skills' replace />} />
-          <Route path='/settings/appearance' element={withRouteFallback(AppearanceSettings)} />
+          <Route
+            path='/settings/appearance'
+            element={<AdminRoute>{withRouteFallback(AppearanceSettings)}</AdminRoute>}
+          />
           <Route path='/settings/display' element={<Navigate to='/settings/appearance' replace />} />
           <Route path='/settings/webui' element={withRouteFallback(WebuiSettings)} />
-          <Route path='/settings/pet' element={withRouteFallback(PetSettings)} />
-          <Route path='/settings/system' element={withRouteFallback(SystemSettings)} />
+          <Route path='/settings/pet' element={<AdminRoute>{withRouteFallback(PetSettings)}</AdminRoute>} />
+          <Route path='/settings/system' element={<AdminRoute>{withRouteFallback(SystemSettings)}</AdminRoute>} />
           <Route path='/settings/about' element={withRouteFallback(SystemSettings)} />
-          <Route path='/settings/ext/:tabId' element={withRouteFallback(ExtensionSettingsPage)} />
-          <Route path='/settings' element={<Navigate to='/settings/agent' replace />} />
+          <Route
+            path='/settings/ext/:tabId'
+            element={<AdminRoute>{withRouteFallback(ExtensionSettingsPage)}</AdminRoute>}
+          />
+          <Route path='/settings' element={<SettingsIndexRedirect />} />
           <Route path='/test/components' element={withRouteFallback(ComponentsShowcase)} />
-          <Route path='/scheduled' element={withRouteFallback(ScheduledTasksPage)} />
-          <Route path='/scheduled/:job_id' element={withRouteFallback(TaskDetailPage)} />
+          <Route path='/scheduled' element={<AdminRoute>{withRouteFallback(ScheduledTasksPage)}</AdminRoute>} />
+          <Route path='/scheduled/:job_id' element={<AdminRoute>{withRouteFallback(TaskDetailPage)}</AdminRoute>} />
         </Route>
         <Route path='*' element={<Navigate to={status === 'authenticated' ? '/guid' : '/login'} replace />} />
       </Routes>

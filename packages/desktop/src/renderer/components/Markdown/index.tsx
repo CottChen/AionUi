@@ -26,6 +26,7 @@ import LocalFileLink from './LocalFileLink';
 import ShadowView from './ShadowView';
 import { resolveLocalFileLinkPath, resolveLocalFileLinkReference } from './markdownUtils';
 import type { LocalFileLinkReference } from './markdownUtils';
+import { transformMarkdownWikiLinks } from './markdownPreprocess';
 
 const REMARK_PLUGINS = [remarkGfm, remarkMath, remarkBreaks];
 
@@ -42,18 +43,31 @@ type MarkdownViewProps = {
   className?: string;
   onRef?: (el?: HTMLDivElement | null) => void;
   onLocalFileLink?: (path: string, reference?: LocalFileLinkReference) => void | Promise<void>;
+  localFileBaseDir?: string;
+  localFileRootDir?: string;
   /** Enable raw HTML rendering in markdown content. Use with caution — only for trusted sources. */
   allowHtml?: boolean;
 };
 
 const MarkdownView: React.FC<MarkdownViewProps> = React.memo(
-  ({ hiddenCodeCopyButton, codeStyle, className, onRef, onLocalFileLink, allowHtml, children: childrenProp }) => {
+  ({
+    hiddenCodeCopyButton,
+    codeStyle,
+    className,
+    onRef,
+    onLocalFileLink,
+    localFileBaseDir,
+    localFileRootDir,
+    allowHtml,
+    children: childrenProp,
+  }) => {
     const { t } = useTranslation();
 
     const normalizedChildren = useMemo(() => {
       if (typeof childrenProp === 'string') {
-        let text = childrenProp.replace(/file:\/\//g, '');
+        let text = childrenProp;
         text = convertLatexDelimiters(text);
+        text = transformMarkdownWikiLinks(text);
         return text;
       }
       return childrenProp;
@@ -63,13 +77,24 @@ const MarkdownView: React.FC<MarkdownViewProps> = React.memo(
       (e: React.MouseEvent<HTMLAnchorElement>) => {
         e.preventDefault();
         e.stopPropagation();
-        const href = (e.currentTarget as HTMLAnchorElement).href;
+        const target = e.currentTarget as HTMLAnchorElement;
+        const href = target.href;
         if (!href) return;
+        const localFilePath =
+          target.dataset.localFilePath ||
+          resolveLocalFileLinkPath(target.getAttribute('href') || '', href, {
+            baseDir: localFileBaseDir,
+            allowedRootDir: localFileRootDir ?? localFileBaseDir,
+          });
+        if (localFilePath && onLocalFileLink) {
+          void onLocalFileLink(localFilePath);
+          return;
+        }
         openExternalUrl(href).catch((error: unknown) => {
           console.error(t('messages.openLinkFailed'), error);
         });
       },
-      [t]
+      [localFileBaseDir, localFileRootDir, onLocalFileLink, t]
     );
 
     // Memoize components so React preserves component identity across re-renders.
@@ -92,7 +117,10 @@ const MarkdownView: React.FC<MarkdownViewProps> = React.memo(
         a: ({ node: _node, ...rest }: Record<string, unknown>) => {
           const anchorProps = rest as React.AnchorHTMLAttributes<HTMLAnchorElement>;
           const rawHref = typeof anchorProps.href === 'string' ? anchorProps.href : '';
-          const localFileReference = resolveLocalFileLinkReference(rawHref);
+          const localFileReference = resolveLocalFileLinkReference(rawHref, undefined, {
+            baseDir: localFileBaseDir,
+            allowedRootDir: localFileRootDir ?? localFileBaseDir,
+          });
           if (localFileReference) {
             return (
               <LocalFileLink reference={localFileReference} onOpen={onLocalFileLink}>
@@ -137,7 +165,7 @@ const MarkdownView: React.FC<MarkdownViewProps> = React.memo(
           return <img {...imgProps} alt={imgProps.alt || ''} />;
         },
       }),
-      [codeStyle, hiddenCodeCopyButton, handleLinkClick, onLocalFileLink]
+      [codeStyle, hiddenCodeCopyButton, handleLinkClick, localFileBaseDir, localFileRootDir, onLocalFileLink]
     );
 
     const rehypePlugins = useMemo(() => (allowHtml ? [rehypeRaw, rehypeKatex] : [rehypeKatex]), [allowHtml]);
@@ -150,7 +178,14 @@ const MarkdownView: React.FC<MarkdownViewProps> = React.memo(
               remarkPlugins={REMARK_PLUGINS}
               rehypePlugins={rehypePlugins}
               components={components}
-              urlTransform={(url) => (resolveLocalFileLinkPath(url) ? url : defaultUrlTransform(url))}
+              urlTransform={(url) =>
+                resolveLocalFileLinkPath(url, undefined, {
+                  baseDir: localFileBaseDir,
+                  allowedRootDir: localFileRootDir ?? localFileBaseDir,
+                })
+                  ? url
+                  : defaultUrlTransform(url)
+              }
             >
               {normalizedChildren}
             </ReactMarkdown>

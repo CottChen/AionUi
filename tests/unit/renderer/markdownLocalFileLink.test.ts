@@ -126,6 +126,43 @@ describe('resolveLocalFileLinkPath', () => {
     });
   });
 
+  it('unwraps markdown punctuation around absolute references', () => {
+    expect(resolveLocalFileLinkReference('(</Users/demo/project/docs/guide.md:39>)')).toEqual({
+      filePath: '/Users/demo/project/docs/guide.md',
+      rawReference: '/Users/demo/project/docs/guide.md:39',
+      line: 39,
+    });
+  });
+
+  it('resolves relative links inside the configured workspace root', () => {
+    expect(
+      resolveLocalFileLinkReference('../src/foo.ts#L7', undefined, {
+        baseDir: '/Users/demo/project/docs',
+        allowedRootDir: '/Users/demo/project',
+      })
+    ).toEqual({
+      filePath: '/Users/demo/project/src/foo.ts',
+      rawReference: '/Users/demo/project/src/foo.ts#L7',
+      line: 7,
+    });
+  });
+
+  it('rejects relative links that escape the configured workspace root', () => {
+    expect(
+      resolveLocalFileLinkReference('../../outside.ts#L1', undefined, {
+        baseDir: '/Users/demo/project/docs',
+        allowedRootDir: '/Users/demo/project',
+      })
+    ).toBeNull();
+  });
+
+  it('keeps non-line anchors as links to the local document', () => {
+    expect(resolveLocalFileLinkReference('/Users/demo/docs/source.md#chapter')).toEqual({
+      filePath: '/Users/demo/docs/source.md',
+      rawReference: '/Users/demo/docs/source.md',
+    });
+  });
+
   it('rejects unsupported hash line formats and remote hash links', () => {
     expect(resolveLocalFileLinkReference('user.ts')).toBeNull();
     expect(resolveLocalFileLinkReference('./user.ts')).toBeNull();
