@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   batchNeedsCloseConfirm,
   canOpenInSystem,
   classifySaveOutcome,
   dirtyTabsInBatch,
   isOpenableFileRef,
+  requestPanelClose,
   shouldOfferOpenInSystem,
   shouldShowDownload,
   wouldDownloadEmptyFile,
@@ -151,6 +152,29 @@ describe('batch close confirmation', () => {
 
     it('does not ask about an empty batch', () => {
       expect(batchNeedsCloseConfirm([])).toBe(false);
+    });
+  });
+
+  describe('requestPanelClose', () => {
+    it('routes all tabs through the batch safety gate before clearing the scope', () => {
+      const requestCloseBatch = vi.fn();
+      const clearPreviewForScope = vi.fn();
+      const tabs = [clean('a'), dirty('b')];
+
+      requestPanelClose(tabs, requestCloseBatch, clearPreviewForScope);
+
+      expect(requestCloseBatch).toHaveBeenCalledWith(tabs, clearPreviewForScope);
+      expect(clearPreviewForScope).not.toHaveBeenCalled();
+    });
+
+    it('clears an already-empty panel immediately', () => {
+      const requestCloseBatch = vi.fn();
+      const clearPreviewForScope = vi.fn();
+
+      requestPanelClose([], requestCloseBatch, clearPreviewForScope);
+
+      expect(clearPreviewForScope).toHaveBeenCalledOnce();
+      expect(requestCloseBatch).not.toHaveBeenCalled();
     });
   });
 });

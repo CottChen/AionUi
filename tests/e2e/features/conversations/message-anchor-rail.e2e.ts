@@ -321,16 +321,32 @@ test.describe('Message anchor rail', () => {
     await expect(rail).toBeVisible({ timeout: 10_000 });
   });
 
-  test('uses a reserved compact gutter when the chat column is narrow', async ({ page }) => {
+  test('keeps desktop narrow previews while mobile renders only search', async ({ page }) => {
     const rail = page.locator('[data-testid="message-anchor-rail"]');
     await expect(rail).toBeVisible({ timeout: 15_000 });
 
     const height = page.viewportSize()?.height ?? 900;
 
-    // A preview/workspace split (or a phone-sized window) squeezes the chat
-    // column below the wide gutter threshold. The compact rail remains usable.
+    // A desktop with Explorer open can have a narrow chat column. Precise hover
+    // input must still show the turn summary at this width.
+    await page.setViewportSize({ width: 900, height });
+    await expect(rail).not.toHaveAttribute('data-mobile-search-only', 'true');
+    const desktopRailBox = await rail.boundingBox();
+    const firstTickBox = await page.locator('[data-testid="message-anchor-tick"]').first().boundingBox();
+    expect(desktopRailBox).not.toBeNull();
+    expect(firstTickBox).not.toBeNull();
+    if (desktopRailBox && firstTickBox) {
+      await page.mouse.move(desktopRailBox.x + desktopRailBox.width / 2, firstTickBox.y + firstTickBox.height / 2);
+      await expect(page.locator('[data-testid="message-anchor-preview"]')).toBeVisible({ timeout: 10_000 });
+    }
+
+    // Phone layouts intentionally keep only the search entry. The turn ticks and
+    // their sticky touch preview add no value beside the searchable prompt list.
     await page.setViewportSize({ width: 560, height });
     await expect(rail).toBeVisible({ timeout: 10_000 });
+    await expect(rail).toHaveAttribute('data-mobile-search-only', 'true');
+    await expect(page.locator('[data-testid="message-anchor-tick"]')).toHaveCount(0);
+    await expect(page.locator('[data-testid="message-anchor-preview"]')).toHaveCount(0);
     const search = page.locator('[data-testid="message-anchor-rail-search"]');
     await expect(search).toBeVisible();
 
@@ -346,15 +362,6 @@ test.describe('Message anchor rail', () => {
     expect(firstMessageBox).not.toBeNull();
     if (railBox && firstMessageBox) {
       expect(railBox.x + railBox.width).toBeLessThanOrEqual(firstMessageBox.x);
-    }
-
-    // A desktop with Explorer open can have the same narrow chat column. Precise
-    // hover input must still show the turn summary instead of losing the card at
-    // the old 720px container threshold.
-    const firstTickBox = await page.locator('[data-testid="message-anchor-tick"]').first().boundingBox();
-    if (railBox && firstTickBox) {
-      await page.mouse.move(railBox.x + railBox.width / 2, firstTickBox.y + firstTickBox.height / 2);
-      await expect(page.locator('[data-testid="message-anchor-preview"]')).toBeVisible({ timeout: 10_000 });
     }
   });
 

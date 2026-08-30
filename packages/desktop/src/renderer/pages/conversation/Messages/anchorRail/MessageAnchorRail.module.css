@@ -87,6 +87,15 @@
   font-size: 11px;
 }
 
+.mobileSearchOnly {
+  width: 32px;
+}
+
+.mobileSearchButton {
+  top: 50%;
+  transform: translateY(-50%);
+}
+
 /* The stack itself. Static (not absolute) so it establishes the viewport's scroll
    height; its `height` is set inline from the tick count and the fixed gap. */
 .ticks {
@@ -240,9 +249,9 @@
 }
 
 /* A narrow desktop chat column still has precise hover input, so opening the
-   project explorer must not remove the turn summary. Touch layouts show the
-   same summary after the first tap instead of relying on hover. */
-@media (hover: hover) and (pointer: fine), (hover: none), (pointer: coarse), (max-width: 767px) {
+   project explorer must not remove the turn summary. Mobile renders only the
+   search entry and never mounts a summary card. */
+@media (hover: hover) and (pointer: fine) {
   .card {
     display: flex;
     max-width: min(320px, calc(100vw - 76px));

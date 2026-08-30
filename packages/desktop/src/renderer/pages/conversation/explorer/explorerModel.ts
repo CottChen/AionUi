@@ -326,16 +326,27 @@ export type RootRef = {
  * in the fact cache. Does not reorder pe roots (kept in their backend
  * `order_index`).
  */
+const entryNameCollator = new Intl.Collator(undefined, { sensitivity: 'base' });
+const sortedEntriesCache = new WeakMap<Entry[], Entry[]>();
+
 function compareEntriesForDisplay(a: Entry, b: Entry): number {
   const aDir = isDirectoryEntry(a);
   const bDir = isDirectoryEntry(b);
   if (aDir !== bDir) return aDir ? -1 : 1;
-  return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+  return entryNameCollator.compare(a.name, b.name);
 }
 
 function isDirectoryEntry(entry: Entry): boolean {
   return entry.kind === 'dir' || (entry.kind === 'symlink' && entry.symlink_target_is_dir === true);
 }
+
+const sortedEntries = (entries: Entry[]): Entry[] => {
+  const cached = sortedEntriesCache.get(entries);
+  if (cached) return cached;
+  const sorted = entries.toSorted(compareEntriesForDisplay);
+  sortedEntriesCache.set(entries, sorted);
+  return sorted;
+};
 
 export function buildTreeData(cache: FactCache, expanded: ReadonlySet<PeKey>, roots: RootRef[]): TreeNode[] {
   const buildChildren = (peId: string, dirRel: string): TreeNode[] | undefined => {
@@ -344,24 +355,21 @@ export function buildTreeData(cache: FactCache, expanded: ReadonlySet<PeKey>, ro
     const entries = cache.get(key);
     if (!entries) return undefined; // expanded but listing not yet arrived
     // Sort a copy — never mutate the cached listing.
-    return entries
-      .slice()
-      .toSorted(compareEntriesForDisplay)
-      .map((entry) => {
-        const childRel = joinRel(dirRel, entry.name);
-        const isDir = isDirectoryEntry(entry);
-        const node: TreeNode = {
-          key: peKey(peId, childRel),
-          title: entry.name,
-          isLeaf: !isDir,
-        };
-        if (entry.excluded) node.excluded = true;
-        if (isDir) {
-          const children = buildChildren(peId, childRel);
-          if (children) node.children = children;
-        }
-        return node;
-      });
+    return sortedEntries(entries).map((entry) => {
+      const childRel = joinRel(dirRel, entry.name);
+      const isDir = isDirectoryEntry(entry);
+      const node: TreeNode = {
+        key: peKey(peId, childRel),
+        title: entry.name,
+        isLeaf: !isDir,
+      };
+      if (entry.excluded) node.excluded = true;
+      if (isDir) {
+        const children = buildChildren(peId, childRel);
+        if (children) node.children = children;
+      }
+      return node;
+    });
   };
 
   return roots.map((root) => {

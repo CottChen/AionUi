@@ -112,13 +112,6 @@ export const resolveTickIndexAtOffset = (offsetY: number, count: number): number
   return Math.min(count - 1, Math.max(0, raw));
 };
 
-/** Touch needs a preview step because it cannot express desktop hover. */
-export const resolveAnchorActivation = (
-  isMobile: boolean,
-  activeIndex: number | null,
-  targetIndex: number
-): 'preview' | 'jump' => (isMobile && activeIndex !== targetIndex ? 'preview' : 'jump');
-
 /**
  * Scroll offset that brings `index` into view, clamped to the scrollable range.
  * Used to follow the conversation as new turns arrive and to keep a

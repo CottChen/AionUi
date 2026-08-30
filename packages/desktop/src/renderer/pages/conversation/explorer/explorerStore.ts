@@ -141,10 +141,10 @@ const persistUi = (opts?: { guardEmptyOverwrite?: boolean }): void => {
 
 // ── snapshot + notify ────────────────────────────────────────────────────────
 
-const rebuildSnapshot = (): void => {
+const rebuildSnapshot = (rebuildTreeData = true): void => {
   snapshot = {
     projectId,
-    treeData: buildTreeData(cache, expanded, roots),
+    treeData: rebuildTreeData ? buildTreeData(cache, expanded, roots) : snapshot.treeData,
     selected,
     revealRequestId,
     expanded: [...expanded],
@@ -152,8 +152,8 @@ const rebuildSnapshot = (): void => {
   };
 };
 
-const commit = (): void => {
-  rebuildSnapshot();
+const commit = (rebuildTreeData = true): void => {
+  rebuildSnapshot(rebuildTreeData);
   for (const listener of listeners) listener();
 };
 
@@ -223,7 +223,15 @@ const applyServerSnapshot = (target: DirRef, entries: Entry[]): void => {
 const applyServerDelta = (target: DirRef, changes: Change[]): void => {
   const key = refToKey(target);
   if (!isWanted(key)) return; // guard
-  cache = applyDelta(cache, key, changes);
+  const nextCache = applyDelta(cache, key, changes);
+  const hasStructuralChange = changes.some(
+    (change) => change.op === 'added' || change.op === 'removed' || change.op === 'renamed'
+  );
+  // Content-only notifications are consumed by the preview watch path. They do
+  // not change the directory listing, so rebuilding and re-rendering the whole
+  // Explorer for every file write is pure overhead on large trees.
+  if (!hasStructuralChange) return;
+  cache = nextCache;
 
   // Structural anti-stale rules on expanded/current/cache.
   for (const change of changes) {
@@ -371,7 +379,9 @@ export const select = (key: PeKey | null, options?: { reveal?: boolean }): void 
   selected = key;
   if (key && options?.reveal) revealRequestId += 1;
   persistUi();
-  commit();
+  // Selection only changes highlight/scroll state. Keep the projected tree
+  // reference stable so arco does not flatten every node again on a file click.
+  commit(false);
 };
 
 /** Reconnect: drop the reported set and re-declare the full want set. */

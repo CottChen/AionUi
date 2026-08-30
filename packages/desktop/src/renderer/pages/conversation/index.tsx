@@ -10,6 +10,7 @@ import { previewScopeKey } from '@/renderer/pages/conversation/Preview/context/p
 import { setCurrentProject } from '@/renderer/pages/conversation/explorer/currentProjectStore';
 import { setCurrentConversation } from '@/renderer/pages/conversation/explorer/currentConversationStore';
 import { useAutoTitle } from '@/renderer/hooks/chat/useAutoTitle';
+import { useOptionalAuth } from '@/renderer/hooks/context/AuthContext';
 import { getConversationOrNull } from '@/renderer/pages/conversation/utils/conversationCache';
 import { getSnapshotConversationProjectId } from '@/renderer/pages/conversation/GroupedHistory/hooks/useConversationListSync';
 
@@ -18,6 +19,8 @@ const ChatConversationIndex: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { closePreviewIfScopeChanged } = usePreviewContext();
+  const auth = useOptionalAuth();
+  const previewUserId = auth?.user?.id ?? 'system_default_user';
   const { syncTitleFromHistory } = useAutoTitle();
   const notFoundHandledIdRef = useRef<string | undefined>(undefined);
   const defaultConversationTitle = t('conversation.welcome.newConversation');
@@ -34,8 +37,8 @@ const ChatConversationIndex: React.FC = () => {
   useEffect(() => {
     if (!data) return;
     const workspace = (data.extra as { workspace?: string } | undefined)?.workspace ?? null;
-    closePreviewIfScopeChanged(previewScopeKey(data.project_id ?? null, workspace));
-  }, [data, closePreviewIfScopeChanged]);
+    closePreviewIfScopeChanged(previewScopeKey(data.project_id ?? null, workspace, previewUserId));
+  }, [data, previewUserId, closePreviewIfScopeChanged]);
 
   // Publish the active project SYNCHRONOUSLY on conversation switch, from the
   // in-memory list snapshot (every row carries project_id) — before the async

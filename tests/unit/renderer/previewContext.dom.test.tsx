@@ -29,6 +29,7 @@ import {
   usePreviewContext,
   type PreviewContextValue,
 } from '@/renderer/pages/conversation/Preview/context/PreviewContext';
+import { previewScopeKey } from '@/renderer/pages/conversation/Preview/context/previewScope';
 
 /**
  * Capture the live context value on every render so assertions read the latest
@@ -107,5 +108,18 @@ describe('PreviewContext scope isolation (closePreviewIfScopeChanged)', () => {
     expect(ctx.isOpen).toBe(true);
     expect(ctx.tabs).toHaveLength(1);
     expect(ctx.tabs[0].title).toBe('A.md');
+  });
+
+  it('does not expose tabs across users sharing the same project', () => {
+    const userA = previewScopeKey('shared-project', null, 'user-a');
+    const userB = previewScopeKey('shared-project', null, 'user-b');
+    mount();
+    act(() => ctx.closePreviewIfScopeChanged(userA));
+    act(() => ctx.openPreview('# private a', 'markdown', { title: 'A.md' }));
+
+    act(() => ctx.closePreviewIfScopeChanged(userB));
+
+    expect(ctx.isOpen).toBe(false);
+    expect(ctx.tabs).toEqual([]);
   });
 });

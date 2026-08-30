@@ -17,6 +17,7 @@ import {
   shouldOfferOpenInSystem,
   dirtyTabsInBatch,
   isOpenableFileRef,
+  requestPanelClose,
   wouldDownloadEmptyFile,
 } from './previewToolbarUtils';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
@@ -86,7 +87,7 @@ const PreviewPanel: React.FC = () => {
     activeTab,
     closeTab,
     switchTab,
-    closePreview,
+    clearPreviewForScope,
     updateContent,
     saveContent,
     reloadTabContent,
@@ -478,15 +479,12 @@ const PreviewPanel: React.FC = () => {
     requestCloseBatch(tabs);
   }, [tabs, requestCloseBatch]);
 
-  // 收起面板：只改可见性，tab 留着照常持久化 —— 但仍要过 dirty 确认，
-  // 否则「收起」会变成一条静默丢弃未保存内容的路径。
-  //
-  // Collapsing the panel only flips visibility and keeps the tabs persisted, but
-  // it still has to pass the dirty check: otherwise "collapse" becomes another
-  // route that silently discards unsaved edits.
+  // The panel close affordance means "close the preview", not "hide it for
+  // later": after the dirty check, discard every tab so reopening starts clean.
+  // Route changes still use closePreview directly and keep project tabs.
   const handleClosePanel = useCallback(() => {
-    requestCloseBatch(tabs, closePreview);
-  }, [tabs, requestCloseBatch, closePreview]);
+    requestPanelClose(tabs, requestCloseBatch, clearPreviewForScope);
+  }, [tabs, requestCloseBatch, clearPreviewForScope]);
 
   // 如果预览面板未打开，不渲染 / Don't render if preview panel is not open
   // Destructure defensively and bail out AFTER the last hook below.

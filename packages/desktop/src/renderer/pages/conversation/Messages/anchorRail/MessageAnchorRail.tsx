@@ -16,7 +16,6 @@ import type { MessageAnchorItem } from './anchors';
 import { useConversationAnchors } from './useConversationAnchors';
 import {
   needsScroll,
-  resolveAnchorActivation,
   resolveScrollTopForIndex,
   resolveSearchButtonTop,
   resolveStackTop,
@@ -170,13 +169,12 @@ const MessageAnchorRail: React.FC = () => {
 
   const handlePointerMove = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
-      if (isMobile) return;
       const viewport = viewportRef.current;
       if (!viewport) return;
       pointerYRef.current = event.clientY - viewport.getBoundingClientRect().top;
       selectAtPointer();
     },
-    [isMobile, selectAtPointer]
+    [selectAtPointer]
   );
 
   const handleScroll = useCallback(
@@ -188,8 +186,8 @@ const MessageAnchorRail: React.FC = () => {
     [selectAtPointer]
   );
 
-  // Keep a selected/focused tick on screen. This is shared by keyboard focus
-  // and the first tap on touch layouts.
+  // Keep a keyboard-focused tick on screen: tabbing through a scrolled rail
+  // must not leave the selection somewhere the user cannot see.
   const revealIndex = useCallback(
     (index: number) => {
       const viewport = viewportRef.current;
@@ -206,18 +204,35 @@ const MessageAnchorRail: React.FC = () => {
       const offsetY = event.clientY - viewport.getBoundingClientRect().top + viewport.scrollTop;
       const index = resolveTickIndexAtOffset(offsetY, anchors.length);
       if (index === null) return;
-
-      // Touch layouts have no hover preview. The first tap selects the turn and
-      // opens its summary; tapping the selected turn again performs the jump.
-      if (resolveAnchorActivation(isMobile, activeIndex, index) === 'preview') {
-        setActiveIndex(index);
-        revealIndex(index);
-        return;
-      }
       jumpToAnchor(anchors[index]);
     },
-    [activeIndex, anchors, isMobile, jumpToAnchor, revealIndex]
+    [anchors, jumpToAnchor]
   );
+
+  if (isMobile) {
+    if (!conversationId) return null;
+
+    return (
+      <div
+        className={classNames(styles.rail, styles.mobileSearchOnly, 'absolute left-0 top-0 bottom-0 z-20')}
+        data-testid='message-anchor-rail'
+        data-mobile-search-only='true'
+        aria-label={t('messages.anchorRail.label')}
+        role='navigation'
+      >
+        <button
+          type='button'
+          className={classNames(styles.searchButton, styles.mobileSearchButton)}
+          data-testid='message-anchor-rail-search'
+          aria-label={t('messages.anchorRail.searchAria')}
+          title={t('messages.anchorRail.searchAria')}
+          onClick={openSearchPanel}
+        >
+          <IconSearch className={styles.searchIcon} />
+        </button>
+      </div>
+    );
+  }
 
   // A single anchor carries no navigational value — the whole turn is already on
   // screen — so the rail stays hidden until there is somewhere to jump to.
@@ -260,7 +275,6 @@ const MessageAnchorRail: React.FC = () => {
         onScroll={handleScroll}
         onPointerMove={handlePointerMove}
         onPointerLeave={() => {
-          if (isMobile) return;
           pointerYRef.current = null;
           setActiveIndex(null);
         }}

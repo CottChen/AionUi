@@ -9,9 +9,10 @@
  * panel reset". The preview is isolated per **scope**: switching to a different
  * scope closes the open preview; staying within the same scope keeps it open.
  *
- * The scope dimension is the **project** (`project_id`), matching the product
- * model where the Explorer + preview are Project-level: switching conversations
- * within the same project keeps the preview open; switching project resets it.
+ * The scope dimensions are the authenticated **user** and the **project**
+ * (`project_id`). Switching conversations within the same user's project keeps
+ * the preview open; switching user or project resets it. User scoping is required
+ * because localStorage is shared by every account using the same browser origin.
  * Until the backend populates `conversation.project_id` (stage-3 contract), and
  * for conversations without a bound project, it falls back to the **workspace**
  * path — preserving the previous per-workspace behavior with no regression.
@@ -27,9 +28,12 @@ export type PreviewScopeKey = string | null;
  */
 export function previewScopeKey(
   projectId: string | null | undefined,
-  workspace: string | null | undefined
+  workspace: string | null | undefined,
+  userId = 'system_default_user'
 ): PreviewScopeKey {
-  return projectId || workspace || null;
+  const resourceScope = projectId || workspace || null;
+  if (!resourceScope) return null;
+  return `user:${encodeURIComponent(userId)}:${resourceScope}`;
 }
 
 /**
@@ -48,7 +52,7 @@ export function previewScopeKey(
  */
 export const PREVIEW_SCOPE_KEY_PREFIX = 'preview-ui:';
 
-/** Storage key holding the persisted state for one preview scope. */
+/** Storage key holding the persisted state for one user-qualified preview scope. */
 export const previewScopeStorageKey = (scope: string): string => `${PREVIEW_SCOPE_KEY_PREFIX}${scope}`;
 
 /** Every persisted preview-scope key currently present in localStorage. */
@@ -64,7 +68,7 @@ export const listPersistedPreviewScopeKeys = (): string[] => {
 /**
  * Drop every persisted preview scope.
  *
- * Called on logout: these entries are keyed by project id and hold file content,
+ * Called on logout: these entries are keyed by user + project and hold file content,
  * so leaving them would show the next account the previous one's open tabs.
  * Nothing cleaned them up before — the logout sweep only matched auth/csrf/token.
  */

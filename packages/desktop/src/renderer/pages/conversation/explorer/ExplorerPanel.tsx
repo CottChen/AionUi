@@ -16,7 +16,7 @@ import { Alert, Button, Dropdown, Menu, Tree } from '@arco-design/web-react';
 import { isElectronDesktop } from '@/renderer/utils/platform';
 import type { TreeProps } from '@arco-design/web-react';
 import { Caution, MoreOne } from '@icon-park/react';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 // File-tree icons (VSCode "vscode-icons" theme), now owned by the explorer.
@@ -66,6 +66,12 @@ export type ExplorerPanelProps = {
   onSearchInFolder?: (targetPeId: string, targetRelativePath: string, name: string) => void;
   /** Open the platform file picker and upload/import files into this directory. */
   onUploadFiles?: (targetPeId: string, targetRelativePath: string) => void;
+};
+
+const EXPLORER_VIRTUAL_LIST_PROPS: NonNullable<TreeProps['virtualListProps']> = {
+  itemHeight: 28,
+  threshold: 80,
+  scrollOptions: { block: 'center', inline: 'nearest' },
 };
 
 const isScrollableY = (element: HTMLElement): boolean => {
@@ -138,8 +144,30 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
   // Scroll container + the last selection we already scrolled to (so we scroll
   // once when a selection's node first appears, not on every tree delta).
   const containerRef = useRef<HTMLDivElement>(null);
+  const treeViewportRef = useRef<HTMLDivElement>(null);
+  const treeRef = useRef<InstanceType<typeof Tree> | null>(null);
   const scrolledSelectionRef = useRef<string | null>(null);
   const centeredRevealRequestRef = useRef(0);
+  const expandedSet = useMemo(() => new Set(view.expanded), [view.expanded]);
+  const [treeViewportHeight, setTreeViewportHeight] = useState(320);
+  const virtualListProps = useMemo(
+    () => ({ ...EXPLORER_VIRTUAL_LIST_PROPS, height: treeViewportHeight }),
+    [treeViewportHeight]
+  );
+
+  useLayoutEffect(() => {
+    const viewport = treeViewportRef.current;
+    if (!viewport) return;
+    const measure = () => {
+      const next = Math.floor(viewport.clientHeight || viewport.getBoundingClientRect().height);
+      if (next > 0) setTreeViewportHeight((current) => (current === next ? current : next));
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, []);
 
   // Wire the WS runtime once.
   useEffect(() => {
@@ -151,9 +179,9 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
   // request centers the node so its surrounding files remain visible, and its
   // request id means locating the already-selected file works again after the
   // user has manually scrolled elsewhere.
-  // NOTE: the tree is not virtualized, so every node is a real DOM element and
-  // scrollIntoView works. If virtual scrolling is enabled later, switch to
-  // arco's scrollTo API (the off-screen node won't be in the DOM).
+  // The tree is virtualized. If the selected node is currently off-screen, ask
+  // arco to materialize it first; a later frame then applies our exact nearest /
+  // centered positioning to the real row.
   useEffect(() => {
     const key = view.selected;
     if (!key) {
@@ -175,6 +203,8 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
         if (shouldCenter) centeredRevealRequestRef.current = view.revealRequestId;
         return;
       }
+
+      treeRef.current?.scrollIntoView(key);
 
       attempts += 1;
       if (attempts < 8) {
@@ -234,7 +264,7 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
       const key = String(node.dataRef?.key ?? '');
       const name = String(node.title);
       const isFile = Boolean(data?.isLeaf);
-      const isExpanded = view.expanded.includes(key);
+      const isExpanded = expandedSet.has(key);
 
       // Right-click file operations, mirroring the legacy tree: non-root nodes
       // get rename + delete; pe roots (role set) get "remove from project" (they
@@ -391,7 +421,7 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
       dragOverKey,
       workspacePeId,
       t,
-      view.expanded,
+      expandedSet,
     ]
   );
 
@@ -427,7 +457,7 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
     : {};
 
   return (
-    <div className='h-full' tabIndex={-1} ref={containerRef} {...containerProps}>
+    <div className='h-full min-h-0 flex flex-col' tabIndex={-1} ref={containerRef} {...containerProps}>
       {view.error && (
         <Alert
           type='warning'
@@ -439,12 +469,15 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
       {/* `workspace-tree` opts into the full-row VSCode-style hover + selected
           backgrounds in arco-override.css (selected = --color-fill-3), so a
           revealed/selected node has a clearly visible highlight. */}
-      <Tree
-        className='workspace-tree'
-        treeData={view.treeData as TreeProps['treeData']}
-        expandedKeys={view.expanded}
-        selectedKeys={view.selected ? [view.selected] : []}
-        /* 点一整行就展开/收起文件夹，不必精准点中前面那个小箭头（arco 默认只有
+      <div ref={treeViewportRef} className='min-h-0 flex-1 overflow-hidden'>
+        <Tree
+          ref={treeRef}
+          className='workspace-tree h-full'
+          treeData={view.treeData as TreeProps['treeData']}
+          virtualListProps={virtualListProps}
+          expandedKeys={view.expanded}
+          selectedKeys={view.selected ? [view.selected] : []}
+          /* 点一整行就展开/收起文件夹，不必精准点中前面那个小箭头（arco 默认只有
            'select'，所以整行点击此前只会选中、不会展开）。arco 内部对同一次点击只
            走一条展开路径（有 loadMore 且未展开时走 loadMore，否则走 onExpand），
            所以不会重复切换；点箭头本身仍然照旧生效。
@@ -454,12 +487,13 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
            Internally arco takes exactly one expand path per click — loadMore when
            children are absent and the node is collapsed, onExpand otherwise — so
            nothing toggles twice, and clicking the arrow still works as before. */
-        actionOnClick={['select', 'expand']}
-        loadMore={handleLoadMore}
-        onExpand={handleExpand}
-        onSelect={handleSelect}
-        renderTitle={renderTitle}
-      />
+          actionOnClick={['select', 'expand']}
+          loadMore={handleLoadMore}
+          onExpand={handleExpand}
+          onSelect={handleSelect}
+          renderTitle={renderTitle}
+        />
+      </div>
     </div>
   );
 };

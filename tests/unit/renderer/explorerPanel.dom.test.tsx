@@ -13,7 +13,7 @@
  */
 
 import React from 'react';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (k: string) => k }) }));
@@ -51,7 +51,10 @@ beforeEach(() => {
   resetExplorerStoreForTest();
   localStorage.clear();
 });
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe('ExplorerPanel arco expand roundtrip', () => {
   it('shows a subscribe error, rolls back reported dirs, and reloads on reconnect', async () => {
@@ -114,9 +117,35 @@ describe('ExplorerPanel arco expand roundtrip', () => {
     const fileNode = (await screen.findByText('only.ts')).closest('.arco-tree-node');
     expect(fileNode?.className).toContain('is-leaf');
   });
+
+  it('virtualizes a large directory instead of mounting every file row', async () => {
+    vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(400);
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 320, 400));
+    const files = Array.from({ length: 500 }, (_, index) => file(`file-${String(index).padStart(3, '0')}.ts`));
+    configureExplorerStore(makePort({ [peKey('pe1', '')]: files }));
+    const { container } = render(
+      <ExplorerPanel projectId='p1' roots={[{ pe_id: 'pe1', title: 'app', role: 'workspace' }]} />
+    );
+
+    // jsdom has no layout engine, so Arco may mount zero virtual rows after its
+    // ResizeObserver pass. The tall filler is the reliable signal that the 501
+    // visible nodes entered virtual mode instead of being appended to the DOM.
+    await waitFor(() => {
+      const hasVirtualFiller = [...container.querySelectorAll<HTMLElement>('div')].some(
+        (element) => Number.parseFloat(element.style.height) > files.length * 20
+      );
+      expect(hasVirtualFiller).toBe(true);
+    });
+    const mountedRows = container.querySelectorAll('.arco-tree-node').length;
+    expect(mountedRows).toBeLessThan(files.length + 1);
+  });
 });
 
 describe('ExplorerPanel reveal highlight + scroll-into-view', () => {
+  beforeEach(() => {
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 120, 28));
+  });
+
   it('opts the tree into the workspace-tree selected-node highlight', async () => {
     configureExplorerStore(makePort({ [peKey('pe1', '')]: [file('a.ts')] }));
     const { container } = render(
@@ -141,7 +170,7 @@ describe('ExplorerPanel reveal highlight + scroll-into-view', () => {
       select(peKey('pe1', 'a.ts'));
       await flush();
     });
-    expect(scrollSpy).toHaveBeenCalledWith({ block: 'nearest', inline: 'nearest' });
+    await waitFor(() => expect(scrollSpy).toHaveBeenCalledWith({ block: 'nearest', inline: 'nearest' }));
   });
 
   it('centers every locate request, including a repeat for the selected file', async () => {
@@ -155,12 +184,13 @@ describe('ExplorerPanel reveal highlight + scroll-into-view', () => {
       select(peKey('pe1', 'a.ts'), { reveal: true });
       await flush();
     });
+    await waitFor(() => expect(scrollSpy).toHaveBeenCalledTimes(1));
     await act(async () => {
       select(peKey('pe1', 'a.ts'), { reveal: true });
       await flush();
     });
 
-    expect(scrollSpy).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(scrollSpy).toHaveBeenCalledTimes(2));
     expect(scrollSpy).toHaveBeenLastCalledWith({ block: 'center', inline: 'nearest' });
   });
 
@@ -175,7 +205,7 @@ describe('ExplorerPanel reveal highlight + scroll-into-view', () => {
       select(peKey('pe1', 'a.ts'));
       await flush();
     });
-    expect(scrollSpy).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(scrollSpy).toHaveBeenCalledTimes(1));
 
     // treeData changes (sibling added) but the selection is unchanged → the
     // scrolledSelectionRef guard prevents a repeat scroll.
@@ -194,7 +224,7 @@ describe('ExplorerPanel reveal highlight + scroll-into-view', () => {
       select(peKey('pe1', 'c.ts'));
       await flush();
     });
-    expect(scrollSpy).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(scrollSpy).toHaveBeenCalledTimes(2));
   });
 });
 

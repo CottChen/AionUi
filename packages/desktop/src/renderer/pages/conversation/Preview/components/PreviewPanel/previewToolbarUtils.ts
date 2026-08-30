@@ -129,6 +129,20 @@ export const dirtyTabsInBatch = <T extends ClosableTab>(batch: readonly T[]): T[
  */
 export const batchNeedsCloseConfirm = (batch: readonly ClosableTab[]): boolean => dirtyTabsInBatch(batch).length > 0;
 
+/**
+ * Route the panel's close affordance through the batch-close safety gate and
+ * clear the scope once every tab is safe to discard. An empty panel clears
+ * immediately because there is nothing to confirm.
+ */
+export const requestPanelClose = <T>(
+  tabs: readonly T[],
+  requestCloseBatch: (tabsToClose: T[], onAllClean?: () => void) => void,
+  clearPreviewForScope: () => void
+): void => {
+  if (tabs.length === 0) clearPreviewForScope();
+  else requestCloseBatch(tabs.slice(), clearPreviewForScope);
+};
+
 /** What the UI should tell the user after attempting a save. */
 export type SaveOutcome =
   /** Written to disk. Nothing to report. */

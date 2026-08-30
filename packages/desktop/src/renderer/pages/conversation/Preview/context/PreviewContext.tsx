@@ -171,7 +171,7 @@ export interface PreviewContextValue {
   clearTabUpdate: (tabId: string) => void;
   findPreviewTab: (type: PreviewContentType, content?: string, metadata?: PreviewMetadata) => PreviewTab | null; // 查找匹配的 tab
   closePreviewByIdentity: (type: PreviewContentType, content?: string, metadata?: PreviewMetadata) => void; // 根据内容关闭指定 tab
-  closePreviewIfScopeChanged: (scopeKey: PreviewScopeKey) => void; // 切换隔离 scope(project;见 previewScope.ts):持久化旧 scope、恢复新 scope 的 tabs+可见性(per-project)
+  closePreviewIfScopeChanged: (scopeKey: PreviewScopeKey) => void; // 切换用户+项目隔离 scope（见 previewScope.ts），持久化旧 scope 并恢复新 scope
 
   // 发送框集成 / Sendbox integration
   addToSendBox: (text: string) => void;
@@ -186,9 +186,9 @@ export interface PreviewContextValue {
 
 const PreviewContext = createContext<PreviewContextValue | null>(null);
 
-// Persistence is per **preview scope** (project id, or workspace fallback — see
-// `previewScope.ts`), so each project restores its own open tabs + visibility
-// when switching conversations / projects. Key: `preview-ui:<scope>`.
+// Persistence is per **preview scope** (user id + project id, or workspace
+// fallback — see `previewScope.ts`), so accounts and projects restore only their
+// own open tabs + visibility. Key: `preview-ui:<scope>`.
 
 /**
  * How many scopes keep persisted state, least-recently-written evicted first.
@@ -213,7 +213,7 @@ type PersistedScopeState = { isOpen: boolean; tabs: PreviewTab[]; activeTabId: s
 // Persist only lightweight text previews to avoid localStorage jank on large files
 const MAX_PERSISTED_TAB_CONTENT_LENGTH = 80_000;
 // `browser` tabs persist so switching projects/conversations restores the same
-// open pages (per-project, see `previewScope.ts`). Their `content` is just a URL,
+// open pages (per-user/project, see `previewScope.ts`). Their `content` is just a URL,
 // so they are always well under the size cap.
 /**
  * Types whose content never comes from `/api/fs/content`: pdf streams from a URL,
@@ -518,11 +518,11 @@ const persistScopeState = (scope: string, state: PersistedScopeState): void => {
 
 export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // State starts empty; the active scope's persisted state is loaded on the first
-  // `closePreviewIfScopeChanged` (per-project restore, see switchScope below).
+  // `closePreviewIfScopeChanged` (per-user/project restore, see switchScope below).
   const [isOpen, setIsOpen] = useState(false);
   const [tabs, setTabs] = useState<PreviewTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
-  // The preview scope currently loaded into state (project id / workspace / null).
+  // The preview scope currently loaded into state (user + project/workspace/null).
   const currentScopeRef = useRef<PreviewScopeKey>(null);
   // Mirror activeTabId in a ref so setTabs updaters can read the latest value
   // without adding activeTabId to their dependencies.
@@ -906,9 +906,9 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setDomSnippets([]);
   }, []);
 
-  // Switch the preview scope (project id / workspace fallback / null). Persists
+  // Switch the preview scope (user id + project id / workspace fallback / null). Persists
   // the leaving scope's state, then restores the entering scope's persisted open
-  // tabs + active tab + visibility — this is what makes preview per-project.
+  // tabs + active tab + visibility — this is what makes preview per user/project.
   // Same scope is a no-op. `currentScopeRef` lives in the app-root context so it
   // survives conversation-page remounts.
   const closePreviewIfScopeChanged = useCallback(

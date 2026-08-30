@@ -5,17 +5,41 @@
  */
 
 import type { TMessage } from '@/common/chat/chatLib';
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
+import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const loadAllConversationMessagesPaged = vi.fn();
+const railMocks = vi.hoisted(() => ({
+  isMobile: true,
+  messages: [] as TMessage[],
+}));
 
 vi.mock('@/renderer/utils/chat/messagePagination', () => ({
   loadAllConversationMessagesPaged: (...args: unknown[]) => loadAllConversationMessagesPaged(...args),
 }));
 
+vi.mock('@/renderer/pages/conversation/Messages/hooks', () => ({
+  useMessageList: () => railMocks.messages,
+}));
+
+vi.mock('@/renderer/hooks/context/ConversationContext', () => ({
+  useConversationContextSafe: () => ({ conversation_id: 'c1' }),
+}));
+
+vi.mock('@/renderer/hooks/context/LayoutContext', () => ({
+  useLayoutContext: () => ({ isMobile: railMocks.isMobile }),
+}));
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (key: string) => key }),
+}));
+
 const { useConversationAnchors } =
   await import('@/renderer/pages/conversation/Messages/anchorRail/useConversationAnchors');
+const { default: MessageAnchorRail } =
+  await import('@/renderer/pages/conversation/Messages/anchorRail/MessageAnchorRail');
+const { CHAT_SEARCH_PANEL_OPEN_EVENT } = await import('@/renderer/utils/chat/chatMinimapEvents');
 
 /** Builds one user/assistant turn pair. */
 const turn = (n: number): TMessage[] =>
@@ -45,6 +69,8 @@ const history = (count: number) => Array.from({ length: count }, (_, i) => turn(
 describe('useConversationAnchors', () => {
   beforeEach(() => {
     loadAllConversationMessagesPaged.mockReset();
+    railMocks.isMobile = true;
+    railMocks.messages = [];
   });
 
   it('covers the whole history even when the chat area has only paged in the tail', async () => {
@@ -130,5 +156,34 @@ describe('useConversationAnchors', () => {
     const { result } = renderHook(() => useConversationAnchors(undefined, []));
     expect(result.current).toEqual([]);
     expect(loadAllConversationMessagesPaged).not.toHaveBeenCalled();
+  });
+});
+
+describe('MessageAnchorRail on mobile', () => {
+  beforeEach(() => {
+    loadAllConversationMessagesPaged.mockResolvedValue([]);
+    railMocks.isMobile = true;
+    railMocks.messages = history(3);
+  });
+
+  it('renders only the search entry even when the conversation has multiple turns', () => {
+    render(<MessageAnchorRail />);
+
+    expect(screen.getByTestId('message-anchor-rail')).toHaveAttribute('data-mobile-search-only', 'true');
+    expect(screen.getByTestId('message-anchor-rail-search')).toBeVisible();
+    expect(screen.queryAllByTestId('message-anchor-tick')).toHaveLength(0);
+    expect(screen.queryByTestId('message-anchor-preview')).not.toBeInTheDocument();
+  });
+
+  it('opens the searchable prompt list for the current conversation', () => {
+    const handler = vi.fn();
+    window.addEventListener(CHAT_SEARCH_PANEL_OPEN_EVENT, handler);
+    render(<MessageAnchorRail />);
+
+    fireEvent.click(screen.getByTestId('message-anchor-rail-search'));
+    window.removeEventListener(CHAT_SEARCH_PANEL_OPEN_EVENT, handler);
+
+    expect(handler).toHaveBeenCalledOnce();
+    expect((handler.mock.calls[0][0] as CustomEvent).detail).toEqual({ conversation_id: 'c1' });
   });
 });

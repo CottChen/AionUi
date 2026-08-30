@@ -3,7 +3,7 @@ import { FullScreen, Left, OffScreen, Peoples, Right } from '@icon-park/react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR, { useSWRConfig } from 'swr';
-import { useAuth } from '@renderer/hooks/context/AuthContext';
+import { useAuth, useOptionalAuth } from '@renderer/hooks/context/AuthContext';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { ipcBridge } from '@/common';
 import type { TeamAssistant, TTeam } from '@/common/types/team/teamTypes';
@@ -337,9 +337,11 @@ const TeamPageContent: React.FC<TeamPageContentProps> = ({
   // Scope is project (falling back to workspace until the leader conversation's
   // project_id is populated).
   const { closePreviewIfScopeChanged } = usePreviewContext();
+  const auth = useOptionalAuth();
+  const previewUserId = auth?.user?.id ?? 'system_default_user';
   useEffect(() => {
-    closePreviewIfScopeChanged(previewScopeKey(teamProjectId, effectiveWorkspace ?? null));
-  }, [teamProjectId, effectiveWorkspace, closePreviewIfScopeChanged]);
+    closePreviewIfScopeChanged(previewScopeKey(teamProjectId, effectiveWorkspace ?? null, previewUserId));
+  }, [teamProjectId, effectiveWorkspace, previewUserId, closePreviewIfScopeChanged]);
 
   const siderTitle = useMemo(
     () => (

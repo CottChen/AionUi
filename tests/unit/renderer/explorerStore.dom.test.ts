@@ -771,6 +771,34 @@ describe('openProject same-project guard (zero-flicker remount)', () => {
 });
 
 describe('selection + misc edge paths', () => {
+  it('keeps the projected tree stable when only selection changes', async () => {
+    const h = makePort({ [peKey('pe1', '')]: [file('a.ts')] });
+    configureExplorerStore(h.port);
+    openProject('proj-sel', roots);
+    await flush();
+    const treeBefore = getExplorerSnapshot().treeData;
+
+    select(peKey('pe1', 'a.ts'));
+
+    expect(getExplorerSnapshot().selected).toBe(peKey('pe1', 'a.ts'));
+    expect(getExplorerSnapshot().treeData).toBe(treeBefore);
+  });
+
+  it('does not publish a new Explorer snapshot for file-content-only deltas', async () => {
+    const h = makePort({ [peKey('pe1', '')]: [file('a.ts')] });
+    configureExplorerStore(h.port);
+    openProject('proj-modified', roots);
+    await flush();
+    const snapshotBefore = getExplorerSnapshot();
+
+    applyMonitorNotification('fs/delta', {
+      target: { pe_id: 'pe1', relative_path: '' },
+      changes: [{ op: 'modified', name: 'a.ts' }],
+    });
+
+    expect(getExplorerSnapshot()).toBe(snapshotBefore);
+  });
+
   it('increments the locate request even when the selected key does not change', async () => {
     const h = makePort({ [peKey('pe1', '')]: [file('a.ts')] });
     configureExplorerStore(h.port);
