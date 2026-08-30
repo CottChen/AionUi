@@ -219,16 +219,23 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [[ "${{ matrix.platform }}" == "linux-x64" ]]; then
+          if [[ "${{ matrix.platform }}" == "linux-x64" ]] &&
+             [[ -n "${SENTRY_AUTH_TOKEN:-}" ]] &&
+             [[ -n "${SENTRY_ORG:-}" ]] &&
+             [[ -n "${SENTRY_PROJECT:-}" ]]; then
             echo "SENTRY_UPLOAD_SOURCE_MAPS=true" >> "$GITHUB_ENV"
             echo "Sentry source maps will be uploaded by linux-x64"
           else
             echo "SENTRY_UPLOAD_SOURCE_MAPS=false" >> "$GITHUB_ENV"
-            echo "Sentry source map upload skipped for ${{ matrix.platform }}"
+            echo "Sentry source map upload skipped for ${{ matrix.platform }} (credentials unavailable or non-owner platform)"
           fi
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
 
       - name: Validate Sentry source map upload configuration
-        if: matrix.platform == 'linux-x64'
+        if: env.SENTRY_UPLOAD_SOURCE_MAPS == 'true'
         shell: bash
         run: |
           set -euo pipefail
