@@ -56,6 +56,7 @@
   "noOptionsAvailable": "Nenhuma opção disponível",
   "processing": "Processando...",
   "responseSentSuccessfully": "Resposta enviada com sucesso",
+  "permissionResponseFailed": "Não foi possível enviar a resposta. Tente novamente.",
   "confirmation": {
     "applyChange": "Aplicar esta alteração?",
     "allowExecution": "Permitir execução?",
@@ -66,5 +67,16 @@
     "yesAlwaysAllowTool": "Sim, sempre permitir a ferramenta \"{{toolName}}\" do servidor \"{{serverName}}\"",
     "yesAlwaysAllowServer": "Sim, sempre permitir todas as ferramentas do servidor \"{{serverName}}\"",
     "no": "Não (esc)"
+  },
+  "rating": {
+    "like": "Like",
+    "dislike": "Dislike",
+    "likeTitle": "Rate this answer",
+    "dislikeTitle": "Rate this answer",
+    "score": "Score",
+    "comment": "Comment",
+    "commentPlaceholder": "Optional note for this rating",
+    "submitSuccess": "Rating submitted",
+    "submitFailed": "Failed to submit rating"
   }
 }

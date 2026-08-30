@@ -9,11 +9,11 @@ import { removeTeamWithCronCleanup } from '../utils/removeTeamAssistantWithCronC
 
 export function useTeamList() {
   const { user } = useAuth();
-  const user_id = user?.id ?? 'system_default_user';
+  const cacheUserId = user?.id ?? 'local';
 
   const { data: teams = [], mutate } = useSWR<TTeam[]>(
-    `teams/${user_id}`,
-    () => ipcBridge.team.list.invoke({ user_id }),
+    `teams/${cacheUserId}`,
+    () => ipcBridge.team.list.invoke(),
     { revalidateOnFocus: false }
   );
 

@@ -10,21 +10,27 @@ import { trackUpload, type UploadSource } from '@/renderer/hooks/file/useUploadS
 /** Sentinel error message used when an upload is cancelled by the caller. */
 export const UPLOAD_ABORTED_ERROR = 'Upload aborted';
 
-export interface UploadFileOptions {
+export type UploadFileOptions = {
   /** Cancel the upload from the outside. Closing the XHR also frees the backend connection. */
   signal?: AbortSignal;
-}
+  /** Explicit workspace-relative destination. An empty string targets the workspace root. */
+  workspaceRelativePath?: string;
+  /** Explicit Project Explorer destination. Used by folder-context uploads in desktop/WebUI. */
+  projectTarget?: { pe_id: string; relative_path: string };
+};
 
 /**
  * Upload a file to the backend via HTTP multipart.
  *
  * Works in both Electron (via `http://127.0.0.1:<backendPort>`) and WebUI
  * (same-origin reverse-proxied). Conversation-bound uploads go to the
- * workspace uploads directory; pre-conversation uploads go to temp storage.
+ * workspace uploads directory when enabled; pre-conversation uploads go to temp storage.
+ * Workspace views can explicitly target a directory with `workspace_relative_path`.
  *
  * Field names match the backend contract exactly (snake_case): `file`,
- * `file_name` (optional), `conversation_id` (optional). The response is
- * `ApiResponse<String>` where `data` is the absolute file path on disk.
+ * `file_name` (optional), `conversation_id` (optional), and
+ * `workspace_relative_path` (optional). The response is `ApiResponse<String>`
+ * where `data` is the absolute file path on disk.
  *
  * @param onProgress Optional callback receiving upload percentage (0-100).
  * @param options    Optional bag — currently supports an `AbortSignal` so callers can cancel.
@@ -43,6 +49,13 @@ export async function uploadFileViaHttp(
   }
   if (conversation_id) {
     formData.append('conversation_id', conversation_id);
+  }
+  if (options?.workspaceRelativePath !== undefined) {
+    formData.append('workspace_relative_path', options.workspaceRelativePath);
+  }
+  if (options?.projectTarget) {
+    formData.append('project_pe_id', options.projectTarget.pe_id);
+    formData.append('project_relative_path', options.projectTarget.relative_path);
   }
 
   return new Promise<string>((resolve, reject) => {

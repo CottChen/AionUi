@@ -23,7 +23,6 @@ import type {
 export type TeamAssistantInput = Pick<TeamAssistant, 'role' | 'assistant_name' | 'assistant_id' | 'model'>;
 
 export type ICreateTeamParams = {
-  user_id: string;
   name: string;
   workspace: string;
   workspace_mode: WorkspaceMode;

@@ -105,7 +105,8 @@
     "officialSkillsEmpty": "No hay habilidades oficiales disponibles.",
     "noSearchResults": "No hay habilidades coincidentes.",
     "customHint": "Importa una carpeta de habilidad, carpeta superior o zip; hasta {{maxFileSize}} por archivo y {{maxTotalSize}} por habilidad; importar el mismo nombre sobrescribe la habilidad existente.",
-    "officialHint": "Habilidades oficiales incluidas en AionUi: listas para usar, de solo lectura y actualizadas con cada versión."
+    "officialHint": "Habilidades oficiales incluidas en AionUi: listas para usar, de solo lectura y actualizadas con cada versión.",
+    "deleteAffectsNewOnlyHint": "Deleting only affects new conversations. Skills already selected in existing conversations keep working."
   },
   "authMethod": "Autenticación",
   "geminiApiKey": "Clave API de Gemini",
@@ -157,7 +158,8 @@
   "assistantHomeLead": "Los asistentes son expertos de IA listos para trabajar, precargados con habilidades y herramientas. Aquí están tus CLI locales, los asistentes que ajustas tú mismo y un conjunto de expertos oficiales. Una vez activados, aparecen en tus chats, equipos y tareas programadas, listos cuando los necesites.",
   "assistantHomeLeadShort": "Expertos de IA listos para trabajar, precargados con habilidades y herramientas. Actívalos para usarlos en chats, equipos y tareas programadas.",
   "assistantReorderHintShort": "Arrastra para reordenar",
-  "myAssistantsHintShort": "Asistentes generados automáticamente desde tus CLI locales, además de los que creaste o duplicaste desde oficiales. Arrastra para cambiar el orden en que aparecen.",
+  "assistantReorderSearchDisabled": "Borra la búsqueda para reordenar.",
+  "myAssistantsHintShort": "Asistentes generados automáticamente desde tus CLI locales, además de los que creaste o duplicaste desde oficiales.",
   "assistantRuntimeLabel": "Agente:",
   "assistantGoChat": "Chat",
   "assistantReorderHint": "Arrastra para reordenar; esto decide el orden de visualización donde elijas un asistente (inicio, equipos, tareas programadas, ...).",
@@ -1285,5 +1287,7 @@
     "solveWithButler": "Preguntar al Mayordomo"
   },
   "providerIdConflict": "El ID del proveedor ya existe. Inténtalo de nuevo.",
-  "autoInjectedSkillsHint": "Se cargan automáticamente en cada conversación: no hace falta activarlas; el agente decide cuándo usarlas."
+  "autoInjectedSkillsHint": "Se cargan automáticamente en cada conversación: no hace falta activarlas; el agente decide cuándo usarlas.",
+  "conversationRating": "Conversation Rating",
+  "conversationRatingDesc": "Show like and dislike actions at the end of each AI reply and save question/answer snapshots."
 }

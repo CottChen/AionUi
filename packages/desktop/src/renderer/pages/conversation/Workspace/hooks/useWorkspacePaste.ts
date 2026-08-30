@@ -57,14 +57,23 @@ export function useWorkspacePaste(options: UseWorkspacePasteOptions) {
   const [pasteTargetFolder, setPasteTargetFolder] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const uploadTargetRelativePathRef = useRef('');
+
+  const getCurrentTargetFolder = useCallback(
+    () => getTargetFolderPath(selectedNodeRef.current, selected, files, workspace),
+    [files, selected, selectedNodeRef, workspace]
+  );
 
   const copyFilesIntoWorkspace = useCallback(
-    async (selectedFiles: string[]) => {
+    async (selectedFiles: string[], targetWorkspace: string) => {
       if (!selectedFiles.length) {
         return;
       }
 
-      const result = await ipcBridge.fs.copyFilesToWorkspace.invoke({ file_paths: selectedFiles, workspace });
+      const result = await ipcBridge.fs.copyFilesToWorkspace.invoke({
+        file_paths: selectedFiles,
+        workspace: targetWorkspace,
+      });
       const copiedFiles = result.copied_files ?? [];
       const failedFiles = result.failed_files ?? [];
 
@@ -78,26 +87,29 @@ export function useWorkspacePaste(options: UseWorkspacePasteOptions) {
         messageApi.warning('Some files failed to copy');
       }
     },
-    [workspace, refreshWorkspace, messageApi, t]
+    [refreshWorkspace, messageApi]
   );
 
   const handleSelectHostFiles = useCallback(() => {
+    const targetWorkspace = getCurrentTargetFolder().fullPath;
     void ipcBridge.dialog.showOpen
       .invoke({
         properties: ['openFile', 'multiSelections'],
-        defaultPath: workspace,
+        defaultPath: targetWorkspace,
       })
       .then((selectedFiles) => {
         if (selectedFiles && selectedFiles.length > 0) {
-          return copyFilesIntoWorkspace(selectedFiles);
+          return copyFilesIntoWorkspace(selectedFiles, targetWorkspace);
         }
       })
       .catch(() => {
         // Silently ignore errors
       });
-  }, [copyFilesIntoWorkspace, workspace]);
+  }, [copyFilesIntoWorkspace, getCurrentTargetFolder]);
 
   const handleUploadDeviceFiles = useCallback(() => {
+    uploadTargetRelativePathRef.current = getCurrentTargetFolder().relativePath ?? '';
+
     if (isElectronDesktop()) {
       handleSelectHostFiles();
       return;
@@ -125,6 +137,7 @@ export function useWorkspacePaste(options: UseWorkspacePasteOptions) {
             try {
               await uploadFileViaHttp(file, conversation_id, tracker.onProgress, undefined, {
                 signal: controller.signal,
+                workspaceRelativePath: uploadTargetRelativePathRef.current,
               });
               successCount++;
             } catch (error) {
@@ -150,7 +163,7 @@ export function useWorkspacePaste(options: UseWorkspacePasteOptions) {
     }
 
     fileInputRef.current.click();
-  }, [conversation_id, handleSelectHostFiles, messageApi, refreshWorkspace, t]);
+  }, [conversation_id, getCurrentTargetFolder, handleSelectHostFiles, messageApi, refreshWorkspace, t]);
 
   useEffect(() => {
     return () => {

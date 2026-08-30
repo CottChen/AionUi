@@ -54,6 +54,7 @@ const SystemModalContent: React.FC = () => {
   const [agentIdleTimeout, setAgentIdleTimeout] = useState<number>(5);
   const [saveUploadToWorkspace, setSaveUploadToWorkspace] = useState(false);
   const [autoPreviewOfficeFiles, setAutoPreviewOfficeFiles] = useState(true);
+  const [conversationRatingEnabled, setConversationRatingEnabled] = useState(false);
 
   useEffect(() => {
     if (!isDesktop) {
@@ -94,6 +95,7 @@ const SystemModalContent: React.FC = () => {
     setCronNotificationEnabled(configService.get('system.cronNotificationEnabled') ?? false);
     setSaveUploadToWorkspace(configService.get('upload.saveToWorkspace') ?? false);
     setAutoPreviewOfficeFiles(configService.get('system.autoPreviewOfficeFiles') ?? true);
+    setConversationRatingEnabled(configService.get('conversation.rating.enabled') ?? false);
   }, [isDesktop]);
 
   useEffect(() => {
@@ -267,6 +269,14 @@ const SystemModalContent: React.FC = () => {
     });
   }, []);
 
+  const handleConversationRatingEnabledChange = useCallback((checked: boolean) => {
+    setConversationRatingEnabled(checked);
+    configService.set('conversation.rating.enabled', checked).catch(() => {
+      setConversationRatingEnabled(!checked);
+      configService.setLocal('conversation.rating.enabled', !checked);
+    });
+  }, []);
+
   // Get system directory info
   const { data: systemInfo } = useSWR('system.dir.info', () => ipcBridge.application.systemInfo.invoke());
 
@@ -354,6 +364,12 @@ const SystemModalContent: React.FC = () => {
       label: t('settings.autoPreviewOfficeFiles'),
       description: t('settings.autoPreviewOfficeFilesDesc'),
       component: <Switch checked={autoPreviewOfficeFiles} onChange={handleAutoPreviewOfficeFilesChange} />,
+    },
+    {
+      key: 'conversationRating',
+      label: t('settings.conversationRating'),
+      description: t('settings.conversationRatingDesc'),
+      component: <Switch checked={conversationRatingEnabled} onChange={handleConversationRatingEnabledChange} />,
     },
   ];
 

@@ -5,7 +5,7 @@
  */
 
 import { WEBUI_DEFAULT_PORT } from '@/common/config/constants';
-import { shell, webui, type IWebUIStatus } from '@/common/adapter/ipcBridge';
+import { conversation, shell, team, webui, type IWebUIStatus, type IWebUIUser } from '@/common/adapter/ipcBridge';
 import { isBackendHttpError } from '@/common/adapter/httpBridge';
 import { configService } from '@/common/config/configService';
 import AionModal from '@/renderer/components/base/AionModal';
@@ -18,8 +18,10 @@ import ChannelSlackLogo from '@/renderer/assets/channel-logos/slack.svg';
 import ChannelTelegramLogo from '@/renderer/assets/channel-logos/telegram.svg';
 import ChannelWecomLogo from '@/renderer/assets/channel-logos/wecom.svg';
 import ChannelWeixinLogo from '@/renderer/assets/channel-logos/weixin.svg';
+import { useAuth } from '@/renderer/hooks/context/AuthContext';
+import { emitter } from '@/renderer/utils/emitter';
 import { isElectronDesktop } from '@/renderer/utils/platform';
-import { Button, Form, Input, Message, Switch, Tabs, Tooltip } from '@arco-design/web-react';
+import { Button, Form, Input, Message, Select, Switch, Tabs, Tooltip } from '@arco-design/web-react';
 import { CheckOne, Communication, Copy, Earth, EditTwo, Refresh } from '@icon-park/react';
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -66,6 +68,19 @@ const QRCodeSVGLazy = React.lazy(async () => {
 const DESKTOP_WEBUI_ENABLED_KEY = 'webui.desktop.enabled';
 const DESKTOP_WEBUI_ALLOW_REMOTE_KEY = 'webui.desktop.allowRemote';
 
+type TransferOwnerResourceType = 'conversation' | 'team';
+
+type TransferOwnerFormValues = {
+  resourceType?: TransferOwnerResourceType;
+  resourceId?: string;
+  targetUserId?: string;
+};
+
+const formatExpiresAt = (timestamp: number) => {
+  const date = new Date(timestamp);
+  return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+};
+
 /**
  * WebUI 设置内容组件
  * WebUI settings content component
@@ -79,6 +94,8 @@ const WebuiModalContent: React.FC = () => {
 
   // 检测是否在 Electron 桌面环境 / Check if running in Electron desktop environment
   const isDesktop = isElectronDesktop();
+  const { user: authUser } = useAuth();
+  const canManageUsers = authUser?.isAdmin === true;
 
   const [status, setStatus] = useState<IWebUIStatus | null>(null);
   const [loading, setLoading] = useState(false);
@@ -95,8 +112,18 @@ const WebuiModalContent: React.FC = () => {
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [setUsernameModalVisible, setSetUsernameModalVisible] = useState(false);
   const [usernameLoading, setUsernameLoading] = useState(false);
+  const [users, setUsers] = useState<IWebUIUser[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [createUserModalVisible, setCreateUserModalVisible] = useState(false);
+  const [createUserLoading, setCreateUserLoading] = useState(false);
+  const [transferOwnerLoading, setTransferOwnerLoading] = useState(false);
+  const [generatedUserPassword, setGeneratedUserPassword] = useState<{ username: string; password: string } | null>(
+    null
+  );
   const [form] = Form.useForm();
   const [usernameForm] = Form.useForm();
+  const [createUserForm] = Form.useForm();
+  const [transferOwnerForm] = Form.useForm<TransferOwnerFormValues>();
 
   // 二维码登录相关状态 / QR code login related state
   const [qrUrl, setQrUrl] = useState<string | null>(null);
@@ -169,6 +196,27 @@ const WebuiModalContent: React.FC = () => {
   useEffect(() => {
     void loadStatus();
   }, [loadStatus]);
+
+  const loadUsers = useCallback(async () => {
+    if (!canManageUsers) {
+      setUsers([]);
+      setGeneratedUserPassword(null);
+      return;
+    }
+    setUsersLoading(true);
+    try {
+      const list = await webui.listUsers.invoke();
+      setUsers(list);
+    } catch (error) {
+      console.error('[WebuiModal] Failed to load WebUI users:', error);
+    } finally {
+      setUsersLoading(false);
+    }
+  }, [canManageUsers]);
+
+  useEffect(() => {
+    void loadUsers();
+  }, [loadUsers]);
 
   // 监听状态变更事件 / Listen to status change events
   useEffect(() => {
@@ -467,6 +515,90 @@ const WebuiModalContent: React.FC = () => {
     }
   };
 
+  const handleCreateUser = async () => {
+    try {
+      const values = await createUserForm.validate();
+      const username = String(values.username || '').trim();
+      const password = String(values.password || '');
+      setCreateUserLoading(true);
+
+      const user = await webui.createUser.invoke({ username, password });
+      setGeneratedUserPassword({ username: user.username, password });
+      Message.success(t('settings.webui.userCreated'));
+      setCreateUserModalVisible(false);
+      createUserForm.resetFields();
+      await loadUsers();
+    } catch (error) {
+      console.error('Create WebUI user error:', error);
+      const fallback = t('settings.webui.userCreateFailed');
+      const msg = isBackendHttpError(error) && error.backendMessage ? error.backendMessage : fallback;
+      Message.error(msg);
+    } finally {
+      setCreateUserLoading(false);
+    }
+  };
+
+  const handleResetUserPassword = async (target: IWebUIUser) => {
+    if (!window.confirm(t('settings.webui.confirmResetUserPassword', { username: target.username }))) {
+      return;
+    }
+    try {
+      const result = await webui.resetUserPassword.invoke({ id: target.id });
+      setGeneratedUserPassword({ username: target.username, password: result.newPassword });
+      Message.success(t('settings.webui.userPasswordReset'));
+    } catch (error) {
+      console.error('Reset WebUI user password error:', error);
+      const fallback = t('settings.webui.userPasswordResetFailed');
+      const msg = isBackendHttpError(error) && error.backendMessage ? error.backendMessage : fallback;
+      Message.error(msg);
+    }
+  };
+
+  const handleDeleteUser = async (target: IWebUIUser) => {
+    if (!window.confirm(t('settings.webui.confirmDeleteUser', { username: target.username }))) {
+      return;
+    }
+    try {
+      await webui.deleteUser.invoke({ id: target.id });
+      if (generatedUserPassword?.username === target.username) {
+        setGeneratedUserPassword(null);
+      }
+      Message.success(t('settings.webui.userDeleted'));
+      await loadUsers();
+    } catch (error) {
+      console.error('Delete WebUI user error:', error);
+      const fallback = t('settings.webui.userDeleteFailed');
+      const msg = isBackendHttpError(error) && error.backendMessage ? error.backendMessage : fallback;
+      Message.error(msg);
+    }
+  };
+
+  const handleTransferOwner = async () => {
+    try {
+      const values = await transferOwnerForm.validate();
+      const resourceType = values.resourceType ?? 'conversation';
+      const resourceId = String(values.resourceId || '').trim();
+      const targetUserId = String(values.targetUserId || '').trim();
+
+      setTransferOwnerLoading(true);
+      if (resourceType === 'team') {
+        await team.transferOwner.invoke({ id: resourceId, targetUserId });
+      } else {
+        await conversation.transferOwner.invoke({ id: resourceId, targetUserId });
+      }
+      Message.success(t('settings.webui.transferOwnerSuccess'));
+      transferOwnerForm.setFieldsValue({ resourceId: '' });
+      emitter.emit('chat.history.refresh');
+    } catch (error) {
+      console.error('Transfer WebUI owner error:', error);
+      const fallback = t('settings.webui.transferOwnerFailed');
+      const msg = isBackendHttpError(error) && error.backendMessage ? error.backendMessage : fallback;
+      Message.error(msg);
+    } finally {
+      setTransferOwnerLoading(false);
+    }
+  };
+
   // 生成二维码 / Generate QR code
   const generateQRCode = useCallback(async () => {
     if (!status?.running) return;
@@ -533,12 +665,6 @@ const WebuiModalContent: React.FC = () => {
       }
     }
   }, [status?.allowRemote, status?.running]);
-
-  // 格式化过期时间 / Format expiration time
-  const formatExpiresAt = (timestamp: number) => {
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-  };
 
   // 获取实际密码 / Get actual password
   const actualPassword = status?.initialPassword || cachedPassword;
@@ -796,6 +922,127 @@ const WebuiModalContent: React.FC = () => {
             </>
           )}
         </div>
+
+        {canManageUsers && (
+          <div className='px-[12px] md:px-[28px] py-14px bg-2 rd-16px'>
+            <div className='flex items-center justify-between gap-12px mb-8px'>
+              <div>
+                <div className='text-14px font-500 text-t-primary'>{t('settings.webui.usersTitle')}</div>
+                <div className='text-12px text-t-tertiary mt-2px'>{t('settings.webui.usersDesc')}</div>
+              </div>
+              <Button size='small' type='primary' onClick={() => setCreateUserModalVisible(true)}>
+                {t('settings.webui.addUser')}
+              </Button>
+            </div>
+
+            {generatedUserPassword && (
+              <div className='mb-10px rd-8px border border-line bg-fill-1 px-10px py-8px flex items-center justify-between gap-10px'>
+                <div className='min-w-0'>
+                  <div className='text-12px text-t-secondary'>
+                    {t('settings.webui.generatedPasswordFor', { username: generatedUserPassword.username })}
+                  </div>
+                  <div className='text-13px text-t-primary font-mono truncate'>{generatedUserPassword.password}</div>
+                </div>
+                <Tooltip content={t('common.copy')}>
+                  <Button
+                    type='text'
+                    size='mini'
+                    className='rd-100px !px-6px inline-flex items-center !h-24px'
+                    onClick={() => handleCopy(generatedUserPassword.password)}
+                  >
+                    <Copy size={14} />
+                  </Button>
+                </Tooltip>
+              </div>
+            )}
+
+            <div className='space-y-6px'>
+              {usersLoading ? (
+                <div className='text-13px text-t-secondary py-8px'>{t('common.loading')}</div>
+              ) : (
+                users.map((item) => (
+                  <div
+                    key={item.id}
+                    className='flex items-center justify-between gap-10px py-8px border-b border-line last:border-b-0'
+                  >
+                    <div className='min-w-0'>
+                      <div className='flex items-center gap-6px'>
+                        <span className='text-14px text-t-primary truncate'>{item.username}</span>
+                        {item.isAdmin && (
+                          <span className='text-11px text-primary bg-fill-1 border border-line rd-100px px-6px py-1px'>
+                            {t('settings.webui.adminUser')}
+                          </span>
+                        )}
+                      </div>
+                      <div className='text-12px text-t-tertiary truncate'>{item.id}</div>
+                    </div>
+                    <div className='flex items-center gap-6px shrink-0'>
+                      <Button
+                        size='mini'
+                        disabled={item.isAdmin}
+                        onClick={() => void handleResetUserPassword(item)}
+                      >
+                        {t('settings.webui.resetPassword')}
+                      </Button>
+                      <Button
+                        size='mini'
+                        status='danger'
+                        disabled={item.isAdmin}
+                        onClick={() => void handleDeleteUser(item)}
+                      >
+                        {t('common.delete')}
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className='border-t border-line mt-12px pt-12px'>
+              <div className='text-14px font-500 text-t-primary mb-8px'>
+                {t('settings.webui.transferOwnerTitle')}
+              </div>
+              <Form
+                form={transferOwnerForm}
+                layout='vertical'
+                initialValues={{ resourceType: 'conversation' }}
+                className='grid grid-cols-1 md:grid-cols-[150px_minmax(0,1fr)_220px_auto] gap-x-10px items-end'
+              >
+                <Form.Item field='resourceType' label={t('settings.webui.transferOwnerType')}>
+                  <Select>
+                    <Select.Option value='conversation'>{t('settings.webui.transferOwnerConversation')}</Select.Option>
+                    <Select.Option value='team'>{t('settings.webui.transferOwnerTeam')}</Select.Option>
+                  </Select>
+                </Form.Item>
+                <Form.Item
+                  field='resourceId'
+                  label={t('settings.webui.transferOwnerResourceId')}
+                  rules={[{ required: true, message: t('settings.webui.transferOwnerResourceIdRequired') }]}
+                >
+                  <Input placeholder={t('settings.webui.transferOwnerResourceIdPlaceholder')} />
+                </Form.Item>
+                <Form.Item
+                  field='targetUserId'
+                  label={t('settings.webui.transferOwnerTargetUser')}
+                  rules={[{ required: true, message: t('settings.webui.transferOwnerTargetUserRequired') }]}
+                >
+                  <Select placeholder={t('settings.webui.transferOwnerTargetUserPlaceholder')}>
+                    {users.map((item) => (
+                      <Select.Option key={item.id} value={item.id}>
+                        {item.username}
+                      </Select.Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+                <Form.Item>
+                  <Button type='primary' loading={transferOwnerLoading} onClick={() => void handleTransferOwner()}>
+                    {t('settings.webui.transferOwnerSubmit')}
+                  </Button>
+                </Form.Item>
+              </Form>
+            </div>
+          </div>
+        )}
       </div>
     </AionScrollArea>
   );
@@ -906,6 +1153,86 @@ const WebuiModalContent: React.FC = () => {
             ]}
           >
             <Input placeholder={t('settings.webui.newUsernamePlaceholder')} />
+          </Form.Item>
+        </Form>
+      </AionModal>
+
+      <AionModal
+        visible={canManageUsers && createUserModalVisible}
+        onCancel={() => setCreateUserModalVisible(false)}
+        onOk={handleCreateUser}
+        confirmLoading={createUserLoading}
+        title={t('settings.webui.addUser')}
+        size='small'
+      >
+        <Form form={createUserForm} layout='vertical' className='pt-16px'>
+          <Form.Item
+            label={t('settings.webui.username')}
+            field='username'
+            rules={[
+              { required: true, message: t('settings.webui.newUsernameRequired') },
+              {
+                validator: (value, callback) => {
+                  if (typeof value !== 'string') {
+                    callback();
+                    return;
+                  }
+
+                  const trimmed = value.trim();
+                  if (trimmed.length < 3) {
+                    callback(t('settings.webui.usernameMinLength'));
+                    return;
+                  }
+
+                  if (trimmed.length > 32) {
+                    callback(t('settings.webui.usernameMaxLength'));
+                    return;
+                  }
+
+                  if (!/^[a-zA-Z0-9_-]+$/.test(trimmed)) {
+                    callback(t('settings.webui.usernameFormatError'));
+                    return;
+                  }
+
+                  if (/^[_-]|[_-]$/.test(trimmed)) {
+                    callback(t('settings.webui.usernameEdgeError'));
+                    return;
+                  }
+
+                  callback();
+                },
+              },
+            ]}
+          >
+            <Input placeholder={t('settings.webui.newUsernamePlaceholder')} />
+          </Form.Item>
+          <Form.Item
+            label={t('settings.webui.newPassword')}
+            field='password'
+            rules={[
+              { required: true, message: t('settings.webui.newPasswordRequired') },
+              { minLength: 8, message: t('settings.webui.passwordMinLength') },
+            ]}
+          >
+            <Input.Password placeholder={t('settings.webui.newPasswordPlaceholder')} />
+          </Form.Item>
+          <Form.Item
+            label={t('settings.webui.confirmPassword')}
+            field='confirmPassword'
+            rules={[
+              { required: true, message: t('settings.webui.confirmPasswordRequired') },
+              {
+                validator: (value, callback) => {
+                  if (value !== createUserForm.getFieldValue('password')) {
+                    callback(t('settings.webui.passwordMismatch'));
+                  } else {
+                    callback();
+                  }
+                },
+              },
+            ]}
+          >
+            <Input.Password placeholder={t('settings.webui.confirmPasswordPlaceholder')} />
           </Form.Item>
         </Form>
       </AionModal>

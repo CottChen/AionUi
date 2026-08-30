@@ -105,7 +105,8 @@
     "officialSkillsTitle": "Compétences officielles",
     "officialSkillsEmpty": "Aucune compétence officielle disponible.",
     "customHint": "Importez un dossier de compétences, un dossier parent ou un zip ; jusqu'à {{maxFileSize}} par fichier et {{maxTotalSize}} par compétence ; l'importation du même nom écrase la compétence existante.",
-    "officialHint": "Compétences officielles fournies avec AionUi — prêtes à l'emploi, en lecture seule et mises à jour à chaque version."
+    "officialHint": "Compétences officielles fournies avec AionUi — prêtes à l'emploi, en lecture seule et mises à jour à chaque version.",
+    "deleteAffectsNewOnlyHint": "Deleting only affects new conversations. Skills already selected in existing conversations keep working."
   },
   "authMethod": "Authentification",
   "geminiApiKey": "Clé API Gemini",
@@ -158,7 +159,8 @@
   "assistantHomeLead": "Les assistants sont des experts en IA prêts à l’emploi, dotés de compétences et d’outils préchargés. Voici vos CLI locales, les assistants que vous personnalisez vous-même et un ensemble d'experts officiels. Une fois activés, ils apparaissent dans vos discussions, équipes et tâches planifiées – prêts lorsque vous en avez besoin.",
   "assistantHomeLeadShort": "Des experts en IA prêts à l’emploi, dotés de compétences et d’outils préchargés. Permettez-leur de les utiliser dans les discussions, les équipes et les tâches planifiées.",
   "assistantReorderHintShort": "Faites glisser pour réorganiser",
-  "myAssistantsHintShort": "Assistants générés automatiquement à partir de vos CLI locales, ainsi que ceux que vous avez créés ou dupliqués à partir d'officiels. Faites glisser pour réorganiser leur apparence.",
+  "assistantReorderSearchDisabled": "Effacez la recherche pour réorganiser.",
+  "myAssistantsHintShort": "Assistants générés automatiquement à partir de vos CLI locales, ainsi que ceux que vous avez créés ou dupliqués à partir d'officiels.",
   "assistantRuntimeLabel": "Agent:",
   "assistantGoChat": "Chat",
   "assistantReorderHint": "Faites glisser pour réorganiser — cela décide de l'ordre d'affichage partout où vous choisissez un assistant (maison, équipes, tâches planifiées,…).",
@@ -1285,5 +1287,7 @@
     "solveWithButler": "Demander au majordome"
   },
   "providerIdConflict": "L'ID du fournisseur existe déjà. Veuillez réessayer.",
-  "autoInjectedSkillsHint": "Chargé automatiquement dans chaque conversation – pas besoin de les activer ; l'agent décide quand les utiliser."
+  "autoInjectedSkillsHint": "Chargé automatiquement dans chaque conversation – pas besoin de les activer ; l'agent décide quand les utiliser.",
+  "conversationRating": "Conversation Rating",
+  "conversationRatingDesc": "Show like and dislike actions at the end of each AI reply and save question/answer snapshots."
 }

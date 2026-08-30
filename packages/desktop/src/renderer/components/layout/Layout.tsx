@@ -20,6 +20,7 @@ import { NavigationHistoryProvider } from '@renderer/hooks/context/NavigationHis
 import { useDeepLink } from '@renderer/hooks/system/useDeepLink';
 import { useNotificationClick } from '@renderer/hooks/system/notification/useNotificationClick';
 import { useBrowserNotification } from '@renderer/hooks/system/notification/useBrowserNotification';
+import { useDesktopTurnNotification } from '@renderer/hooks/system/notification/useDesktopTurnNotification';
 import { useDirectorySelection } from '@renderer/hooks/file/useDirectorySelection';
 import { cleanupSiderTooltips } from '@renderer/utils/ui/siderTooltip';
 import { useConversationShortcuts } from '@renderer/hooks/ui/useConversationShortcuts';
@@ -114,15 +115,21 @@ const Layout: React.FC<{
   useDeepLink();
   useNotificationClick();
   useBrowserNotification();
+  useDesktopTurnNotification();
   const navigate = useNavigate();
-  useConversationShortcuts({ navigate });
+  const location = useLocation();
+  const workspaceAvailable =
+    location.pathname.startsWith('/conversation/') || (TEAM_MODE_ENABLED && location.pathname.startsWith('/team/'));
+  const toggleSider = useCallback(() => {
+    setCollapsed((previous) => !previous);
+  }, []);
+  useConversationShortcuts({ navigate, toggleSider });
   // Expose navigate to code running outside the Router tree (e.g. the globally
   // mounted FeedbackReportModal's "via chat" action).
   useEffect(() => {
     setGlobalNavigate(navigate);
     return () => setGlobalNavigate(null);
   }, [navigate]);
-  const location = useLocation();
   const { t } = useTranslation();
   // The "AionUi" wordmark acts as Home / Back-to-Chat, but only from settings routes.
   // In non-settings routes the user is already "home", so it is a no-op (and not actionable).
@@ -144,9 +151,6 @@ const Layout: React.FC<{
     }
     void navigate('/guid');
   }, [navigate]);
-  const workspaceAvailable =
-    location.pathname.startsWith('/conversation/') || (TEAM_MODE_ENABLED && location.pathname.startsWith('/team/'));
-
   // Close preview whenever the user leaves the conversation route entirely
   // (e.g. switches to a team, /guid, or settings). Within /conversation/:id
   // the finer-grained closePreviewIfWorkspaceChanged in conversation/index.tsx
