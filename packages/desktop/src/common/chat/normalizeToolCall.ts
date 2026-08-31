@@ -202,7 +202,8 @@ function normalizeToolCallStatus(status?: string): NormalizedToolStatus {
 const IMAGE_PATH_EXTENSION_RE = /\.(?:png|jpe?g|webp|gif)$/i;
 
 const getDirectToolImagePath = (name: string, output?: string): string | undefined => {
-  if (name.replace(/[\s_-]/g, '').toLowerCase() !== 'imagegeneration' || !output) {
+  const normalizedName = name.replace(/[\s_-]/g, '').toLowerCase();
+  if (!['imagegeneration', 'imagegenerationcall'].includes(normalizedName) || !output) {
     return undefined;
   }
 

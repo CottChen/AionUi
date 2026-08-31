@@ -68,6 +68,25 @@ describe('normalizeToolCall', () => {
     );
   });
 
+  it('preserves raw Codex image_generation_call paths for grouped tool summaries', () => {
+    const message: IMessageToolCall = {
+      id: 'ig_direct_raw_image',
+      conversation_id: 'conv-1',
+      type: 'tool_call',
+      content: {
+        call_id: 'ig_direct_raw_image',
+        name: 'image_generation_call',
+        args: {},
+        status: 'completed',
+        output: '/workspace/.aionui/generated-images/conv-1/ig_direct_raw_image.png',
+      },
+    };
+
+    expect(normalizeToolCall(message)?.imagePath).toBe(
+      '/workspace/.aionui/generated-images/conv-1/ig_direct_raw_image.png'
+    );
+  });
+
   it('does not treat image-looking output from ordinary tools as generated image output', () => {
     const message: IMessageToolCall = {
       id: 'shell-1',
