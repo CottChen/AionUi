@@ -324,6 +324,14 @@ describe('MarkdownView local file links', () => {
     expect(link).toHaveAttribute('href', 'https://aionui.com/docs#L10');
   });
 
+  it('renders a local image whose angle-bracket destination contains spaces and Chinese parentheses', () => {
+    const imagePath = '.local/迪敏思（包装 盒）.png';
+
+    render(<MarkdownView>{`![迪敏思包装盒](<${imagePath}>)`}</MarkdownView>);
+
+    expect(screen.getByRole('img', { name: '迪敏思包装盒' })).toHaveAttribute('src', imagePath);
+  });
+
   it('adds empty alt text to external raw HTML images without alt text', () => {
     const { container } = render(
       <MarkdownView allowHtml>{'<img src="https://example.com/generated.png" />'}</MarkdownView>

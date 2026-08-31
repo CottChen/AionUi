@@ -803,6 +803,83 @@ describe('MessageText attachment paths', () => {
     // The whole point: the content endpoint is never hit for an oversized file.
     expect(ipcBridge.fs.readContent.invoke).not.toHaveBeenCalled();
   });
+  it('renders a valid assistant image block as local image markdown without exposing the protocol', () => {
+    const content = [
+      '图片已经准备好。',
+      '',
+      '[AIONUI_CHANNEL_SEND]',
+      '{"type":"image","path":".local/迪敏思包装盒.png","caption":"迪敏思包装盒"}',
+      '[/AIONUI_CHANNEL_SEND]',
+    ].join('\n');
+
+    renderMessageText(content);
+
+    const messageContent = screen.getByTestId('message-text-content');
+    expect(messageContent).toHaveTextContent('图片已经准备好。');
+    expect(messageContent).toHaveTextContent('![迪敏思包装盒](<.local/迪敏思包装盒.png>)');
+    expect(messageContent).not.toHaveTextContent('AIONUI_CHANNEL_SEND');
+  });
+
+  it('renders a valid assistant file block as a workspace-relative attachment', () => {
+    const content = [
+      '[AIONUI_CHANNEL_SEND]',
+      '{"type":"file","path":"output/报告.pdf","fileName":"报告.pdf"}',
+      '[/AIONUI_CHANNEL_SEND]',
+    ].join('\n');
+
+    renderMessageText(content);
+
+    expect(screen.getByTestId('file-preview')).toHaveTextContent('/workspace/demo/output/报告.pdf');
+    expect(screen.queryByText(/AIONUI_CHANNEL_SEND/)).not.toBeInTheDocument();
+  });
+
+  it.each([
+    {
+      name: 'malformed JSON',
+      payload: '{"type":"image"',
+    },
+    {
+      name: 'remote URL',
+      payload: '{"type":"image","path":"https://example.com/image.png"}',
+    },
+    {
+      name: 'unsupported type',
+      payload: '{"type":"video","path":"output/video.mp4"}',
+    },
+  ])('keeps $name protocol blocks visible instead of silently dropping them', ({ payload }) => {
+    const content = ['[AIONUI_CHANNEL_SEND]', payload, '[/AIONUI_CHANNEL_SEND]'].join('\n');
+
+    renderMessageText(content);
+
+    expect(screen.getByTestId('message-text-content')).toHaveTextContent('AIONUI_CHANNEL_SEND');
+    expect(screen.queryByTestId('file-preview')).not.toBeInTheDocument();
+  });
+
+  it('does not interpret protocol blocks written by users', () => {
+    const content = [
+      '[AIONUI_CHANNEL_SEND]',
+      '{"type":"image","path":"output/image.png"}',
+      '[/AIONUI_CHANNEL_SEND]',
+    ].join('\n');
+
+    renderMessageText(content, { position: 'right' });
+
+    expect(screen.getByTestId('message-text-content')).toHaveTextContent('AIONUI_CHANNEL_SEND');
+  });
+
+  it('keeps protocol examples inside fenced Markdown code visible', () => {
+    const content = [
+      '```text',
+      '[AIONUI_CHANNEL_SEND]',
+      '{"type":"image","path":"output/image.png"}',
+      '[/AIONUI_CHANNEL_SEND]',
+      '```',
+    ].join('\n');
+
+    renderMessageText(content);
+
+    expect(screen.getByTestId('message-text-content')).toHaveTextContent('AIONUI_CHANNEL_SEND');
+  });
 });
 
 describe('MessageText fork entry point', () => {

@@ -63,8 +63,21 @@ type ParsedFileMarker = {
   files: string[];
 };
 
+type ChannelSendPayload = {
+  type: 'image' | 'file';
+  path: string;
+  caption?: string;
+};
+
+type ParsedChannelSend = {
+  text: string;
+  files: string[];
+};
+
 const URL_SCHEME_PATTERN = /^[a-z][a-z0-9+.-]*:\/\//i;
 const MARKDOWN_ATTACHMENT_LINE_PATTERN = /^(#{1,6}\s|[-*+]\s|\d+[.)]\s|>\s?|```|~~~|\|)/;
+const CHANNEL_SEND_BLOCK_PATTERN =
+  /^[ \t]*\[AIONUI_CHANNEL_SEND\][ \t]*\r?\n([\s\S]*?)\r?\n[ \t]*\[\/AIONUI_CHANNEL_SEND\][ \t]*$/gm;
 
 const parseFileMarker = (content: string, canParseFileMarker: boolean): ParsedFileMarker => {
   if (!canParseFileMarker) {
@@ -123,6 +136,63 @@ const isLocalMessageFilePath = (file_path: string): boolean => {
   }
 
   return isAbsoluteMessageFilePath(trimmedFilePath) || isWorkspaceRelativeMessageFilePath(trimmedFilePath);
+};
+
+const escapeMarkdownImageAlt = (value: string): string =>
+  value.replace(/\r?\n/g, ' ').replace(/\\/g, '\\\\').replace(/\[/g, '\\[').replace(/\]/g, '\\]');
+
+const escapeMarkdownDestination = (value: string): string => value.replace(/</g, '%3C').replace(/>/g, '%3E');
+
+const isInsideMarkdownFence = (content: string, offset: number): boolean => {
+  let activeFence: '`' | '~' | undefined;
+  for (const line of content.slice(0, offset).split(/\r?\n/)) {
+    const match = line.match(/^\s*(`{3,}|~{3,})/);
+    if (!match) continue;
+    const marker = match[1][0] as '`' | '~';
+    activeFence = activeFence === marker ? undefined : activeFence || marker;
+  }
+  return activeFence !== undefined;
+};
+
+export const parseChannelSendBlocks = (content: string, canParseChannelSend: boolean): ParsedChannelSend => {
+  if (!canParseChannelSend) {
+    return { text: content, files: [] };
+  }
+
+  const files: string[] = [];
+  const text = content.replace(CHANNEL_SEND_BLOCK_PATTERN, (block, rawPayload: string, offset: number) => {
+    if (isInsideMarkdownFence(content, offset)) return block;
+
+    let payload: unknown;
+    try {
+      payload = JSON.parse(rawPayload.trim());
+    } catch {
+      return block;
+    }
+
+    if (!payload || typeof payload !== 'object') return block;
+    const candidate = payload as Partial<ChannelSendPayload>;
+    if (
+      (candidate.type !== 'image' && candidate.type !== 'file') ||
+      typeof candidate.path !== 'string' ||
+      !isLocalMessageFilePath(candidate.path)
+    ) {
+      return block;
+    }
+
+    const path = candidate.path.trim();
+    if (candidate.type === 'file') {
+      files.push(path);
+      return '';
+    }
+
+    const fallbackAlt = path.split(/[\\/]/).pop() || 'image';
+    const caption =
+      typeof candidate.caption === 'string' && candidate.caption.trim() ? candidate.caption.trim() : fallbackAlt;
+    return `\n\n![${escapeMarkdownImageAlt(caption)}](<${escapeMarkdownDestination(path)}>)\n\n`;
+  });
+
+  return { text: text.replace(/\n{3,}/g, '\n\n').trim(), files };
 };
 
 export const resolveMessageFilePath = (file_path: string, workspace?: string): string => {
@@ -190,10 +260,11 @@ const MessageText: React.FC<{
   const [showCopyAlert, setShowCopyAlert] = useState(false);
   const isUserMessage = message.position === 'right';
   const isTeammateMessage = message.position === 'left' && message.content.teammateMessage === true;
-  const { text, files } = useMemo(
-    () => parseFileMarker(contentToRender, isUserMessage),
-    [contentToRender, isUserMessage]
-  );
+  const { text, files } = useMemo(() => {
+    const channelSend = parseChannelSendBlocks(contentToRender, !isUserMessage);
+    const fileMarker = parseFileMarker(channelSend.text, isUserMessage);
+    return { text: fileMarker.text, files: [...fileMarker.files, ...channelSend.files] };
+  }, [contentToRender, isUserMessage]);
   const { data, json } = useFormatContent(text);
   const shouldRenderPlainText = isUserMessage;
   const conversationContext = useConversationContextSafe();
