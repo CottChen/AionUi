@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { IMessageAcpToolCall } from '@/common/chat/chatLib';
-import { normalizeAcpToolCall } from '@/common/chat/normalizeToolCall';
+import type { IMessageAcpToolCall, IMessageToolCall } from '@/common/chat/chatLib';
+import { normalizeAcpToolCall, normalizeToolCall } from '@/common/chat/normalizeToolCall';
 import { describe, expect, it } from 'vitest';
 
 describe('normalizeAcpToolCall', () => {
@@ -45,5 +45,43 @@ describe('normalizeAcpToolCall', () => {
     expect((normalized as { imagePath?: string } | undefined)?.imagePath).toBe(
       '/Users/test/.codex/generated_images/session/ig_test_image.png'
     );
+  });
+});
+
+describe('normalizeToolCall', () => {
+  it('preserves direct Codex image generation paths for grouped tool summaries', () => {
+    const message: IMessageToolCall = {
+      id: 'ig_direct_image',
+      conversation_id: 'conv-1',
+      type: 'tool_call',
+      content: {
+        call_id: 'ig_direct_image',
+        name: 'imageGeneration',
+        args: {},
+        status: 'completed',
+        output: '/Users/test/.codex/generated_images/session/ig_direct_image.png',
+      },
+    };
+
+    expect(normalizeToolCall(message)?.imagePath).toBe(
+      '/Users/test/.codex/generated_images/session/ig_direct_image.png'
+    );
+  });
+
+  it('does not treat image-looking output from ordinary tools as generated image output', () => {
+    const message: IMessageToolCall = {
+      id: 'shell-1',
+      conversation_id: 'conv-1',
+      type: 'tool_call',
+      content: {
+        call_id: 'shell-1',
+        name: 'commandExecution',
+        args: {},
+        status: 'completed',
+        output: '/workspace/screenshot.png',
+      },
+    };
+
+    expect(normalizeToolCall(message)?.imagePath).toBeUndefined();
   });
 });

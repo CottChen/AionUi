@@ -203,4 +203,25 @@ describe('MessageToolGroupSummary ACP image output', () => {
     expect(screen.queryByTestId('local-image')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('acp.image.download_aria')).not.toBeInTheDocument();
   });
+
+  it('renders generated images emitted by the direct Codex backend', () => {
+    const imagePath = '/Users/test/.codex/generated_images/session/ig_direct_image.png';
+    const message: IMessageToolCall = {
+      id: 'ig_direct_image',
+      conversation_id: 'conv-1',
+      type: 'tool_call',
+      content: {
+        call_id: 'ig_direct_image',
+        name: 'imageGeneration',
+        args: {},
+        status: 'completed',
+        output: imagePath,
+      },
+    };
+
+    render(<MessageToolGroupSummary messages={[message]} />);
+    fireEvent.click(screen.getByText('View Steps · 1'));
+
+    expect(screen.getByTestId('local-image')).toHaveAttribute('src', imagePath);
+  });
 });

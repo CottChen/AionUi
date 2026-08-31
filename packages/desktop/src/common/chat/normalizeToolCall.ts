@@ -199,6 +199,19 @@ function normalizeToolCallStatus(status?: string): NormalizedToolStatus {
   }
 }
 
+const IMAGE_PATH_EXTENSION_RE = /\.(?:png|jpe?g|webp|gif)$/i;
+
+const getDirectToolImagePath = (name: string, output?: string): string | undefined => {
+  if (name.replace(/[\s_-]/g, '').toLowerCase() !== 'imagegeneration' || !output) {
+    return undefined;
+  }
+
+  return output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => IMAGE_PATH_EXTENSION_RE.test(line));
+};
+
 export function normalizeToolCall(message: IMessageToolCall): NormalizedToolCall | undefined {
   const { call_id, name, status, input, output, args, description } = message.content;
   if (!call_id) return undefined;
@@ -216,6 +229,7 @@ export function normalizeToolCall(message: IMessageToolCall): NormalizedToolCall
     description: description || undefined,
     input: displayInput,
     output,
+    imagePath: getDirectToolImagePath(name, output),
   };
 }
 
