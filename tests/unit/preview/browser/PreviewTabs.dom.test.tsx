@@ -16,7 +16,7 @@ vi.mock('@/renderer/utils/platform', () => ({
 
 import PreviewTabs from '@/renderer/pages/conversation/Preview/components/PreviewPanel/PreviewTabs';
 
-const renderTabs = (onNewBrowserTab = vi.fn()) =>
+const renderTabs = (onNewBrowserTab = vi.fn(), onCollapsePanel = vi.fn()) =>
   render(
     <PreviewTabs
       tabs={[{ id: 'file-1', title: 'notes.md' }]}
@@ -27,6 +27,7 @@ const renderTabs = (onNewBrowserTab = vi.fn()) =>
       onCloseTab={vi.fn()}
       onContextMenu={vi.fn()}
       onNewBrowserTab={onNewBrowserTab}
+      onCollapsePanel={onCollapsePanel}
     />
   );
 
@@ -48,5 +49,14 @@ describe('PreviewTabs browser entry', () => {
 
     fireEvent.click(screen.getByTitle('preview.browser.newTab'));
     expect(onNewBrowserTab).toHaveBeenCalledOnce();
+  });
+
+  it('collapses the panel without routing through a tab close action', () => {
+    const onCollapsePanel = vi.fn();
+    renderTabs(vi.fn(), onCollapsePanel);
+
+    fireEvent.click(screen.getByTitle('preview.collapsePanel'));
+
+    expect(onCollapsePanel).toHaveBeenCalledOnce();
   });
 });

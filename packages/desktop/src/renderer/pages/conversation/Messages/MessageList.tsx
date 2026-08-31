@@ -72,6 +72,10 @@ type IMessageVO =
 type IArtifactVO = { type: 'artifact'; id: string; artifact: IConversationArtifact; created_at: number };
 type IProcessedItem = IMessageVO | IArtifactVO;
 
+type PendingMessageJump = {
+  detail: ChatMessageJumpDetail;
+};
+
 type CompactAcpToolCallContent = IMessageAcpToolCall['content'] & {
   _compact?: {
     truncated?: boolean;
@@ -367,8 +371,9 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
   const { t } = useTranslation();
   const location = useLocation();
   const locationState = (location.state || {}) as ConversationLocationState;
-  const targetMessageId = locationState.targetMessageId;
+  const routeTargetMessageId = locationState.targetMessageId;
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | undefined>();
+  const [pendingMessageJump, setPendingMessageJump] = useState<PendingMessageJump | undefined>();
   const handledTargetKeyRef = useRef<string>('');
   const loadingTargetKeyRef = useRef<string>('');
   const loadedAnchorTargetKeyRef = useRef<string>('');
@@ -632,28 +637,6 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
     [hideScrollButton, processedList, scrollElementIntoView]
   );
 
-  const scrollToAnchorFallback = useCallback(
-    (targetMessageId: string, options: { block?: ScrollLogicalPosition; behavior?: ScrollBehavior } = {}) => {
-      const block = options.block || 'center';
-      const behavior = options.behavior || 'smooth';
-      setHighlightedMessageId(targetMessageId);
-      hideScrollButton();
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          const visibleItems = Array.from(
-            contentElementRef.current?.querySelectorAll<HTMLElement>('.message-item[id^="message-"]') ?? []
-          );
-          const targetElement = visibleItems[Math.floor(visibleItems.length / 2)] ?? null;
-          scrollElementIntoView(targetElement, { behavior, block });
-        });
-      });
-      window.setTimeout(() => {
-        setHighlightedMessageId((current) => (current === targetMessageId ? undefined : current));
-      }, 2400);
-    },
-    [hideScrollButton, scrollElementIntoView]
-  );
-
   const handleMessageListScroll = useCallback(
     (event: React.UIEvent<HTMLDivElement>) => {
       handleScroll(event);
@@ -675,52 +658,73 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
   );
 
   useEffect(() => {
-    if (!targetMessageId || processedList.length === 0) {
+    if (!routeTargetMessageId || processedList.length === 0) {
       return;
     }
 
-    const targetKey = `${location.key}:${targetMessageId}`;
+    const targetKey = `${location.key}:${routeTargetMessageId}`;
     if (handledTargetKeyRef.current === targetKey) {
       return;
     }
 
-    const targetIndex = processedList.findIndex((item) => matchesTargetMessage(item, targetMessageId));
+    const targetIndex = processedList.findIndex((item) => matchesTargetMessage(item, routeTargetMessageId));
     if (targetIndex >= 0) {
       handledTargetKeyRef.current = targetKey;
       loadingTargetKeyRef.current = '';
       loadedAnchorTargetKeyRef.current = '';
-      scrollToProcessedTarget(targetIndex, targetMessageId);
+      scrollToProcessedTarget(targetIndex, routeTargetMessageId);
       const timer = window.setTimeout(() => {
-        setHighlightedMessageId((current) => (current === targetMessageId ? undefined : current));
+        setHighlightedMessageId((current) => (current === routeTargetMessageId ? undefined : current));
       }, 2400);
       return () => window.clearTimeout(timer);
     }
 
     if (loadedAnchorTargetKeyRef.current === targetKey) {
-      handledTargetKeyRef.current = targetKey;
       loadingTargetKeyRef.current = '';
-      loadedAnchorTargetKeyRef.current = '';
-      scrollToAnchorFallback(targetMessageId);
       return;
     }
 
     if (loadingTargetKeyRef.current !== targetKey) {
       loadingTargetKeyRef.current = targetKey;
-      void loadAnchorMessageWindow(targetMessageId).then((loaded) => {
+      void loadAnchorMessageWindow(routeTargetMessageId).then((loaded) => {
         loadingTargetKeyRef.current = '';
         if (loaded) {
           loadedAnchorTargetKeyRef.current = targetKey;
         }
       });
     }
-  }, [
-    loadAnchorMessageWindow,
-    location.key,
-    processedList,
-    scrollToAnchorFallback,
-    scrollToProcessedTarget,
-    targetMessageId,
-  ]);
+  }, [loadAnchorMessageWindow, location.key, processedList, routeTargetMessageId, scrollToProcessedTarget]);
+
+  useEffect(() => {
+    const pending = pendingMessageJump;
+    if (!pending || pending.detail.conversation_id !== conversationContext?.conversation_id) {
+      return;
+    }
+
+    const targetIndex = processedList.findIndex((item) => {
+      if (pending.detail.messageId && matchesTargetMessage(item, pending.detail.messageId)) {
+        return true;
+      }
+      if (isSummaryItem(item)) {
+        return false;
+      }
+      return Boolean(pending.detail.msgId && (item as TMessage).msg_id === pending.detail.msgId);
+    });
+    if (targetIndex < 0) {
+      return;
+    }
+
+    const jumpTargetMessageId = pending.detail.messageId || getProcessedItemAnchorId(processedList[targetIndex]);
+    scrollToProcessedTarget(targetIndex, jumpTargetMessageId, {
+      block: pending.detail.align || 'start',
+      behavior: pending.detail.behavior || 'smooth',
+    });
+    setPendingMessageJump((current) => (current === pending ? undefined : current));
+  }, [conversationContext?.conversation_id, pendingMessageJump, processedList, scrollToProcessedTarget]);
+
+  useEffect(() => {
+    setPendingMessageJump(undefined);
+  }, [conversationContext?.conversation_id]);
 
   useEffect(() => {
     const handleMessageJump = (event: Event) => {
@@ -743,29 +747,16 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
       if (targetIndex < 0) {
         const anchorMessageId = detail.messageId;
         if (!anchorMessageId) return;
+        const pending: PendingMessageJump = { detail };
+        setPendingMessageJump(pending);
         void loadAnchorMessageWindow(anchorMessageId).then((loaded) => {
-          if (!loaded) return;
-          setHighlightedMessageId(anchorMessageId);
-          requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-              const targetElement = document.getElementById(`message-${anchorMessageId}`);
-              if (targetElement) {
-                scrollElementIntoView(targetElement, {
-                  block: detail.align || 'start',
-                  behavior: detail.behavior || 'smooth',
-                });
-                return;
-              }
-              scrollToAnchorFallback(anchorMessageId, {
-                block: detail.align || 'center',
-                behavior: detail.behavior || 'smooth',
-              });
-            });
-          });
+          if (loaded) return;
+          setPendingMessageJump((current) => (current === pending ? undefined : current));
         });
         return;
       }
 
+      setPendingMessageJump(undefined);
       scrollToProcessedTarget(targetIndex, detail.messageId || getProcessedItemAnchorId(processedList[targetIndex]), {
         block: detail.align || 'start',
         behavior: detail.behavior || 'smooth',
@@ -776,13 +767,7 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
     return () => {
       window.removeEventListener(CHAT_MESSAGE_JUMP_EVENT, handleMessageJump);
     };
-  }, [
-    conversationContext?.conversation_id,
-    loadAnchorMessageWindow,
-    processedList,
-    scrollToAnchorFallback,
-    scrollToProcessedTarget,
-  ]);
+  }, [conversationContext?.conversation_id, loadAnchorMessageWindow, processedList, scrollToProcessedTarget]);
 
   // Click scroll button
   const handleScrollButtonClick = () => {

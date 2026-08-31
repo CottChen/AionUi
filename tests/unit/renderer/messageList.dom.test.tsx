@@ -5,7 +5,7 @@
  */
 
 import React, { type PropsWithChildren } from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { IMessageAcpToolCall, IMessageText, IMessageToolGroup, TMessage } from '@/common/chat/chatLib';
 import type { MessageFileChangesProps } from '@/renderer/pages/conversation/Messages/MessageFileChanges';
@@ -16,10 +16,20 @@ import {
   useUpdateMessageList,
 } from '@/renderer/pages/conversation/Messages/hooks';
 import MessageList from '@/renderer/pages/conversation/Messages/MessageList';
+import { dispatchChatMessageJump } from '@/renderer/utils/chat/chatMinimapEvents';
 
-const { parseDiffMock, useTeamPermissionMock } = vi.hoisted(() => ({
-  parseDiffMock: vi.fn(),
-  useTeamPermissionMock: vi.fn(),
+const { loadAnchorMessageWindowMock, parseDiffMock, scrollElementIntoViewMock, useTeamPermissionMock } = vi.hoisted(
+  () => ({
+    loadAnchorMessageWindowMock: vi.fn(),
+    parseDiffMock: vi.fn(),
+    scrollElementIntoViewMock: vi.fn(),
+    useTeamPermissionMock: vi.fn(),
+  })
+);
+
+vi.mock('@/renderer/pages/conversation/Messages/hooks', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/renderer/pages/conversation/Messages/hooks')>()),
+  useLoadAnchorMessageWindow: () => loadAnchorMessageWindowMock,
 }));
 
 vi.mock('react-i18next', () => ({
@@ -67,7 +77,7 @@ vi.mock('@/renderer/pages/conversation/Messages/useAutoScroll', () => ({
     handlePointerDown: () => {},
     showScrollButton: false,
     scrollToBottom: () => {},
-    scrollElementIntoView: () => {},
+    scrollElementIntoView: scrollElementIntoViewMock,
     hideScrollButton: () => {},
   }),
 }));
@@ -265,7 +275,10 @@ function ReplaceMessagesButton({ messages }: { messages: TMessage[] }): JSX.Elem
 describe('MessageList', () => {
   beforeEach(() => {
     mockIsProcessing = false;
+    loadAnchorMessageWindowMock.mockReset();
+    loadAnchorMessageWindowMock.mockResolvedValue(true);
     parseDiffMock.mockReset();
+    scrollElementIntoViewMock.mockReset();
     parseDiffMock.mockReturnValue({
       file_name: 'file.ts',
       fullPath: '/workspace/file.ts',
@@ -287,6 +300,36 @@ describe('MessageList', () => {
     const messageRow = screen.getByTestId('message-text-left');
     expect(messageRow.className).toContain('m-t-10px');
     expect(messageRow.className).not.toContain('pt-10px');
+  });
+
+  it('waits for a lazily loaded target row before scrolling to a minimap result', async () => {
+    const target = { ...createTextMessage(), id: 'message-history', msg_id: 'msg-history', created_at: 0 };
+    render(
+      <Wrapper>
+        <MessageList />
+        <ReplaceMessagesButton messages={[target, createTextMessage()]} />
+      </Wrapper>
+    );
+
+    dispatchChatMessageJump({
+      conversation_id: 'conversation-1',
+      messageId: target.id,
+      msgId: target.msg_id,
+      align: 'start',
+      behavior: 'smooth',
+    });
+
+    expect(loadAnchorMessageWindowMock).toHaveBeenCalledWith(target.id);
+    expect(scrollElementIntoViewMock).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByText('replace messages'));
+
+    await waitFor(() => {
+      expect(scrollElementIntoViewMock).toHaveBeenCalledWith(document.getElementById(`message-${target.id}`), {
+        behavior: 'smooth',
+        block: 'start',
+      });
+    });
   });
 
   it('uses container-responsive fluid width for standalone message rows', () => {

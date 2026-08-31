@@ -4,12 +4,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Empty, Input, Spin } from '@arco-design/web-react';
+import { Button, Empty, Input, Message, Spin, Tooltip } from '@arco-design/web-react';
 import { IconSearch } from '@arco-design/web-react/icon';
+import { Copy } from '@icon-park/react';
 import classNames from 'classnames';
 import React, { useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import { iconColors } from '@/renderer/styles/colors';
+import { copyText } from '@/renderer/utils/ui/clipboard';
 import styles from './ConversationTitleMinimap.module.css';
 import type { ConversationTitleMinimapProps } from './minimapTypes';
 import { HEADER_HEIGHT, PANEL_MIN_WIDTH } from './minimapTypes';
@@ -161,48 +164,67 @@ const ConversationTitleMinimap: React.FC<ConversationTitleMinimapProps> = ({
           >
             <div className='conversation-minimap-list flex flex-col gap-6px'>
               {filteredItems.map((item, idx) => (
-                <button
+                <div
                   key={`${item.index}-${item.messageId || item.msgId || 'unknown'}`}
-                  type='button'
-                  data-minimap-item-index={idx}
-                  aria-selected={activeResultIndex === idx}
-                  className={classNames(
-                    'conversation-minimap-item w-full text-left px-12px py-10px border-none rounded-10px hover:bg-fill-2 transition-colors cursor-pointer block',
-                    isSearchMode && activeResultIndex === idx ? 'bg-fill-2' : 'bg-transparent'
-                  )}
-                  onMouseEnter={() => {
-                    if (!isSearchMode) return;
-                    setActiveResultIndex(idx);
-                  }}
-                  onClick={() => {
-                    jumpToItem(item);
-                  }}
+                  className='flex items-start gap-4px min-w-0'
                 >
-                  <div
+                  <button
+                    type='button'
+                    data-minimap-item-index={idx}
+                    aria-selected={activeResultIndex === idx}
                     className={classNames(
-                      'text-11px mb-2px',
-                      isIndexMatch(item.index, normalizedKeyword)
-                        ? 'text-[rgb(var(--primary-6))] font-semibold'
-                        : 'text-t-secondary'
+                      'conversation-minimap-item flex-1 min-w-0 text-left px-12px py-10px border-none rounded-10px hover:bg-fill-2 transition-colors cursor-pointer block',
+                      isSearchMode && activeResultIndex === idx ? 'bg-fill-2' : 'bg-transparent'
                     )}
+                    onMouseEnter={() => {
+                      if (!isSearchMode) return;
+                      setActiveResultIndex(idx);
+                    }}
+                    onClick={() => {
+                      jumpToItem(item);
+                    }}
                   >
-                    #{item.index}
-                  </div>
-                  <div
-                    className='text-13px text-t-primary font-medium leading-18px'
-                    style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}
-                  >
-                    Q: {renderHighlightedText(item.questionRaw || item.question, normalizedKeyword)}
-                  </div>
-                  {item.answer && (
                     <div
-                      className='text-12px text-t-secondary leading-18px mt-2px'
+                      className={classNames(
+                        'text-11px mb-2px',
+                        isIndexMatch(item.index, normalizedKeyword)
+                          ? 'text-[rgb(var(--primary-6))] font-semibold'
+                          : 'text-t-secondary'
+                      )}
+                    >
+                      #{item.index}
+                    </div>
+                    <div
+                      className='text-13px text-t-primary font-medium leading-18px'
                       style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}
                     >
-                      A: {renderHighlightedText(item.answerRaw || item.answer, normalizedKeyword)}
+                      Q: {renderHighlightedText(item.questionRaw || item.question, normalizedKeyword)}
                     </div>
-                  )}
-                </button>
+                    {item.answer && (
+                      <div
+                        className='text-12px text-t-secondary leading-18px mt-2px'
+                        style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}
+                      >
+                        A: {renderHighlightedText(item.answerRaw || item.answer, normalizedKeyword)}
+                      </div>
+                    )}
+                  </button>
+                  <Tooltip content={t('common.copy')}>
+                    <Button
+                      type='text'
+                      size='mini'
+                      className='!w-28px !h-28px !p-0 flex-shrink-0 mt-6px'
+                      aria-label={t('common.copy')}
+                      icon={<Copy theme='outline' size='15' fill={iconColors.secondary} />}
+                      onClick={() => {
+                        void copyText(item.questionRaw || item.question).then(
+                          () => Message.success(t('common.copySuccess')),
+                          () => Message.error(t('common.copyFailed'))
+                        );
+                      }}
+                    />
+                  </Tooltip>
+                </div>
               ))}
             </div>
           </div>
