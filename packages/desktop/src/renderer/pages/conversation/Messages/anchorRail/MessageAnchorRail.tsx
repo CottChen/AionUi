@@ -59,16 +59,21 @@ const tickToneFor = (distance: number): string | undefined => {
  * than compressing. Keyword search stays in the conversation title's panel; the
  * rail only offers a shortcut to it.
  */
-const MessageAnchorRail: React.FC = () => {
+const DesktopMessageAnchorRail: React.FC = () => {
   const { t } = useTranslation();
   const messages = useMessageList();
   const conversationContext = useConversationContextSafe();
-  const isMobile = useLayoutContext()?.isMobile ?? false;
   const conversationId = conversationContext?.conversation_id;
+  const [historyRequestedForConversation, setHistoryRequestedForConversation] = useState<string | undefined>();
 
-  // Covers the whole conversation, not just the pages the chat area has loaded, so
-  // reopening an old conversation shows every turn without scrolling up first.
-  const anchors = useConversationAnchors(conversationId, messages);
+  // The chat area's latest page gives an immediately useful rail. Reading the
+  // complete history on every conversation switch duplicated the first-page query
+  // and made the visible conversation wait behind an unrelated navigation feature.
+  // Older anchors are loaded only after the user enters the desktop rail.
+  const anchors = useConversationAnchors(conversationId, messages, historyRequestedForConversation === conversationId);
+  const requestFullHistory = useCallback(() => {
+    if (conversationId) setHistoryRequestedForConversation(conversationId);
+  }, [conversationId]);
 
   // A callback ref, not a plain one: the rail is not rendered until a second
   // anchor arrives, so a mount-only effect would run while there is no element to
@@ -209,31 +214,6 @@ const MessageAnchorRail: React.FC = () => {
     [anchors, jumpToAnchor]
   );
 
-  if (isMobile) {
-    if (!conversationId) return null;
-
-    return (
-      <div
-        className={classNames(styles.rail, styles.mobileSearchOnly, 'absolute left-0 top-0 bottom-0 z-20')}
-        data-testid='message-anchor-rail'
-        data-mobile-search-only='true'
-        aria-label={t('messages.anchorRail.label')}
-        role='navigation'
-      >
-        <button
-          type='button'
-          className={classNames(styles.searchButton, styles.mobileSearchButton)}
-          data-testid='message-anchor-rail-search'
-          aria-label={t('messages.anchorRail.searchAria')}
-          title={t('messages.anchorRail.searchAria')}
-          onClick={openSearchPanel}
-        >
-          <IconSearch className={styles.searchIcon} />
-        </button>
-      </div>
-    );
-  }
-
   // A single anchor carries no navigational value — the whole turn is already on
   // screen — so the rail stays hidden until there is somewhere to jump to.
   if (anchors.length < 2) return null;
@@ -272,6 +252,7 @@ const MessageAnchorRail: React.FC = () => {
         style={{ top: stackTop, height: viewportHeight }}
         data-testid='message-anchor-rail-zone'
         data-scrollable={scrollable ? 'true' : undefined}
+        onPointerEnter={requestFullHistory}
         onScroll={handleScroll}
         onPointerMove={handlePointerMove}
         onPointerLeave={() => {
@@ -374,6 +355,42 @@ const MessageAnchorRail: React.FC = () => {
       )}
     </div>
   );
+};
+
+const MobileMessageAnchorRail: React.FC<{ conversationId: string }> = ({ conversationId }) => {
+  const { t } = useTranslation();
+  const openSearchPanel = useCallback(() => {
+    dispatchChatSearchPanelOpen({ conversation_id: conversationId });
+  }, [conversationId]);
+
+  return (
+    <div
+      className={classNames(styles.rail, styles.mobileSearchOnly, 'absolute left-0 top-0 bottom-0 z-20')}
+      data-testid='message-anchor-rail'
+      data-mobile-search-only='true'
+      aria-label={t('messages.anchorRail.label')}
+      role='navigation'
+    >
+      <button
+        type='button'
+        className={classNames(styles.searchButton, styles.mobileSearchButton)}
+        data-testid='message-anchor-rail-search'
+        aria-label={t('messages.anchorRail.searchAria')}
+        title={t('messages.anchorRail.searchAria')}
+        onClick={openSearchPanel}
+      >
+        <IconSearch className={styles.searchIcon} />
+      </button>
+    </div>
+  );
+};
+
+const MessageAnchorRail: React.FC = () => {
+  const conversationId = useConversationContextSafe()?.conversation_id;
+  const isMobile = useLayoutContext()?.isMobile ?? false;
+
+  if (!conversationId) return null;
+  return isMobile ? <MobileMessageAnchorRail conversationId={conversationId} /> : <DesktopMessageAnchorRail />;
 };
 
 export default MessageAnchorRail;

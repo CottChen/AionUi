@@ -73,22 +73,20 @@ describe('useConversationAnchors', () => {
     railMocks.messages = [];
   });
 
-  it('covers the whole history even when the chat area has only paged in the tail', async () => {
-    // The regression this exists for: reopening an old conversation used to show a
-    // rail with only the newest page's turns, so earlier ones had no tick at all.
+  it('uses the already-loaded chat page until complete history is requested', () => {
     loadAllConversationMessagesPaged.mockResolvedValue(history(40));
     const paged = history(40).slice(-4); // chat area holds the last 2 turns
 
-    const { result } = renderHook(() => useConversationAnchors('c1', paged));
+    const { result } = renderHook(() => useConversationAnchors('c1', paged, false));
 
-    await waitFor(() => expect(result.current).toHaveLength(40));
-    expect(result.current[0]?.question).toContain('question 1');
-    expect(result.current[39]?.question).toContain('question 40');
+    expect(result.current).toHaveLength(2);
+    expect(result.current[0]?.question).toContain('question 39');
+    expect(loadAllConversationMessagesPaged).not.toHaveBeenCalled();
   });
 
-  it('reads previews rather than whole message bodies', async () => {
+  it('reads compact previews only after complete history is requested', async () => {
     loadAllConversationMessagesPaged.mockResolvedValue(history(3));
-    renderHook(() => useConversationAnchors('c1', []));
+    renderHook(() => useConversationAnchors('c1', [], true));
 
     await waitFor(() => expect(loadAllConversationMessagesPaged).toHaveBeenCalled());
     expect(loadAllConversationMessagesPaged).toHaveBeenCalledWith('c1', { contentMode: 'compact' });
@@ -96,14 +94,17 @@ describe('useConversationAnchors', () => {
 
   it('lets newly sent messages extend the rail without re-reading history', async () => {
     loadAllConversationMessagesPaged.mockResolvedValue(history(5));
-    const { result, rerender } = renderHook(({ live }) => useConversationAnchors('c1', live), {
-      initialProps: { live: history(5) },
-    });
+    const { result, rerender } = renderHook(
+      ({ live, loadFullHistory }) => useConversationAnchors('c1', live, loadFullHistory),
+      {
+        initialProps: { live: history(5), loadFullHistory: true },
+      }
+    );
 
     await waitFor(() => expect(result.current).toHaveLength(5));
 
     // A new turn arrives in memory; the rail must grow immediately.
-    rerender({ live: history(6) });
+    rerender({ live: history(6), loadFullHistory: true });
     await waitFor(() => expect(result.current).toHaveLength(6));
     expect(loadAllConversationMessagesPaged).toHaveBeenCalledTimes(1);
   });
@@ -113,7 +114,7 @@ describe('useConversationAnchors', () => {
       Promise.resolve(id === 'c1' ? history(30) : history(2))
     );
 
-    const { result, rerender } = renderHook(({ id }) => useConversationAnchors(id, []), {
+    const { result, rerender } = renderHook(({ id }) => useConversationAnchors(id, [], true), {
       initialProps: { id: 'c1' },
     });
     await waitFor(() => expect(result.current).toHaveLength(30));
@@ -130,7 +131,7 @@ describe('useConversationAnchors', () => {
       return Promise.resolve(history(3));
     });
 
-    const { result, rerender } = renderHook(({ id }) => useConversationAnchors(id, []), {
+    const { result, rerender } = renderHook(({ id }) => useConversationAnchors(id, [], true), {
       initialProps: { id: 'c1' },
     });
     rerender({ id: 'c2' });
@@ -146,14 +147,14 @@ describe('useConversationAnchors', () => {
   it('falls back to the in-memory list when the history read fails', async () => {
     loadAllConversationMessagesPaged.mockRejectedValue(new Error('offline'));
 
-    const { result } = renderHook(() => useConversationAnchors('c1', history(2)));
+    const { result } = renderHook(() => useConversationAnchors('c1', history(2), true));
 
     // Degrades to whatever the chat area has, rather than rendering nothing.
     await waitFor(() => expect(result.current).toHaveLength(2));
   });
 
   it('renders no ticks without a conversation', () => {
-    const { result } = renderHook(() => useConversationAnchors(undefined, []));
+    const { result } = renderHook(() => useConversationAnchors(undefined, [], false));
     expect(result.current).toEqual([]);
     expect(loadAllConversationMessagesPaged).not.toHaveBeenCalled();
   });
@@ -173,6 +174,7 @@ describe('MessageAnchorRail on mobile', () => {
     expect(screen.getByTestId('message-anchor-rail-search')).toBeVisible();
     expect(screen.queryAllByTestId('message-anchor-tick')).toHaveLength(0);
     expect(screen.queryByTestId('message-anchor-preview')).not.toBeInTheDocument();
+    expect(loadAllConversationMessagesPaged).not.toHaveBeenCalled();
   });
 
   it('opens the searchable prompt list for the current conversation', () => {
@@ -185,5 +187,26 @@ describe('MessageAnchorRail on mobile', () => {
 
     expect(handler).toHaveBeenCalledOnce();
     expect((handler.mock.calls[0][0] as CustomEvent).detail).toEqual({ conversation_id: 'c1' });
+  });
+});
+
+describe('MessageAnchorRail on desktop', () => {
+  beforeEach(() => {
+    loadAllConversationMessagesPaged.mockResolvedValue(history(5));
+    railMocks.isMobile = false;
+    railMocks.messages = history(3);
+  });
+
+  it('defers the full-history request until the user enters the navigation rail', async () => {
+    render(<MessageAnchorRail />);
+
+    const railZone = screen.getByTestId('message-anchor-rail-zone');
+    expect(loadAllConversationMessagesPaged).not.toHaveBeenCalled();
+
+    fireEvent.pointerEnter(railZone);
+
+    await waitFor(() => {
+      expect(loadAllConversationMessagesPaged).toHaveBeenCalledWith('c1', { contentMode: 'compact' });
+    });
   });
 });

@@ -26,7 +26,8 @@ import { buildMessageAnchors, type MessageAnchorItem } from './anchors';
  */
 export const useConversationAnchors = (
   conversationId: string | undefined,
-  liveMessages: TMessage[]
+  liveMessages: TMessage[],
+  loadFullHistory: boolean
 ): MessageAnchorItem[] => {
   const [historyAnchors, setHistoryAnchors] = useState<MessageAnchorItem[]>([]);
   // Guards against a stale conversation's response landing after a switch.
@@ -34,7 +35,7 @@ export const useConversationAnchors = (
 
   useEffect(() => {
     requestedIdRef.current = conversationId;
-    if (!conversationId) {
+    if (!conversationId || !loadFullHistory) {
       setHistoryAnchors([]);
       return;
     }
@@ -61,7 +62,7 @@ export const useConversationAnchors = (
     return () => {
       cancelled = true;
     };
-  }, [conversationId]);
+  }, [conversationId, loadFullHistory]);
 
   const liveAnchors = useMemo(() => buildMessageAnchors(liveMessages), [liveMessages]);
 
