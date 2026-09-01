@@ -650,7 +650,14 @@
       "placeholder": "جستجوی فایل‌ها بر اساس نام",
       "searching": "در حال جستجو…",
       "empty": "هیچ فایلی مطابقت ندارد",
-      "limitReached": "نمایش {{count}} مورد اول — جستجو را محدود کنید"
+      "limitReached": "{{count}} نتیجه در این صفحه نمایش داده می‌شود؛ {{reason}}",
+      "continue": "ادامه جستجو",
+      "limitReason": {
+        "resultLimit": "به حد نتایج رسیدید",
+        "scanLimit": "به حد پیمایش فایل‌ها رسیدید",
+        "contentByteLimit": "به حد خواندن محتوا رسیدید",
+        "fileSizeLimit": "{{count}} فایل بزرگ‌تر از حد مجاز رد شد"
+      }
     },
     "scm": {
       "notARepository": "این پوشه تحت کنترل نسخه نیست",

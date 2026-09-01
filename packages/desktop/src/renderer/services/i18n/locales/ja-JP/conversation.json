@@ -653,7 +653,14 @@
       "placeholder": "ファイル名で検索",
       "searching": "検索中…",
       "empty": "一致するファイルがありません",
-      "limitReached": "最初の {{count}} 件を表示 — 絞り込んでください"
+      "limitReached": "このページには {{count}} 件を表示しています。{{reason}}",
+      "continue": "検索を続ける",
+      "limitReason": {
+        "resultLimit": "結果の上限に達しました",
+        "scanLimit": "ファイル走査の上限に達しました",
+        "contentByteLimit": "内容の読み取り上限に達しました",
+        "fileSizeLimit": "ファイルごとのサイズ上限を超えた {{count}} 件をスキップしました"
+      }
     },
     "scm": {
       "notARepository": "このフォルダーはバージョン管理されていません",

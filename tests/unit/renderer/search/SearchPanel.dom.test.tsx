@@ -21,12 +21,30 @@ import type { SearchView } from '@/renderer/pages/conversation/explorer/search/s
 // Controllable useFileSearch: tests set `hooks.view` before the action that
 // re-renders (typing), and assert `hooks.runSearch` / `hooks.cancel` calls.
 const hooks = vi.hoisted(() => ({
-  view: { query: '', hits: [], status: 'idle', limitReached: false, total: 0, owner: 'panel' } as SearchView,
+  view: {
+    query: '',
+    hits: [],
+    status: 'idle',
+    limitReached: false,
+    limitReasons: [],
+    scannedFiles: 0,
+    searchedContentBytes: 0,
+    skippedLargeFiles: 0,
+    nextCursor: null,
+    total: 0,
+    owner: 'panel',
+  } as SearchView,
   runSearch: vi.fn(),
+  continueSearch: vi.fn(),
   cancel: vi.fn(),
 }));
 vi.mock('@/renderer/pages/conversation/explorer/search/useFileSearch', () => ({
-  useFileSearch: () => ({ view: hooks.view, runSearch: hooks.runSearch, cancel: hooks.cancel }),
+  useFileSearch: () => ({
+    view: hooks.view,
+    runSearch: hooks.runSearch,
+    continueSearch: hooks.continueSearch,
+    cancel: hooks.cancel,
+  }),
 }));
 
 import { SearchPanel } from '@/renderer/pages/conversation/explorer/search/SearchPanel';
@@ -34,7 +52,20 @@ import { SearchPanel } from '@/renderer/pages/conversation/explorer/search/Searc
 const hit = (name: string): SearchHit => ({ pe_id: 'pe1', relative_path: `src/${name}`, name });
 
 const setView = (v: Partial<SearchView>): void => {
-  hooks.view = { query: '', hits: [], status: 'idle', limitReached: false, total: 0, owner: 'panel', ...v };
+  hooks.view = {
+    query: '',
+    hits: [],
+    status: 'idle',
+    limitReached: false,
+    limitReasons: [],
+    scannedFiles: 0,
+    searchedContentBytes: 0,
+    skippedLargeFiles: 0,
+    nextCursor: null,
+    total: 0,
+    owner: 'panel',
+    ...v,
+  };
 };
 
 const renderPanel = (
@@ -62,6 +93,7 @@ const type = (value: string): void => fireEvent.change(screen.getByRole('textbox
 beforeEach(() => {
   setView({});
   hooks.runSearch.mockClear();
+  hooks.continueSearch.mockClear();
   hooks.cancel.mockClear();
 });
 afterEach(() => cleanup());
@@ -181,13 +213,19 @@ describe('SearchPanel', () => {
     expect(screen.queryByLabelText('conversation.explorer.contextMenu.addToChat')).toBeNull();
   });
 
-  it('shows the empty state and the limit-reached hint', () => {
+  it('shows the empty state and a fixed limit-reached hint', () => {
     setView({ hits: [], status: 'done' });
     const { rerender } = renderPanel();
     type('zzz');
     expect(screen.getByText('conversation.explorer.search.empty')).toBeTruthy();
 
-    setView({ hits: [hit('a.tsx')], status: 'done', limitReached: true, total: 200 });
+    setView({
+      hits: [hit('a.tsx')],
+      status: 'done',
+      limitReached: true,
+      limitReasons: ['result_limit'],
+      total: 200,
+    });
     rerender(
       <SearchPanel roots={[{ pe_id: 'pe1', relative_path: '' }]} peNames={{}} onRevealHit={() => {}}>
         <div data-testid='tree'>TREE</div>
@@ -195,6 +233,22 @@ describe('SearchPanel', () => {
     );
     type('a');
     expect(screen.getByText('conversation.explorer.search.limitReached')).toBeTruthy();
+  });
+
+  it('continues from a terminal cursor and replaces the previous page', () => {
+    setView({
+      hits: [hit('a.tsx')],
+      status: 'done',
+      limitReached: true,
+      limitReasons: ['content_byte_limit'],
+      nextCursor: { roots: [{ pe_id: 'pe1', cursor: 'session-token' }] },
+      total: 1,
+    });
+    renderPanel();
+    type('needle');
+
+    fireEvent.click(screen.getByText('conversation.explorer.search.continue'));
+    expect(hooks.continueSearch).toHaveBeenCalledOnce();
   });
 
   it('shows a visible error when panel search fails', () => {

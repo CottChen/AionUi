@@ -653,7 +653,14 @@
       "placeholder": "依檔名搜尋",
       "searching": "搜尋中…",
       "empty": "沒有符合的檔案",
-      "limitReached": "僅顯示前 {{count}} 項 — 請縮小範圍"
+      "limitReached": "本頁顯示 {{count}} 項；{{reason}}",
+      "continue": "繼續搜尋",
+      "limitReason": {
+        "resultLimit": "已達到結果上限",
+        "scanLimit": "已達到檔案掃描上限",
+        "contentByteLimit": "已達到內容讀取資源上限",
+        "fileSizeLimit": "已略過 {{count}} 個超過單一檔案大小上限的檔案"
+      }
     },
     "scm": {
       "notARepository": "該資料夾未納入版本控制",

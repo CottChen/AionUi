@@ -655,7 +655,14 @@
       "placeholder": "Dosya adına göre ara",
       "searching": "Aranıyor…",
       "empty": "Eşleşen dosya yok",
-      "limitReached": "İlk {{count}} gösteriliyor — daraltın"
+      "limitReached": "Bu sayfada {{count}} sonuç gösteriliyor; {{reason}}",
+      "continue": "Aramaya devam et",
+      "limitReason": {
+        "resultLimit": "sonuç sınırına ulaşıldı",
+        "scanLimit": "dosya tarama sınırına ulaşıldı",
+        "contentByteLimit": "içerik okuma bütçesine ulaşıldı",
+        "fileSizeLimit": "dosya boyutu sınırını aşan {{count}} dosya atlandı"
+      }
     },
     "scm": {
       "notARepository": "Bu klasör sürüm denetiminde değil",

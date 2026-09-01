@@ -651,7 +651,14 @@
       "placeholder": "Dateien nach Name suchen",
       "searching": "Suche läuft…",
       "empty": "Keine passenden Dateien",
-      "limitReached": "Erste {{count}} werden angezeigt — eingrenzen"
+      "limitReached": "Diese Seite zeigt {{count}} Ergebnisse; {{reason}}",
+      "continue": "Suche fortsetzen",
+      "limitReason": {
+        "resultLimit": "das Ergebnislimit wurde erreicht",
+        "scanLimit": "das Dateisuchlimit wurde erreicht",
+        "contentByteLimit": "das Inhaltsleselimit wurde erreicht",
+        "fileSizeLimit": "{{count}} Datei(en) über dem Größenlimit wurden übersprungen"
+      }
     },
     "scm": {
       "notARepository": "Dieser Ordner steht nicht unter Versionskontrolle",

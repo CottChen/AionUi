@@ -5,6 +5,7 @@ import type { SearchHit } from '@/renderer/pages/conversation/explorer/search/se
 import {
   applySearchMatch,
   cancelSearch,
+  continueSearch,
   configureSearchStore,
   getSearchSnapshot,
   resetSearchStoreForTest,
@@ -75,6 +76,30 @@ describe('searchStore lifecycle', () => {
     // must not mutate the finished result set.
     applySearchMatch({ search_id: calls[0].id, matches: [hit('late.tsx')] });
     expect(getSearchSnapshot().hits.map((h) => h.name)).toEqual(['btn.tsx']);
+  });
+
+  it('continues from the backend cursor and discards the prior page', async () => {
+    const { port, calls } = makePort();
+    configureSearchStore(port);
+    startSearch(OWNER, ROOTS, 'needle', 'content');
+    applySearchMatch({ search_id: calls[0].id, matches: [hit('first.txt')] });
+    calls[0].resolve({
+      limit_reached: true,
+      total: 1,
+      limit_reasons: ['content_byte_limit'],
+      next_cursor: { roots: [{ pe_id: 'pe1', cursor: 'session-token' }] },
+    });
+    await Promise.resolve();
+
+    continueSearch(OWNER);
+    expect(calls[1].params).toEqual({
+      roots: ROOTS,
+      query: 'needle',
+      mode: 'content',
+      limit: undefined,
+      cursor: { roots: [{ pe_id: 'pe1', cursor: 'session-token' }] },
+    });
+    expect(getSearchSnapshot()).toMatchObject({ status: 'searching', hits: [] });
   });
 
   it('de-dups a hit that repeats across batches', () => {

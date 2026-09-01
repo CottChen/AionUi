@@ -653,7 +653,14 @@
       "placeholder": "파일 이름으로 검색",
       "searching": "검색 중…",
       "empty": "일치하는 파일이 없습니다",
-      "limitReached": "처음 {{count}}개 표시 — 범위를 좁혀 주세요"
+      "limitReached": "이 페이지에는 {{count}}개가 표시됩니다. {{reason}}",
+      "continue": "검색 계속",
+      "limitReason": {
+        "resultLimit": "결과 한도에 도달했습니다",
+        "scanLimit": "파일 검색 한도에 도달했습니다",
+        "contentByteLimit": "내용 읽기 한도에 도달했습니다",
+        "fileSizeLimit": "파일당 크기 한도를 넘는 {{count}}개 파일을 건너뛰었습니다"
+      }
     },
     "scm": {
       "notARepository": "이 폴더는 버전 관리 대상이 아닙니다",

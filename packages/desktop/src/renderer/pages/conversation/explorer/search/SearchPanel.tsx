@@ -75,7 +75,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
     () => (scope === 'folder' && folderTarget ? [folderTarget.ref] : roots),
     [folderTarget, roots, scope]
   );
-  const { view, runSearch, cancel } = useFileSearch(PANEL_SEARCH_OWNER, effectiveRoots, mode);
+  const { view, runSearch, continueSearch, cancel } = useFileSearch(PANEL_SEARCH_OWNER, effectiveRoots, mode);
   const queryRef = useLatestRef(query);
   const modeRef = useLatestRef(mode);
 
@@ -148,6 +148,21 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
   const showEmpty = owned && view.status === 'done' && rows.length === 0;
   const showError = owned && view.status === 'error';
   const contentBlockCount = rows.reduce((sum, hit) => sum + (hit.content_match_count ?? 0), 0);
+  const limitReason = useMemo(() => {
+    const labels = view.limitReasons.map((reason) => {
+      switch (reason) {
+        case 'result_limit':
+          return t('conversation.explorer.search.limitReason.resultLimit');
+        case 'scan_limit':
+          return t('conversation.explorer.search.limitReason.scanLimit');
+        case 'content_byte_limit':
+          return t('conversation.explorer.search.limitReason.contentByteLimit');
+        case 'file_size_limit':
+          return t('conversation.explorer.search.limitReason.fileSizeLimit', { count: view.skippedLargeFiles });
+      }
+    });
+    return labels.join(' · ') || t('conversation.explorer.search.limitReason.resultLimit');
+  }, [t, view.limitReasons, view.skippedLargeFiles]);
 
   return (
     <div className='h-full flex flex-col min-h-0'>
@@ -195,6 +210,22 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
           {scope === 'folder' && folderTarget && (
             <div className='truncate px-2px text-11px text-t-tertiary' title={folderTarget.label}>
               {t('conversation.workspace.searchScope.selectedFolder', { folder: folderTarget.label })}
+            </div>
+          )}
+          {active && owned && view.limitReached && (
+            <div className='flex items-center gap-6px px-2px py-2px text-11px text-t-secondary' role='status'>
+              <span className='min-w-0 flex-1'>
+                {t('conversation.explorer.search.limitReached', {
+                  count: view.total,
+                  reason: limitReason,
+                  scannedFiles: view.scannedFiles,
+                })}
+              </span>
+              {view.nextCursor && (
+                <Button type='text' size='mini' className='flex-shrink-0' onClick={continueSearch}>
+                  {t('conversation.explorer.search.continue')}
+                </Button>
+              )}
             </div>
           )}
         </div>
@@ -286,11 +317,6 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
               )}
             </div>
           ))}
-          {owned && view.limitReached && (
-            <div className='px-8px py-6px text-t-tertiary text-12px'>
-              {t('conversation.explorer.search.limitReached', { count: view.total })}
-            </div>
-          )}
         </div>
       )}
     </div>

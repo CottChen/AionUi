@@ -631,7 +631,14 @@
       "placeholder": "Rechercher des fichiers par nom",
       "searching": "Recherche…",
       "empty": "Aucun fichier correspondant",
-      "limitReached": "Affichage des {{count}} premiers — affinez la recherche"
+      "limitReached": "Cette page affiche {{count}} résultat(s) ; {{reason}}",
+      "continue": "Continuer la recherche",
+      "limitReason": {
+        "resultLimit": "la limite de résultats est atteinte",
+        "scanLimit": "la limite d'analyse des fichiers est atteinte",
+        "contentByteLimit": "la limite de lecture du contenu est atteinte",
+        "fileSizeLimit": "{{count}} fichier(s) dépassant la taille maximale ont été ignorés"
+      }
     },
     "scm": {
       "notARepository": "Ce dossier n'est pas sous gestion de version",

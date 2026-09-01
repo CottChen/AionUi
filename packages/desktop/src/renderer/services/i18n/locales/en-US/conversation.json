@@ -656,7 +656,14 @@
       "searching": "Searching…",
       "empty": "No files match",
       "failed": "Search failed: {{error}}",
-      "limitReached": "Showing first {{count}} — refine to narrow"
+      "limitReached": "This page shows {{count}} result(s); {{reason}}",
+      "continue": "Continue search",
+      "limitReason": {
+        "resultLimit": "the result limit was reached",
+        "scanLimit": "the file scan limit was reached",
+        "contentByteLimit": "the content read budget was reached",
+        "fileSizeLimit": "{{count}} file(s) over the per-file size limit were skipped"
+      }
     },
     "scm": {
       "notARepository": "Not a version-controlled folder",

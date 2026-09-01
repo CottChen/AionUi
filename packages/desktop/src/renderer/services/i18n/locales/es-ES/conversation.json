@@ -651,7 +651,14 @@
       "placeholder": "Buscar archivos por nombre",
       "searching": "Buscando…",
       "empty": "Ningún archivo coincide",
-      "limitReached": "Mostrando los primeros {{count}} — afina la búsqueda"
+      "limitReached": "Esta página muestra {{count}} resultado(s); {{reason}}",
+      "continue": "Continuar búsqueda",
+      "limitReason": {
+        "resultLimit": "se alcanzó el límite de resultados",
+        "scanLimit": "se alcanzó el límite de exploración de archivos",
+        "contentByteLimit": "se alcanzó el límite de lectura de contenido",
+        "fileSizeLimit": "se omitieron {{count}} archivo(s) por superar el límite de tamaño"
+      }
     },
     "scm": {
       "notARepository": "Esta carpeta no está bajo control de versiones",

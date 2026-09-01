@@ -22,7 +22,7 @@ import { useLatestRef } from '@renderer/hooks/ui/useLatestRef';
 
 import type { DirRef } from '../explorerModel';
 import { initExplorerRuntime } from '../monitorTransport';
-import { cancelSearch, type SearchMode, type SearchView, startSearch, useSearch } from './searchStore';
+import { cancelSearch, continueSearch, type SearchMode, type SearchView, startSearch, useSearch } from './searchStore';
 
 /** Debounce for query→fs/search (search.md §触发: front-end debounce). */
 export const FILE_SEARCH_DEBOUNCE_MS = 150;
@@ -31,6 +31,8 @@ export type FileSearch = {
   view: SearchView;
   /** Debounced: issue (or supersede) a search for `query` over the current roots. */
   runSearch: (query: string, options?: { roots?: DirRef[]; mode?: SearchMode }) => void;
+  /** Continue from the backend cursor and replace the previous result page. */
+  continueSearch: () => void;
   /** Cancel the active search now (box closed / query cleared) and reset. */
   cancel: () => void;
 };
@@ -71,9 +73,14 @@ export const useFileSearch = (owner: string, roots: DirRef[], mode: SearchMode =
     cancelSearch(owner); // owner-guarded: only releases if this skin owns the stream
   }, [clearTimer, owner]);
 
+  const continueCurrentSearch = useCallback((): void => {
+    clearTimer();
+    continueSearch(owner);
+  }, [clearTimer, owner]);
+
   // Drop any pending debounce on unmount (do not cancel the shared stream here —
   // another mount of the same surface may own it).
   useEffect(() => clearTimer, [clearTimer]);
 
-  return { view, runSearch, cancel };
+  return { view, runSearch, continueSearch: continueCurrentSearch, cancel };
 };

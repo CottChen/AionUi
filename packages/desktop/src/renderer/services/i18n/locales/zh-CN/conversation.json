@@ -656,7 +656,14 @@
       "searching": "搜索中…",
       "empty": "没有匹配的文件",
       "failed": "搜索失败：{{error}}",
-      "limitReached": "仅显示前 {{count}} 项 — 请缩小范围"
+      "limitReached": "本页显示 {{count}} 项；{{reason}}",
+      "continue": "继续搜索",
+      "limitReason": {
+        "resultLimit": "已达到结果上限",
+        "scanLimit": "已达到文件扫描上限",
+        "contentByteLimit": "已达到内容读取资源上限",
+        "fileSizeLimit": "已跳过 {{count}} 个超过单文件大小上限的文件"
+      }
     },
     "scm": {
       "notARepository": "该文件夹未纳入版本控制",

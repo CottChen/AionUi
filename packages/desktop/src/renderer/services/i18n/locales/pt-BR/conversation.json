@@ -656,7 +656,14 @@
       "placeholder": "Buscar arquivos por nome",
       "searching": "Buscando…",
       "empty": "Nenhum arquivo corresponde",
-      "limitReached": "Mostrando os primeiros {{count}} — refine a busca"
+      "limitReached": "Esta página mostra {{count}} resultado(s); {{reason}}",
+      "continue": "Continuar pesquisa",
+      "limitReason": {
+        "resultLimit": "o limite de resultados foi atingido",
+        "scanLimit": "o limite de varredura de arquivos foi atingido",
+        "contentByteLimit": "o limite de leitura de conteúdo foi atingido",
+        "fileSizeLimit": "{{count}} arquivo(s) acima do limite por arquivo foram ignorados"
+      }
     },
     "scm": {
       "notARepository": "Esta pasta não está sob controle de versão",
