@@ -87,6 +87,23 @@ describe('normalizeToolCall', () => {
     );
   });
 
+  it('preserves Codex imageView paths for grouped tool summaries', () => {
+    const message: IMessageToolCall = {
+      id: 'image-view-1',
+      conversation_id: 'conv-1',
+      type: 'tool_call',
+      content: {
+        call_id: 'image-view-1',
+        name: 'imageView',
+        args: {},
+        status: 'completed',
+        output: '/workspace/.aionui/generated-images/conv-1/image-view-1.png',
+      },
+    };
+
+    expect(normalizeToolCall(message)?.imagePath).toBe('/workspace/.aionui/generated-images/conv-1/image-view-1.png');
+  });
+
   it('does not treat image-looking output from ordinary tools as generated image output', () => {
     const message: IMessageToolCall = {
       id: 'shell-1',

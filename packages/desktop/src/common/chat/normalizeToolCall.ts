@@ -203,7 +203,7 @@ const IMAGE_PATH_EXTENSION_RE = /\.(?:png|jpe?g|webp|gif)$/i;
 
 const getDirectToolImagePath = (name: string, output?: string): string | undefined => {
   const normalizedName = name.replace(/[\s_-]/g, '').toLowerCase();
-  if (!['imagegeneration', 'imagegenerationcall'].includes(normalizedName) || !output) {
+  if (!['imagegeneration', 'imagegenerationcall', 'imageview'].includes(normalizedName) || !output) {
     return undefined;
   }
 
