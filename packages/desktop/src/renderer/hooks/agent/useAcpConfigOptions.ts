@@ -105,6 +105,10 @@ const getRuntimeConfigOptionsKey = (conversation_id: string): AcpConfigOptionsKe
   ['acp-config-options', conversation_id] as const;
 
 export function revalidateAcpConfigOptions(conversation_id: string): Promise<AcpConfigOptionDto[] | null | undefined> {
+  // Drop the process-local snapshot before asking SWR to revalidate. Without
+  // this, the shared fetcher would legitimately return the old conversation
+  // config and a session change would never reach the ACP agent.
+  configOptionsCache.delete(conversation_id);
   return swrMutate(getRuntimeConfigOptionsKey(conversation_id));
 }
 
@@ -139,17 +143,26 @@ const ensureRuntimeConfigOptions: AcpConfigOptionsLoader = async (conversation_i
   (await ensureConversationRuntime(conversation_id)).config_options;
 
 const configOptionsInFlight = new Map<string, Promise<AcpConfigOptionDto[] | null>>();
+const configOptionsCache = new Map<string, AcpConfigOptionDto[] | null>();
 
 function fetchConfigOptionsOnce(
   key: AcpConfigOptionsKey,
-  loadConfigOptions: AcpConfigOptionsLoader
+  loadConfigOptions: AcpConfigOptionsLoader,
+  force = false
 ): Promise<AcpConfigOptionDto[] | null> {
   const [, conversation_id] = key;
+  if (!force && configOptionsCache.has(conversation_id)) {
+    return Promise.resolve(configOptionsCache.get(conversation_id) ?? null);
+  }
   const existing = configOptionsInFlight.get(conversation_id);
   if (existing) return existing;
 
   const promise = loadConfigOptions(conversation_id)
-    .then((options) => options ?? null)
+    .then((options) => {
+      const resolved = options ?? null;
+      configOptionsCache.set(conversation_id, resolved);
+      return resolved;
+    })
     .finally(() => {
       if (configOptionsInFlight.get(conversation_id) === promise) {
         configOptionsInFlight.delete(conversation_id);
@@ -200,10 +213,11 @@ export function useAcpConfigOptions({
 
   const replaceSnapshot = useCallback(
     (next: AcpConfigOptionDto[]) => {
+      configOptionsCache.set(conversation_id, next);
       optionsRef.current = next;
       void mutate(next, false);
     },
-    [mutate]
+    [conversation_id, mutate]
   );
 
   const reload = useCallback(async () => {
