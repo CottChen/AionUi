@@ -6,6 +6,7 @@
 
 import type { TMessage } from '@/common/chat/chatLib';
 import { buildMessageAnchors } from '@/renderer/pages/conversation/Messages/anchorRail/anchors';
+import { parseTurnIndexSearch } from '@/renderer/pages/conversation/components/ConversationTitleMinimap/minimapUtils';
 import { describe, expect, it } from 'vitest';
 
 const textMessage = (
@@ -115,5 +116,18 @@ describe('buildMessageAnchors', () => {
     const anchors = buildMessageAnchors(messages);
     expect(anchors.map((anchor) => anchor.index)).toEqual([1, 2, 3, 4, 5]);
     expect(anchors.map((anchor) => anchor.messageId)).toEqual(['u1', 'u2', 'u3', 'u4', 'u5']);
+  });
+});
+
+describe('parseTurnIndexSearch', () => {
+  it('recognizes the turn number formats accepted by conversation search', () => {
+    expect(parseTurnIndexSearch('#12')).toBe(12);
+    expect(parseTurnIndexSearch('第十二')).toBe(12);
+    expect(parseTurnIndexSearch('二十')).toBe(20);
+  });
+
+  it('leaves ordinary keywords and invalid indexes to text search', () => {
+    expect(parseTurnIndexSearch('第几条')).toBeUndefined();
+    expect(parseTurnIndexSearch('0')).toBeUndefined();
   });
 });

@@ -157,6 +157,37 @@ export const isIndexMatch = (index: number, keyword: string) => {
   return buildIndexSearchTokens(index).some((token) => token.toLowerCase().includes(normalized));
 };
 
+export const parseTurnIndexSearch = (keyword: string): number | undefined => {
+  const arabic = keyword.match(/^(?:#|第)?(\d+)$/);
+  if (arabic) {
+    const value = Number(arabic[1]);
+    return Number.isSafeInteger(value) && value > 0 ? value : undefined;
+  }
+
+  const chinese = keyword.match(/^第?([一二三四五六七八九十]+)$/)?.[1];
+  if (!chinese) return undefined;
+  if (chinese === '十') return 10;
+  const digits: Record<string, number> = {
+    一: 1,
+    二: 2,
+    三: 3,
+    四: 4,
+    五: 5,
+    六: 6,
+    七: 7,
+    八: 8,
+    九: 9,
+  };
+  const [tens, ones] = chinese.split('十');
+  if (ones !== undefined) {
+    const tensValue = tens ? digits[tens] : 1;
+    const onesValue = ones ? digits[ones] : 0;
+    if (tensValue !== undefined && onesValue !== undefined) return tensValue * 10 + onesValue;
+    return undefined;
+  }
+  return digits[chinese];
+};
+
 export const buildTurnPreview = (messages: TMessage[]): TurnPreviewItem[] => {
   const turns: TurnPreviewItem[] = [];
   let turnIndex = 0;

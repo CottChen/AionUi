@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ipcBridge } from '@/common';
 import type { ChatSearchPanelOpenDetail } from '@/renderer/utils/chat/chatMinimapEvents';
 import { CHAT_SEARCH_PANEL_OPEN_EVENT, dispatchChatMessageJump } from '@/renderer/utils/chat/chatMinimapEvents';
-import { loadAllConversationMessagesPaged } from '@/renderer/utils/chat/messagePagination';
 import { isPrimaryApplicationShortcut } from '@/renderer/utils/ui/keyboardShortcuts';
 import type { RefInputType } from '@arco-design/web-react/es/Input/interface';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -21,12 +21,18 @@ import {
   PANEL_OFFSET,
   PANEL_VISIBLE_ITEM_CAP,
 } from './minimapTypes';
-import { buildTurnPreview, getPanelWidth, isIndexMatch, normalizeText, readPopoverVisualStyle } from './minimapUtils';
+import { getPanelWidth, normalizeText, parseTurnIndexSearch, readPopoverVisualStyle } from './minimapUtils';
+
+const TURN_PREVIEW_PAGE_SIZE = 50;
+const SEARCH_DEBOUNCE_MS = 200;
 
 // Return type for the useMinimapPanel hook
 type UseMinimapPanelReturn = {
   visible: boolean;
   loading: boolean;
+  loadingMore: boolean;
+  hasMore: boolean;
+  total: number;
   items: TurnPreviewItem[];
   searchKeyword: string;
   isSearchMode: boolean;
@@ -42,6 +48,8 @@ type UseMinimapPanelReturn = {
   panelHeight: number;
   setSearchKeyword: (keyword: string) => void;
   setActiveResultIndex: React.Dispatch<React.SetStateAction<number>>;
+  loadMore: () => void;
+  loadQuestionText: (item: TurnPreviewItem) => Promise<string>;
   togglePanel: () => void;
   openSearchPanel: () => void;
   jumpToItem: (item?: TurnPreviewItem) => void;
@@ -56,8 +64,12 @@ type UseMinimapPanelReturn = {
 export const useMinimapPanel = (conversation_id?: string): UseMinimapPanelReturn => {
   const [visible, setVisible] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [total, setTotal] = useState(0);
   const [items, setItems] = useState<TurnPreviewItem[]>([]);
   const [searchKeyword, setSearchKeyword] = useState('');
+  const [debouncedKeyword, setDebouncedKeyword] = useState('');
   const [isSearchMode, setIsSearchMode] = useState(false);
   const [activeResultIndex, setActiveResultIndex] = useState(-1);
   const [panelWidth, setPanelWidth] = useState(getPanelWidth);
@@ -69,18 +81,28 @@ export const useMinimapPanel = (conversation_id?: string): UseMinimapPanelReturn
   const isSearchInputComposingRef = useRef(false);
   const pendingCloseAfterCompositionRef = useRef(false);
   const searchKeywordRef = useRef('');
+  const nextCursorRef = useRef<string | undefined>(undefined);
+  const requestGenerationRef = useRef(0);
+  const loadingMoreRef = useRef(false);
 
   // Reset on conversation switch
   useEffect(() => {
     setVisible(false);
     setLoading(false);
+    setLoadingMore(false);
+    setHasMore(false);
+    setTotal(0);
     setItems([]);
     setSearchKeyword('');
+    setDebouncedKeyword('');
     searchKeywordRef.current = '';
     setIsSearchMode(false);
     setActiveResultIndex(-1);
     isSearchInputComposingRef.current = false;
     pendingCloseAfterCompositionRef.current = false;
+    nextCursorRef.current = undefined;
+    loadingMoreRef.current = false;
+    requestGenerationRef.current += 1;
   }, [conversation_id]);
 
   // Sync searchKeyword to ref
@@ -104,37 +126,130 @@ export const useMinimapPanel = (conversation_id?: string): UseMinimapPanelReturn
     };
   }, []);
 
-  // Fetch data
-  const fetchTurnPreview = useCallback(async () => {
-    if (!conversation_id) {
-      setItems([]);
-      return;
-    }
+  useEffect(() => {
+    if (!visible) return;
+    const timer = window.setTimeout(() => {
+      setDebouncedKeyword(normalizeText(searchKeyword));
+    }, SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [searchKeyword, visible]);
+
+  const mapPreview = useCallback(
+    (item: {
+      index: number;
+      message_id: string;
+      msg_id?: string;
+      question: string;
+      answer: string;
+    }): TurnPreviewItem => ({
+      index: item.index,
+      question: item.question,
+      answer: item.answer,
+      questionRaw: normalizeText(item.question),
+      answerRaw: normalizeText(item.answer),
+      messageId: item.message_id,
+      msgId: item.msg_id,
+    }),
+    []
+  );
+  const requestedTurnIndex = useMemo(() => parseTurnIndexSearch(debouncedKeyword), [debouncedKeyword]);
+
+  useEffect(() => {
+    if (!visible || !conversation_id) return;
+
+    const generation = requestGenerationRef.current + 1;
+    requestGenerationRef.current = generation;
+    loadingMoreRef.current = false;
     setLoading(true);
-    try {
-      const messages = await loadAllConversationMessagesPaged(conversation_id);
-      setItems(buildTurnPreview(messages));
-    } catch (error) {
-      console.error('[ConversationTitleMinimap] Failed to load conversation messages:', error);
-      setItems([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [conversation_id]);
+    setLoadingMore(false);
+    setItems([]);
+    setHasMore(false);
+    nextCursorRef.current = undefined;
 
-  // Derived values
-  const normalizedKeyword = useMemo(() => normalizeText(searchKeyword).toLowerCase(), [searchKeyword]);
+    void ipcBridge.database.getConversationTurnPreviews
+      .invoke({
+        conversation_id,
+        limit: TURN_PREVIEW_PAGE_SIZE,
+        ...(debouncedKeyword ? { keyword: debouncedKeyword } : {}),
+        ...(requestedTurnIndex ? { turn_index: requestedTurnIndex } : {}),
+      })
+      .then((page) => {
+        if (requestGenerationRef.current !== generation) return;
+        setItems(page.items.map(mapPreview));
+        setTotal(page.total);
+        setHasMore(page.has_more);
+        nextCursorRef.current = page.next_cursor ?? undefined;
+      })
+      .catch((error) => {
+        if (requestGenerationRef.current !== generation) return;
+        console.error('[ConversationTitleMinimap] Failed to load turn previews:', error);
+        setItems([]);
+        setTotal(0);
+        setHasMore(false);
+        nextCursorRef.current = undefined;
+      })
+      .finally(() => {
+        if (requestGenerationRef.current === generation) setLoading(false);
+      });
 
-  const filteredItems = useMemo(() => {
-    if (!normalizedKeyword) return items;
-    return items.filter((item) => {
-      return (
-        item.questionRaw.toLowerCase().includes(normalizedKeyword) ||
-        item.answerRaw.toLowerCase().includes(normalizedKeyword) ||
-        isIndexMatch(item.index, normalizedKeyword)
-      );
-    });
-  }, [items, normalizedKeyword]);
+    return () => {
+      if (requestGenerationRef.current === generation) requestGenerationRef.current += 1;
+    };
+  }, [conversation_id, debouncedKeyword, mapPreview, requestedTurnIndex, visible]);
+
+  const loadMore = useCallback(() => {
+    const after = nextCursorRef.current;
+    if (!visible || !conversation_id || !hasMore || !after || loading || loadingMoreRef.current) return;
+
+    const generation = requestGenerationRef.current;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    void ipcBridge.database.getConversationTurnPreviews
+      .invoke({
+        conversation_id,
+        limit: TURN_PREVIEW_PAGE_SIZE,
+        after,
+        ...(debouncedKeyword ? { keyword: debouncedKeyword } : {}),
+        ...(requestedTurnIndex ? { turn_index: requestedTurnIndex } : {}),
+      })
+      .then((page) => {
+        if (requestGenerationRef.current !== generation) return;
+        setItems((current) => {
+          const known = new Set(current.map((item) => item.messageId));
+          return [...current, ...page.items.filter((item) => !known.has(item.message_id)).map(mapPreview)];
+        });
+        setTotal(page.total);
+        setHasMore(page.has_more);
+        nextCursorRef.current = page.next_cursor ?? undefined;
+      })
+      .catch((error) => {
+        if (requestGenerationRef.current !== generation) return;
+        console.error('[ConversationTitleMinimap] Failed to load more turn previews:', error);
+      })
+      .finally(() => {
+        if (requestGenerationRef.current !== generation) return;
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
+      });
+  }, [conversation_id, debouncedKeyword, hasMore, loading, mapPreview, requestedTurnIndex, visible]);
+
+  const loadQuestionText = useCallback(
+    async (item: TurnPreviewItem) => {
+      if (!conversation_id || !item.messageId) throw new Error('Conversation message is unavailable');
+      const message = await ipcBridge.database.getConversationMessage.invoke({
+        conversation_id,
+        message_id: item.messageId,
+      });
+      if (message.type !== 'text' || typeof message.content?.content !== 'string') {
+        throw new Error('Conversation message is not text');
+      }
+      return message.content.content;
+    },
+    [conversation_id]
+  );
+
+  const normalizedKeyword = useMemo(() => debouncedKeyword.toLowerCase(), [debouncedKeyword]);
+  const filteredItems = items;
 
   const panelHeight = useMemo(() => {
     if (loading) return PANEL_MIN_HEIGHT;
@@ -180,8 +295,7 @@ export const useMinimapPanel = (conversation_id?: string): UseMinimapPanelReturn
     setVisualStyle(readPopoverVisualStyle());
     setVisible(true);
     setIsSearchMode(true);
-    void fetchTurnPreview();
-  }, [conversation_id, fetchTurnPreview, panelHeight, updatePanelLayout]);
+  }, [conversation_id, panelHeight, updatePanelLayout]);
 
   const togglePanel = useCallback(() => {
     setVisible((prev) => {
@@ -189,13 +303,12 @@ export const useMinimapPanel = (conversation_id?: string): UseMinimapPanelReturn
       if (next) {
         updatePanelLayout(panelHeight);
         setVisualStyle(readPopoverVisualStyle());
-        void fetchTurnPreview();
       } else {
         setIsSearchMode(false);
       }
       return next;
     });
-  }, [fetchTurnPreview, panelHeight, updatePanelLayout]);
+  }, [panelHeight, updatePanelLayout]);
 
   const collapseSearchModeIfIdle = useCallback(() => {
     if (isSearchInputComposingRef.current) return;
@@ -325,16 +438,6 @@ export const useMinimapPanel = (conversation_id?: string): UseMinimapPanelReturn
     });
   }, [filteredItems.length, isSearchMode, loading, visible]);
 
-  // Scroll active result into view
-  useEffect(() => {
-    if (!visible || !isSearchMode) return;
-    if (activeResultIndex < 0 || !filteredItems.length) return;
-    const currentItem = panelRef.current?.querySelector<HTMLButtonElement>(
-      `[data-minimap-item-index="${activeResultIndex}"]`
-    );
-    currentItem?.scrollIntoView({ block: 'nearest' });
-  }, [activeResultIndex, filteredItems.length, isSearchMode, visible]);
-
   // Jump to item
   const jumpToItem = useCallback(
     (item?: TurnPreviewItem) => {
@@ -389,6 +492,9 @@ export const useMinimapPanel = (conversation_id?: string): UseMinimapPanelReturn
   return {
     visible,
     loading,
+    loadingMore,
+    hasMore,
+    total,
     items,
     searchKeyword,
     isSearchMode,
@@ -404,6 +510,8 @@ export const useMinimapPanel = (conversation_id?: string): UseMinimapPanelReturn
     panelHeight,
     setSearchKeyword,
     setActiveResultIndex,
+    loadMore,
+    loadQuestionText,
     togglePanel,
     openSearchPanel,
     jumpToItem,

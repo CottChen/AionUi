@@ -1281,6 +1281,22 @@ export type GetConversationMessagesParams = {
   content_mode?: 'compact' | 'full';
 };
 
+export type ConversationTurnPreview = {
+  index: number;
+  message_id: string;
+  msg_id?: string;
+  question: string;
+  answer: string;
+  created_at: number;
+};
+
+export type ConversationTurnPreviewPage = {
+  items: ConversationTurnPreview[];
+  total: number;
+  next_cursor: string | null;
+  has_more: boolean;
+};
+
 export const database = {
   getConversationMessages: httpGet<
     MessageCursorPage<import('@/common/chat/chatLib').TMessage>,
@@ -1299,6 +1315,18 @@ export const database = {
     import('@/common/chat/chatLib').TMessage,
     { conversation_id: string; message_id: string }
   >((p) => `/api/conversations/${p.conversation_id}/messages/${encodeURIComponent(p.message_id)}`),
+  getConversationTurnPreviews: httpGet<
+    ConversationTurnPreviewPage,
+    { conversation_id: string; limit?: number; after?: string; keyword?: string; turn_index?: number }
+  >((p) => {
+    const params = new URLSearchParams();
+    if (p.limit !== undefined) params.set('limit', String(p.limit));
+    if (p.after) params.set('after', p.after);
+    if (p.keyword) params.set('keyword', p.keyword);
+    if (p.turn_index !== undefined) params.set('turn_index', String(p.turn_index));
+    const qs = params.toString();
+    return `/api/conversations/${p.conversation_id}/turn-previews${qs ? `?${qs}` : ''}`;
+  }),
   getUserConversations: withResponseMap(
     httpGet<PaginatedResult<import('@/common/config/storage').TChatConversation>, { cursor?: string; limit?: number }>(
       (p) => {

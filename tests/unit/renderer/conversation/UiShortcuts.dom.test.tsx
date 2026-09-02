@@ -1,4 +1,4 @@
-import { act, cleanup, render, renderHook, screen } from '@testing-library/react';
+import { act, cleanup, render, renderHook, screen, waitFor } from '@testing-library/react';
 import type { NavigateFunction } from 'react-router-dom';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -12,6 +12,8 @@ const testState = vi.hoisted(() => ({
 const serviceMocks = vi.hoisted(() => ({
   loadMessages: vi.fn(() => new Promise<never>(() => {})),
   searchMessages: vi.fn().mockResolvedValue({ items: [], has_more: false }),
+  turnPreviews: vi.fn(() => new Promise<never>(() => {})),
+  getMessage: vi.fn(() => new Promise<never>(() => {})),
 }));
 
 vi.mock('react-router-dom', () => ({
@@ -40,6 +42,8 @@ vi.mock('@/common', () => ({
   ipcBridge: {
     database: {
       searchConversationMessages: { invoke: serviceMocks.searchMessages },
+      getConversationTurnPreviews: { invoke: serviceMocks.turnPreviews },
+      getConversationMessage: { invoke: serviceMocks.getMessage },
     },
   },
 }));
@@ -69,6 +73,14 @@ const dispatchShortcut = (target: EventTarget, init: KeyboardEventInit): Keyboar
     target.dispatchEvent(event);
   });
   return event;
+};
+
+const deferred = <T,>() => {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((next) => {
+    resolve = next;
+  });
+  return { promise, resolve };
 };
 
 const renderConversationShortcuts = ({
@@ -404,6 +416,10 @@ describe('existing conversation search shortcuts', () => {
       configurable: true,
       value: globalThis.electronAPI,
     });
+    serviceMocks.turnPreviews.mockReset();
+    serviceMocks.turnPreviews.mockImplementation(() => new Promise<never>(() => {}));
+    serviceMocks.getMessage.mockReset();
+    serviceMocks.getMessage.mockImplementation(() => new Promise<never>(() => {}));
   });
 
   afterEach(() => {
@@ -419,6 +435,104 @@ describe('existing conversation search shortcuts', () => {
 
     expect(result.current.visible).toBe(true);
     expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('loads one lightweight turn page and appends the next cursor page on demand', async () => {
+    serviceMocks.turnPreviews
+      .mockResolvedValueOnce({
+        items: [
+          {
+            index: 1,
+            message_id: 'message-1',
+            question: 'question 1',
+            answer: 'answer 1',
+            created_at: 1,
+          },
+        ],
+        total: 2,
+        next_cursor: 'cursor-1',
+        has_more: true,
+      })
+      .mockResolvedValueOnce({
+        items: [
+          {
+            index: 2,
+            message_id: 'message-2',
+            question: 'question 2',
+            answer: 'answer 2',
+            created_at: 2,
+          },
+        ],
+        total: 2,
+        next_cursor: null,
+        has_more: false,
+      });
+    const { result } = renderHook(() => useMinimapPanel('conversation-1'));
+
+    act(() => result.current.openSearchPanel());
+    await waitFor(() => expect(result.current.items).toHaveLength(1));
+    expect(serviceMocks.turnPreviews).toHaveBeenNthCalledWith(1, {
+      conversation_id: 'conversation-1',
+      limit: 50,
+    });
+
+    act(() => result.current.loadMore());
+    await waitFor(() => expect(result.current.items).toHaveLength(2));
+    expect(serviceMocks.turnPreviews).toHaveBeenNthCalledWith(2, {
+      conversation_id: 'conversation-1',
+      limit: 50,
+      after: 'cursor-1',
+    });
+  });
+
+  it('keeps a late stale search response from replacing the latest keyword results', async () => {
+    const initial = deferred<unknown>();
+    const latest = deferred<unknown>();
+    serviceMocks.turnPreviews
+      .mockImplementationOnce(() => initial.promise)
+      .mockImplementationOnce(() => latest.promise);
+    const { result } = renderHook(() => useMinimapPanel('conversation-1'));
+
+    act(() => result.current.openSearchPanel());
+    act(() => result.current.setSearchKeyword('latest'));
+    await waitFor(() => expect(serviceMocks.turnPreviews).toHaveBeenCalledTimes(2));
+
+    await act(async () => {
+      latest.resolve({
+        items: [
+          {
+            index: 2,
+            message_id: 'latest-message',
+            question: 'latest result',
+            answer: '',
+            created_at: 2,
+          },
+        ],
+        total: 2,
+        next_cursor: null,
+        has_more: false,
+      });
+      await Promise.resolve();
+    });
+    await act(async () => {
+      initial.resolve({
+        items: [
+          {
+            index: 1,
+            message_id: 'stale-message',
+            question: 'stale result',
+            answer: '',
+            created_at: 1,
+          },
+        ],
+        total: 2,
+        next_cursor: null,
+        has_more: false,
+      });
+      await Promise.resolve();
+    });
+
+    expect(result.current.items[0]?.messageId).toBe('latest-message');
   });
 
   it('leaves Ctrl+F untouched on macOS', () => {

@@ -8,9 +8,10 @@ import { Button, Empty, Input, Message, Spin, Tooltip } from '@arco-design/web-r
 import { IconSearch } from '@arco-design/web-react/icon';
 import { Copy } from '@icon-park/react';
 import classNames from 'classnames';
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import { iconColors } from '@/renderer/styles/colors';
 import { copyText } from '@/renderer/utils/ui/clipboard';
 import styles from './ConversationTitleMinimap.module.css';
@@ -27,6 +28,9 @@ const ConversationTitleMinimap: React.FC<ConversationTitleMinimapProps> = ({
   const {
     visible,
     loading,
+    loadingMore,
+    hasMore,
+    total,
     items,
     searchKeyword,
     isSearchMode,
@@ -42,6 +46,8 @@ const ConversationTitleMinimap: React.FC<ConversationTitleMinimapProps> = ({
     panelHeight,
     setSearchKeyword,
     setActiveResultIndex,
+    loadMore,
+    loadQuestionText,
     togglePanel,
     openSearchPanel,
     jumpToItem,
@@ -49,6 +55,12 @@ const ConversationTitleMinimap: React.FC<ConversationTitleMinimapProps> = ({
     handleSearchInputCompositionStart,
     handleSearchInputCompositionEnd,
   } = useMinimapPanel(conversation_id);
+  const listRef = useRef<VirtuosoHandle>(null);
+
+  useEffect(() => {
+    if (!visible || !isSearchMode || activeResultIndex < 0) return;
+    listRef.current?.scrollToIndex({ index: activeResultIndex, align: 'center', behavior: 'auto' });
+  }, [activeResultIndex, isSearchMode, visible]);
 
   const contentNode = useMemo(() => {
     const frameStyle: React.CSSProperties = {
@@ -75,8 +87,8 @@ const ConversationTitleMinimap: React.FC<ConversationTitleMinimapProps> = ({
         }}
       >
         {normalizedKeyword
-          ? `${filteredItems.length}/${items.length}`
-          : t('conversation.minimap.count', { count: items.length })}
+          ? `${filteredItems.length}${hasMore ? '+' : ''}/${total}`
+          : t('conversation.minimap.count', { count: total })}
       </span>
     );
 
@@ -134,7 +146,9 @@ const ConversationTitleMinimap: React.FC<ConversationTitleMinimapProps> = ({
         <div className='conversation-minimap-panel' style={frameStyle}>
           {titleNode}
           <div className='flex-center p-12px box-border' style={{ height: `calc(100% - ${HEADER_HEIGHT}px)` }}>
-            <Empty description={t('conversation.minimap.empty')} />
+            <Empty
+              description={normalizedKeyword ? t('conversation.minimap.noMatch') : t('conversation.minimap.empty')}
+            />
           </div>
         </div>
       );
@@ -158,12 +172,22 @@ const ConversationTitleMinimap: React.FC<ConversationTitleMinimapProps> = ({
           className='conversation-minimap-body-shell box-border'
           style={{ height: `calc(100% - ${HEADER_HEIGHT}px)`, padding: '10px 12px 12px' }}
         >
-          <div
-            className='conversation-minimap-body h-full overflow-y-auto overflow-x-hidden box-border'
+          <Virtuoso
+            ref={listRef}
+            className='conversation-minimap-body h-full overflow-x-hidden box-border'
             style={{ paddingRight: '14px', scrollbarGutter: 'stable' }}
-          >
-            <div className='conversation-minimap-list flex flex-col gap-6px'>
-              {filteredItems.map((item, idx) => (
+            data={filteredItems}
+            endReached={loadMore}
+            components={{
+              Footer: () =>
+                loadingMore ? (
+                  <div className='flex-center h-32px'>
+                    <Spin size={14} />
+                  </div>
+                ) : null,
+            }}
+            itemContent={(idx, item) => (
+              <div style={{ paddingBottom: '6px' }}>
                 <div
                   key={`${item.index}-${item.messageId || item.msgId || 'unknown'}`}
                   className='flex items-start gap-4px min-w-0'
@@ -217,32 +241,39 @@ const ConversationTitleMinimap: React.FC<ConversationTitleMinimapProps> = ({
                       aria-label={t('common.copy')}
                       icon={<Copy theme='outline' size='15' fill={iconColors.secondary} />}
                       onClick={() => {
-                        void copyText(item.questionRaw || item.question).then(
-                          () => Message.success(t('common.copySuccess')),
-                          () => Message.error(t('common.copyFailed'))
-                        );
+                        void loadQuestionText(item)
+                          .then((text) => copyText(text))
+                          .then(
+                            () => Message.success(t('common.copySuccess')),
+                            () => Message.error(t('common.copyFailed'))
+                          );
                       }}
                     />
                   </Tooltip>
                 </div>
-              ))}
-            </div>
-          </div>
+              </div>
+            )}
+          />
         </div>
       </div>
     );
   }, [
     activeResultIndex,
     filteredItems,
+    hasMore,
     isSearchMode,
     items.length,
     jumpToItem,
+    loadMore,
+    loadQuestionText,
     loading,
+    loadingMore,
     normalizedKeyword,
     panelHeight,
     panelWidth,
     searchKeyword,
     t,
+    total,
     visualStyle.borderColor,
     visualStyle.border,
     visualStyle.borderRadius,

@@ -8,13 +8,31 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { copyTextMock, jumpToItemMock, messageErrorMock, messageSuccessMock, useMinimapPanelMock } = vi.hoisted(() => ({
+const {
+  copyTextMock,
+  jumpToItemMock,
+  loadQuestionTextMock,
+  messageErrorMock,
+  messageSuccessMock,
+  useMinimapPanelMock,
+} = vi.hoisted(() => ({
   copyTextMock: vi.fn(),
   jumpToItemMock: vi.fn(),
+  loadQuestionTextMock: vi.fn(),
   messageErrorMock: vi.fn(),
   messageSuccessMock: vi.fn(),
   useMinimapPanelMock: vi.fn(),
 }));
+
+vi.mock('react-virtuoso', async () => {
+  const ReactModule = await import('react');
+  return {
+    Virtuoso: ReactModule.forwardRef<
+      unknown,
+      { data: unknown[]; itemContent: (index: number, item: unknown) => unknown }
+    >(({ data, itemContent }, _ref) => <div>{data.map((item, index) => itemContent(index, item))}</div>),
+  };
+});
 
 vi.mock('@arco-design/web-react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@arco-design/web-react')>();
@@ -47,11 +65,16 @@ describe('ConversationTitleMinimap', () => {
     copyTextMock.mockReset();
     copyTextMock.mockResolvedValue(undefined);
     jumpToItemMock.mockReset();
+    loadQuestionTextMock.mockReset();
+    loadQuestionTextMock.mockResolvedValue('complete user question');
     messageErrorMock.mockReset();
     messageSuccessMock.mockReset();
     useMinimapPanelMock.mockReturnValue({
       visible: true,
       loading: false,
+      loadingMore: false,
+      hasMore: false,
+      total: 1,
       items: [
         {
           index: 1,
@@ -93,6 +116,8 @@ describe('ConversationTitleMinimap', () => {
       panelHeight: 200,
       setSearchKeyword: vi.fn(),
       setActiveResultIndex: vi.fn(),
+      loadMore: vi.fn(),
+      loadQuestionText: loadQuestionTextMock,
       togglePanel: vi.fn(),
       openSearchPanel: vi.fn(),
       jumpToItem: jumpToItemMock,
@@ -110,6 +135,7 @@ describe('ConversationTitleMinimap', () => {
     await waitFor(() => {
       expect(copyTextMock).toHaveBeenCalledWith('complete user question');
     });
+    expect(loadQuestionTextMock).toHaveBeenCalledWith(expect.objectContaining({ messageId: 'message-1' }));
     expect(jumpToItemMock).not.toHaveBeenCalled();
   });
 });
