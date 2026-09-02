@@ -149,40 +149,7 @@ function prepareManagedResources(binaryPath, targetDir) {
   });
 
   removeDirectorySafe(dataDir);
-  ensureManagedResourcesManifest(bundleOut);
   return bundleOut;
-}
-
-// Older or forked AionCore binaries may export the managed Node tree but omit
-// its contract manifest. Reconstruct the minimal v2 contract from that tree so
-// packaging remains compatible while the backend command is fixed upstream.
-function ensureManagedResourcesManifest(bundleOut) {
-  const manifestPath = path.join(bundleOut, 'manifest.json');
-  if (fs.existsSync(manifestPath)) return;
-
-  const nodeRoot = path.join(bundleOut, 'node');
-  if (!fs.existsSync(nodeRoot)) return;
-  const nodeDirs = fs
-    .readdirSync(nodeRoot, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name);
-  for (const directoryName of nodeDirs) {
-    const root = path.join(nodeRoot, directoryName);
-    const executable = path.join(root, 'bin', process.platform === 'win32' ? 'node.exe' : 'node');
-    if (!fs.existsSync(executable)) continue;
-    writeJson(manifestPath, {
-      schemaVersion: 2,
-      runtimeKey: `${process.platform === 'darwin' ? 'darwin' : process.platform}-${process.arch}`,
-      node: {
-        version: directoryName.replace(/^node-v/, ''),
-        root: `node/${directoryName}`,
-        executable: `bin/${process.platform === 'win32' ? 'node.exe' : 'node'}`,
-      },
-      clis: [],
-    });
-    console.warn(`  AionCore did not emit managed-resources/manifest.json; reconstructed contract for ${directoryName}`);
-    return;
-  }
 }
 
 function verifyPreparedAioncoreBundle(projectRoot, platform, arch) {
