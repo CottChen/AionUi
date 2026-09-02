@@ -145,6 +145,13 @@ const ensureRuntimeConfigOptions: AcpConfigOptionsLoader = async (conversation_i
 const configOptionsInFlight = new Map<string, Promise<AcpConfigOptionDto[] | null>>();
 const configOptionsCache = new Map<string, AcpConfigOptionDto[] | null>();
 
+export function resetAcpConfigOptionsStateForTests(): void {
+  configOptionsInFlight.clear();
+  configOptionsCache.clear();
+  statusByConversation.clear();
+  statusListeners.clear();
+}
+
 function fetchConfigOptionsOnce(
   key: AcpConfigOptionsKey,
   loadConfigOptions: AcpConfigOptionsLoader,

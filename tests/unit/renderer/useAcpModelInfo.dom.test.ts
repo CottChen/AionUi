@@ -10,6 +10,7 @@ import { SWRConfig } from 'swr';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { IResponseMessage } from '@/common/adapter/ipcBridge';
 import type { AcpConfigOptionDto, AcpModelInfo } from '@/common/types/platform/acpTypes';
+import { resetAcpConfigOptionsStateForTests } from '@/renderer/hooks/agent/useAcpConfigOptions';
 import { useAcpModelInfo } from '@/renderer/hooks/agent/useAcpModelInfo';
 import { resetEnsureConversationRuntimeStateForTests } from '@/renderer/pages/conversation/utils/ensureConversationRuntime';
 
@@ -115,6 +116,7 @@ describe('useAcpModelInfo', () => {
     vi.clearAllMocks();
     responseStreamHandlers.length = 0;
     resetEnsureConversationRuntimeStateForTests();
+    resetAcpConfigOptionsStateForTests();
     ensureRuntimeInvokeMock.mockReset();
     setConfigOptionInvokeMock.mockReset();
     ensureRuntimeInvokeMock.mockResolvedValue({ recovered: true, config_options: buildConfigOptions(), runtime: null });
@@ -205,7 +207,7 @@ describe('useAcpModelInfo', () => {
         value: 'opus-4',
       });
     });
-    expect(calls).toEqual(['load', 'prepare-set', 'load', 'set']);
+    expect(calls).toEqual(['load', 'prepare-set', 'set']);
   });
 
   it('falls back to the persisted model when the initial config option snapshot fails', async () => {

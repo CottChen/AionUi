@@ -44,6 +44,7 @@ vi.mock('@arco-design/web-react', async () => {
 
 vi.mock('@/renderer/hooks/context/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'user-1' } }),
+  useOptionalAuth: () => ({ user: { id: 'user-1' } }),
 }));
 
 vi.mock('@/renderer/hooks/context/LayoutContext', () => ({
