@@ -332,6 +332,19 @@ describe('MarkdownView local file links', () => {
     expect(screen.getByRole('img', { name: '迪敏思包装盒' })).toHaveAttribute('src', imagePath);
   });
 
+  it('resolves relative markdown images against the project workspace', () => {
+    render(
+      <MarkdownView localFileBaseDir='/Users/demo/project'>
+        {'![generated](.aionui/generated-images/preview.png)'}
+      </MarkdownView>
+    );
+
+    expect(screen.getByRole('img', { name: 'generated' })).toHaveAttribute(
+      'src',
+      '/Users/demo/project/.aionui/generated-images/preview.png'
+    );
+  });
+
   it('adds empty alt text to external raw HTML images without alt text', () => {
     const { container } = render(
       <MarkdownView allowHtml>{'<img src="https://example.com/generated.png" />'}</MarkdownView>

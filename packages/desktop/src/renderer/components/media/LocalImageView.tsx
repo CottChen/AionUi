@@ -11,13 +11,15 @@ const LocalImageView: React.FC<{
   src: string;
   alt: string;
   className?: string;
+  workspace?: string;
 }> & {
   Provider: typeof LocalImageProvider;
   useUpdateLocalImage: typeof useUpdateLocalImage;
-} = ({ src, alt, className }) => {
+} = ({ src, alt, className, workspace }) => {
   const [loading, setLoading] = useState(true);
   const [url, setUrl] = useState(src);
-  const { root } = useLocalImage();
+  const { root: contextRoot } = useLocalImage();
+  const root = workspace || contextRoot;
 
   const absolutePath = useMemo(() => {
     if (!root) return src;

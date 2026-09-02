@@ -159,8 +159,19 @@ const MarkdownView: React.FC<MarkdownViewProps> = React.memo(
         img: ({ node: _node, ...rest }: Record<string, unknown>) => {
           const imgProps = rest as React.ImgHTMLAttributes<HTMLImageElement>;
           if (isLocalFilePath(imgProps.src || '')) {
-            const src = resolveLocalFileLinkPath(imgProps.src || '') || decodeURIComponent(imgProps.src || '');
-            return <LocalImageView src={src} alt={imgProps.alt || ''} className={imgProps.className} />;
+            const src =
+              resolveLocalFileLinkPath(imgProps.src || '', undefined, {
+                baseDir: localFileBaseDir,
+                allowedRootDir: localFileRootDir ?? localFileBaseDir,
+              }) || decodeURIComponent(imgProps.src || '');
+            return (
+              <LocalImageView
+                src={src}
+                alt={imgProps.alt || ''}
+                className={imgProps.className}
+                workspace={localFileBaseDir}
+              />
+            );
           }
           return <img {...imgProps} alt={imgProps.alt || ''} />;
         },
