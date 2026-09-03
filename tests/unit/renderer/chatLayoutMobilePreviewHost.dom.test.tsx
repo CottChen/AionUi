@@ -15,13 +15,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // non-project conversations already render.
 
 let mockIsMobile = false;
+let mockPreviewOpen = true;
 
 vi.mock('@/renderer/hooks/context/LayoutContext', () => ({
   useLayoutContext: () => ({ isMobile: mockIsMobile }),
 }));
 
 vi.mock('@/renderer/pages/conversation/Preview', () => ({
-  usePreviewContext: () => ({ isOpen: true }),
+  usePreviewContext: () => ({ isOpen: mockPreviewOpen }),
   PreviewPanel: () => <div data-testid='preview-panel'>preview</div>,
 }));
 
@@ -105,6 +106,7 @@ function renderChatLayout(previewHosted: boolean) {
 describe('ChatLayout mobile preview host fallback', () => {
   afterEach(() => {
     mockIsMobile = false;
+    mockPreviewOpen = true;
   });
 
   it('renders the preview overlay on mobile even for hoisted (project) conversations', () => {
@@ -112,6 +114,38 @@ describe('ChatLayout mobile preview host fallback', () => {
     renderChatLayout(true);
     // The regression target: preview must render inside ChatLayout on mobile.
     expect(screen.getByTestId('preview-panel')).toBeInTheDocument();
+  });
+
+  it('keeps the mobile chat laid out while preview visibility changes', () => {
+    mockIsMobile = true;
+    mockPreviewOpen = false;
+    const view = renderChatLayout(true);
+    const chatArea = screen.getByTestId('chat-layout-chat-area');
+
+    mockPreviewOpen = true;
+    view.rerender(
+      <ChatLayout conversation_id='conversation-mobile' previewHosted sider={<div>sider</div>} workspaceEnabled={false}>
+        <div>chat body</div>
+      </ChatLayout>
+    );
+
+    expect(screen.getByTestId('chat-layout-chat-area')).toBe(chatArea);
+    expect(chatArea).toHaveStyle({ display: 'flex' });
+    expect(screen.getByTestId('chat-layout-preview-region')).toHaveStyle({
+      position: 'absolute',
+      inset: '0',
+      zIndex: '40',
+    });
+
+    mockPreviewOpen = false;
+    view.rerender(
+      <ChatLayout conversation_id='conversation-mobile' previewHosted sider={<div>sider</div>} workspaceEnabled={false}>
+        <div>chat body</div>
+      </ChatLayout>
+    );
+
+    expect(screen.getByTestId('chat-layout-chat-area')).toBe(chatArea);
+    expect(screen.queryByTestId('chat-layout-preview-region')).not.toBeInTheDocument();
   });
 
   it('keeps the hidden conversation search controller mounted on mobile', () => {

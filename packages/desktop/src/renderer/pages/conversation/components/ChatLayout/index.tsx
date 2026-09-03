@@ -256,12 +256,17 @@ const ChatLayout: React.FC<{
           <div className='flex flex-1 min-h-0 relative'>
             {/* Chat area - always mounted, never unmounted on preview toggle */}
             <div
+              data-testid='chat-layout-chat-area'
               className='flex flex-col relative'
               style={{
                 flexGrow: isPreviewOpen && isDesktop ? 0 : 1,
                 flexShrink: 0,
                 flexBasis: isPreviewOpen && isDesktop ? `${chatFlex}%` : 0,
-                display: isPreviewOpen && isMobile ? 'none' : 'flex',
+                // Keep the mobile chat at its normal dimensions under the preview
+                // overlay. Hiding it collapses the message scroller to zero, which
+                // makes its ResizeObserver think the list is pinned to the bottom;
+                // restoring the panel then jumps a mid-history reader to the end.
+                display: 'flex',
                 minWidth: '240px',
               }}
               onClick={() => {
@@ -275,6 +280,7 @@ const ChatLayout: React.FC<{
             {/* Preview panel - conditionally rendered */}
             {isPreviewOpen && (
               <div
+                data-testid='chat-layout-preview-region'
                 className={classNames(
                   'preview-panel flex flex-col relative overflow-visible',
                   // 移动端预览是覆盖层，保留内缩和圆角；桌面端不留边距，
@@ -285,6 +291,10 @@ const ChatLayout: React.FC<{
                   isDesktop ? '' : 'm-[8px] rounded-[15px]'
                 )}
                 style={{
+                  // Mobile preview is a real overlay. Keeping the chat underneath
+                  // mounted and laid out preserves its exact scroll position when
+                  // the preview is collapsed or closed.
+                  ...(isMobile ? { position: 'absolute', inset: 0, zIndex: 40 } : {}),
                   flexGrow: 1,
                   flexShrink: 1,
                   flexBasis: 0,
