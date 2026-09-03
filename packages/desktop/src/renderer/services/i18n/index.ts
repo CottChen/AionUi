@@ -77,20 +77,10 @@ function getInjectedLanguageHint(): string | null {
   return typeof language === 'string' && language.trim() !== '' ? language : null;
 }
 
-function getElectronSystemLanguageHint(): string | null {
-  if (typeof window === 'undefined' || !window.electronAPI) return null;
-  return navigator.language || null;
-}
-
 function getInitialLanguage(): SupportedLanguage {
-  const backendStartupFailed =
-    typeof window !== 'undefined' && (window as Window & { __backendStartupFailed?: boolean }).__backendStartupFailed;
   const localStorageLanguage = getLocalStorageLanguageHint();
   const injectedLanguage = getInjectedLanguageHint();
-  const systemLanguage = backendStartupFailed ? getElectronSystemLanguageHint() : null;
-  const hint = backendStartupFailed
-    ? injectedLanguage || localStorageLanguage || systemLanguage
-    : localStorageLanguage || injectedLanguage;
+  const hint = localStorageLanguage || injectedLanguage;
   return normalizeLanguageCode(hint || DEFAULT_LANGUAGE);
 }
 
@@ -119,8 +109,7 @@ if (initialLanguage !== DEFAULT_LANGUAGE) {
 // Initialize i18n with fallback and initial locale loaded synchronously to avoid FOUC.
 // NOTE: We intentionally do NOT use i18next-browser-languagedetector here.
 // In WebUI mode the browser's localStorage is on a different origin than the
-// Electron renderer, so the detector would read the wrong (or missing) value
-// and fall back to navigator.language, causing a language mismatch (Issue #1176).
+// Electron renderer, so the detector would read the wrong (or missing) value.
 // Instead, we use localStorage and Electron's injected local config language
 // only as hints for the initial render, then let configService be the source of truth.
 i18n
@@ -144,7 +133,7 @@ async function initLanguage(): Promise<void> {
   try {
     await configService.whenReady();
     const savedLanguage = configService.get('language');
-    const language = savedLanguage || normalizeLanguageCode(navigator.language || DEFAULT_LANGUAGE);
+    const language = savedLanguage || DEFAULT_LANGUAGE;
     await ensureAndSwitch(i18n, language, loadLocaleModules);
     // Sync to localStorage so next page load can use it as a fast hint
     if (typeof localStorage !== 'undefined') {
