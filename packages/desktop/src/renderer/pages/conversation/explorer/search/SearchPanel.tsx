@@ -285,9 +285,7 @@ export const SearchPanel: React.FC<SearchPanelProps> = ({
               className='group flex items-start gap-4px px-8px py-5px rd-4px cursor-pointer hover:bg-2 min-w-0'
               title={hit.relative_path}
             >
-              <FileTypeIcon
-                node={{ name: hit.name, relativePath: hit.relative_path, isFile: !hit.is_directory }}
-              />
+              <FileTypeIcon node={{ name: hit.name, relativePath: hit.relative_path, isFile: !hit.is_directory }} />
               <span className='min-w-0 flex-1 flex flex-col gap-2px'>
                 <span className='flex min-w-0 items-center gap-4px'>
                   <span className='overflow-hidden text-ellipsis whitespace-nowrap flex-shrink-0 max-w-[45%]'>
