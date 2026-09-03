@@ -28,6 +28,8 @@ export type SearchHit = {
   pe_id: string;
   relative_path: string;
   name: string;
+  /** True when the hit is a directory whose name matched the query. */
+  is_directory?: boolean;
   match_kind?: 'name' | 'content' | 'both';
   content_match_count?: number;
   content_preview?: string;
@@ -44,7 +46,7 @@ export type SearchHit = {
 export const searchHitToMentionItem = (hit: SearchHit): FileOrFolderItem => ({
   path: hit.relative_path,
   name: hit.name,
-  isFile: true,
+  isFile: !hit.is_directory,
   relativePath: hit.relative_path,
   chatRef: projectFileRef(hit.pe_id, hit.relative_path),
 });

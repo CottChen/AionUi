@@ -439,9 +439,10 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId,
     select(peKey(hit.pe_id, hit.relative_path), { reveal: true });
   };
 
-  // Search result explicit add-to-chat: a hit is always a file; route through the
-  // same emitter lane as the tree's context-menu action.
-  const handleAddHit = (hit: SearchHit): void => handleAddToChat(hit.pe_id, hit.relative_path, hit.name, true);
+  // Search result explicit add-to-chat: preserve whether the hit is a file or
+  // directory so folder matches follow the same project-ref path as the tree.
+  const handleAddHit = (hit: SearchHit): void =>
+    handleAddToChat(hit.pe_id, hit.relative_path, hit.name, !hit.is_directory);
 
   // A-paste: import OS files dropped onto a tree node into that node's dir via
   // the pe-targeted /api/fs/copy. The copied files arrive on the target dir's WS
