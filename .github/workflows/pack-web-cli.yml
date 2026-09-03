@@ -1,5 +1,9 @@
 name: Pack Web CLI
 
+permissions:
+  contents: write
+  actions: write
+
 on:
   workflow_call:
     inputs:
@@ -27,6 +31,18 @@ on:
         description: 'AionCore repository owner/name for aioncore_run_id artifacts'
         type: string
         default: 'iOfficeAI/AionCore'
+      release_tag:
+        description: 'Optional release tag to create from this build'
+        type: string
+        default: ''
+      release_title:
+        description: 'Optional release title'
+        type: string
+        default: ''
+      release_prerelease:
+        description: 'Mark release as prerelease'
+        type: boolean
+        default: true
   workflow_dispatch:
     inputs:
       ref:
@@ -56,6 +72,18 @@ on:
         description: 'AionCore repository owner/name for aioncore_run_id artifacts'
         type: string
         default: 'iOfficeAI/AionCore'
+      release_tag:
+        description: 'Optional release tag to create from this build'
+        type: string
+        default: ''
+      release_title:
+        description: 'Optional release title'
+        type: string
+        default: ''
+      release_prerelease:
+        description: 'Mark release as prerelease'
+        type: boolean
+        default: true
 
 env:
   BUN_INSTALL_REGISTRY: 'https://registry.npmjs.org/'
@@ -322,3 +350,76 @@ jobs:
         run: |
           chmod +x scripts/smoke-test-install-web.sh
           bash scripts/smoke-test-install-web.sh file:///tmp/releases ${{ steps.version.outputs.version }}
+
+  promote-release:
+    name: Promote Web Artifact to Release
+    runs-on: ubuntu-latest
+    needs: [pack-web-cli, prepare-install-script]
+    if: ${{ inputs.release_tag != '' && needs.pack-web-cli.result == 'success' && needs.prepare-install-script.result == 'success' }}
+    steps:
+      - name: Download macOS arm64 Web artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: web-cli-darwin-arm64
+          path: release-assets
+          run-id: ${{ github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download install script artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: install-web-script
+          path: install-script-source
+          run-id: ${{ github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare release assets and checksums
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARBALL=$(find release-assets -maxdepth 1 -type f -name 'aionui-web-*-darwin-arm64.tar.gz' -print -quit)
+          CHECKSUM=$(find release-assets -maxdepth 1 -type f -name '*.tar.gz.sha256' -print -quit)
+          SOURCE_SCRIPT=$(find install-script-source -type f -name install-web.sh -print -quit)
+          [[ -n "$TARBALL" && -n "$CHECKSUM" && -n "$SOURCE_SCRIPT" ]]
+          TARBALL_NAME=$(basename "$TARBALL")
+          VERSION=$(sed -n 's/^aionui-web-\([^ -]*\)-darwin-arm64\.tar\.gz$/\1/p' <<< "$TARBALL_NAME")
+          [[ -n "$VERSION" ]]
+          TARGET_SCRIPT="release-assets/install-aionui-web-${VERSION}-darwin-arm64.sh"
+          sed \
+            -e "s|^VERSION=.*$|VERSION=\"\${VERSION:-${VERSION}}\"|" \
+            -e "s|^MIRROR=.*$|MIRROR=\"\${MIRROR:-https://github.com/${GITHUB_REPOSITORY}/releases/download}\"|" \
+            -e "s|\${MIRROR}/v\${VERSION}/\${TARBALL_NAME}|\${MIRROR}/${RELEASE_TAG}/\${TARBALL_NAME}|g" \
+            -e "s|\${MIRROR}/v\${VERSION}/\${CHECKSUM_NAME}|\${MIRROR}/${RELEASE_TAG}/\${CHECKSUM_NAME}|g" \
+            "$SOURCE_SCRIPT" > "$TARGET_SCRIPT"
+          chmod +x "$TARGET_SCRIPT"
+          (
+            cd release-assets
+            sha256sum "$TARBALL_NAME" "$(basename "$CHECKSUM")" "$(basename "$TARGET_SCRIPT")" > SHA256SUMS.txt
+          )
+
+      - name: Write release notes
+        shell: bash
+        run: |
+          cat > release-notes.md <<EOF
+          Web CLI manual build promoted from GitHub Actions.
+
+          - Source commit: \`${GITHUB_SHA}\`
+          - Build run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          - Platform: macOS Apple Silicon (arm64)
+          EOF
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag }}
+          target_commitish: ${{ github.sha }}
+          name: ${{ inputs.release_title || inputs.release_tag }}
+          body_path: release-notes.md
+          files: release-assets/*
+          draft: false
+          prerelease: ${{ inputs.release_prerelease }}
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
