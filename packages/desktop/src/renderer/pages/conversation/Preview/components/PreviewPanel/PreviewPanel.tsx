@@ -88,6 +88,7 @@ const PreviewPanel: React.FC = () => {
     closeTab,
     switchTab,
     closePreview,
+    collapsePreviewPanel,
     clearPreviewForScope,
     updateContent,
     saveContent,
@@ -481,8 +482,8 @@ const PreviewPanel: React.FC = () => {
   }, [tabs, requestCloseBatch]);
 
   // The toolbar X means "close the preview": after the dirty check, discard
-  // every tab so reopening starts clean. The tab-bar shrink control calls
-  // closePreview directly and only hides the panel.
+  // every tab so reopening starts clean. The tab-bar shrink control uses the
+  // separate collapse action and only hides the panel.
   const handleClosePanelAndTabs = useCallback(() => {
     requestPanelClose(tabs, requestCloseBatch, clearPreviewForScope);
   }, [tabs, requestCloseBatch, clearPreviewForScope]);
@@ -1113,7 +1114,7 @@ const PreviewPanel: React.FC = () => {
           onCloseRight={handleCloseRight}
           onCloseOthers={handleCloseOthers}
           onCloseAll={handleCloseAll}
-          onCollapsePanel={closePreview}
+          onCollapsePanel={collapsePreviewPanel}
           // 只要面板里已经有任意 tab（文件或浏览器），就露出「新建浏览器 tab」的加号，
           // 不必等用户先手动开过一次浏览器。面板本身为空时才隐藏，避免出现一个没有
           // 上下文的孤立加号。

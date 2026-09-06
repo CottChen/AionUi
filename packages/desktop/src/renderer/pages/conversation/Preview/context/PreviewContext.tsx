@@ -122,6 +122,8 @@ export interface PreviewContextValue {
    */
   openBrowserTab: (url?: string) => void;
   closePreview: () => void;
+  /** Collapse the preview panel without discarding tabs. */
+  collapsePreviewPanel: () => void;
   /** Discard this scope's tabs entirely (see closePreview for the difference). */
   clearPreviewForScope: () => void;
   closeTab: (tabId: string) => void;
@@ -893,6 +895,14 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, []);
 
   /**
+   * Collapse the preview panel without touching open tabs.
+   *
+   * Exposed separately from {@link closePreview} so callers that mean "hide the
+   * panel" do not accidentally read like they are discarding the current tab set.
+   */
+  const collapsePreviewPanel = closePreview;
+
+  /**
    * Discard this scope's tabs outright — the panel closes and nothing is restored.
    *
    * Separated from {@link closePreview} because "I am done with these files" and "get
@@ -1413,6 +1423,7 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
       activeTab,
       openPreview,
       closePreview,
+      collapsePreviewPanel,
       clearPreviewForScope,
       closeTab,
       switchTab: setActiveTabId,
@@ -1442,6 +1453,7 @@ export const PreviewProvider: React.FC<{ children: React.ReactNode }> = ({ child
     activeTab,
     openPreview,
     closePreview,
+    collapsePreviewPanel,
     clearPreviewForScope,
     closeTab,
     setActiveTabId,
