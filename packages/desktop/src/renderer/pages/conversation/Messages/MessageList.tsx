@@ -57,6 +57,8 @@ import type { MessageRatingContext } from './components/MessageRatingActions';
 import MessageThinking from './components/MessageThinking';
 import type { WriteFileResult } from './types';
 import { useAutoScroll } from './useAutoScroll';
+import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
+import { useOptionalPreviewContext } from '../Preview/context/PreviewContext';
 import SelectionReplyButton from './components/SelectionReplyButton';
 
 type IMessageVO =
@@ -583,6 +585,9 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
   }, [processedList]);
 
   // Use auto-scroll hook
+  const layout = useLayoutContext();
+  const preview = useOptionalPreviewContext();
+  const mobilePreviewOpen = Boolean(layout?.isMobile && preview?.isOpen);
   const {
     handleScrollerRef,
     handleContentRef,
@@ -596,6 +601,7 @@ const MessageList: React.FC<{ className?: string; emptySlot?: React.ReactNode }>
   } = useAutoScroll({
     messages: list,
     itemCount: processedList.length,
+    suspended: mobilePreviewOpen,
   });
 
   const setScrollerRef = useCallback(

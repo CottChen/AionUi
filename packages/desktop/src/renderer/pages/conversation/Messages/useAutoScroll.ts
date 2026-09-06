@@ -13,7 +13,7 @@
  *   only while auto-follow mode is active.
  * - Use DOM-native scrollIntoView for explicit message jumps.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { TMessage } from '@/common/chat/chatLib';
 
 const PROGRAMMATIC_SCROLL_GUARD_MS = 150;
@@ -23,6 +23,7 @@ const FOLLOW_BOTTOM_THRESHOLD_PX = 4;
 interface UseAutoScrollOptions {
   messages: TMessage[];
   itemCount: number;
+  suspended?: boolean;
 }
 
 interface ScrollElementIntoViewOptions {
@@ -46,7 +47,7 @@ const getBottomGap = (element: HTMLElement): number => {
   return element.scrollHeight - element.clientHeight - element.scrollTop;
 };
 
-export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): UseAutoScrollReturn {
+export function useAutoScroll({ messages, itemCount, suspended = false }: UseAutoScrollOptions): UseAutoScrollReturn {
   const [scrollerEl, setScrollerEl] = useState<HTMLDivElement | null>(null);
   const [contentEl, setContentEl] = useState<HTMLDivElement | null>(null);
   const [showScrollButton, setShowScrollButton] = useState(false);
@@ -59,6 +60,26 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
   const initialScrollDoneRef = useRef(false);
   const pendingAutoFollowFrameRef = useRef<number | null>(null);
   const userInputActiveRef = useRef(false);
+  const suspendedRef = useRef(suspended);
+  const savedScrollTopRef = useRef<number | null>(null);
+
+  useLayoutEffect(() => {
+    suspendedRef.current = suspended;
+    if (!scrollerEl) return;
+    if (suspended) {
+      savedScrollTopRef.current ??= scrollerEl.scrollTop;
+      if (pendingAutoFollowFrameRef.current !== null) {
+        cancelAnimationFrame(pendingAutoFollowFrameRef.current);
+        pendingAutoFollowFrameRef.current = null;
+      }
+    } else if (savedScrollTopRef.current !== null) {
+      scrollerEl.scrollTop = savedScrollTopRef.current;
+      lastScrollTopRef.current = scrollerEl.scrollTop;
+      savedScrollTopRef.current = null;
+      userScrolledRef.current = getBottomGap(scrollerEl) > FOLLOW_BOTTOM_THRESHOLD_PX;
+      setShowScrollButton(getBottomGap(scrollerEl) > AT_BOTTOM_THRESHOLD_PX);
+    }
+  }, [suspended, scrollerEl]);
 
   const markProgrammaticScroll = useCallback(() => {
     lastProgrammaticScrollTimeRef.current = Date.now();
@@ -81,7 +102,7 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
 
   const scrollToBottom = useCallback(
     (behavior: ScrollBehavior = 'smooth') => {
-      if (itemCount <= 0 || !scrollerEl) return;
+      if (itemCount <= 0 || !scrollerEl || suspendedRef.current || scrollerEl.clientHeight <= 0) return;
 
       markProgrammaticScroll();
       scrollerEl.scrollTo({
@@ -95,7 +116,7 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
   );
 
   const scheduleAutoFollow = useCallback(() => {
-    if (!scrollerEl || userScrolledRef.current) return;
+    if (!scrollerEl || userScrolledRef.current || suspendedRef.current) return;
 
     if (pendingAutoFollowFrameRef.current !== null) {
       cancelAnimationFrame(pendingAutoFollowFrameRef.current);
@@ -103,7 +124,7 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
 
     pendingAutoFollowFrameRef.current = requestAnimationFrame(() => {
       pendingAutoFollowFrameRef.current = null;
-      if (!scrollerEl || userScrolledRef.current) return;
+      if (!scrollerEl || userScrolledRef.current || suspendedRef.current) return;
 
       const gap = getBottomGap(scrollerEl);
       if (gap > 2) {
@@ -124,7 +145,7 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
     (element: HTMLElement | null, options?: ScrollElementIntoViewOptions) => {
       if (!element) return;
 
-      userScrolledRef.current = false;
+      userScrolledRef.current = true;
       setShowScrollButton(false);
       markProgrammaticScroll();
       element.scrollIntoView({
@@ -139,6 +160,7 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
   const handleScroll = useCallback(
     (e: React.UIEvent<HTMLDivElement>) => {
       const target = e.currentTarget;
+      if (suspendedRef.current || target.clientHeight <= 0) return;
       const currentScrollTop = target.scrollTop;
       const timeSinceGuard = Date.now() - lastProgrammaticScrollTimeRef.current;
       const delta = currentScrollTop - lastScrollTopRef.current;
@@ -179,8 +201,10 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
     if (!scrollerEl || !contentEl) return;
 
     const observer = new ResizeObserver(() => {
+      if (suspendedRef.current || scrollerEl.clientHeight <= 0) return;
       scheduleAutoFollow();
-      updateBottomState(scrollerEl);
+      // Layout changes must not re-enable following a historical message.
+      setShowScrollButton(getBottomGap(scrollerEl) > AT_BOTTOM_THRESHOLD_PX);
     });
 
     observer.observe(scrollerEl);
@@ -190,14 +214,14 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
   }, [contentEl, scheduleAutoFollow, scrollerEl, updateBottomState]);
 
   useEffect(() => {
-    if (!scrollerEl || initialScrollDoneRef.current || itemCount === 0) return;
+    if (!scrollerEl || initialScrollDoneRef.current || itemCount === 0 || suspended) return;
 
     initialScrollDoneRef.current = true;
     requestAnimationFrame(() => {
       scrollToBottom('auto');
       lastScrollTopRef.current = scrollerEl.scrollTop;
     });
-  }, [itemCount, scrollerEl, scrollToBottom]);
+  }, [itemCount, scrollerEl, scrollToBottom, suspended]);
 
   useEffect(() => {
     const currentListLength = messages.length;
@@ -209,6 +233,8 @@ export function useAutoScroll({ messages, itemCount }: UseAutoScrollOptions): Us
 
     previousListLengthRef.current = currentListLength;
     previousLastMessageRef.current = lastMessage;
+
+    if (suspendedRef.current) return;
 
     if (!isNewMessage) {
       if (isLastMessageUpdated) {

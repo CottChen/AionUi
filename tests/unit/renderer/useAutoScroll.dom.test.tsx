@@ -116,6 +116,52 @@ function fireScroll(
 }
 
 describe('useAutoScroll', () => {
+  it('restores the reading position after preview closes despite hidden scroll events and new output', () => {
+    const scroller = createScroller();
+    const { result, rerender } = renderHook(
+      ({ suspended, messages }) => useAutoScroll({ suspended, messages, itemCount: messages.length }),
+      { initialProps: { suspended: false, messages: [createLeftMessage('hello')] } }
+    );
+    attachElements(result, scroller, createContent());
+    act(() => vi.runAllTimers());
+    act(() => result.current.handlePointerDown());
+    fireScroll(result.current.handleScroll, scroller, 240);
+    rerender({ suspended: true, messages: [createLeftMessage('hello')] });
+    scroller.clientHeight = 0;
+    fireScroll(result.current.handleScroll, scroller, 0);
+    rerender({ suspended: true, messages: [createLeftMessage('hello'), createRightMessage('queued')] });
+    act(() => {
+      resizeObserverCallback?.([], {} as ResizeObserver);
+      vi.runAllTimers();
+    });
+    scroller.clientHeight = 400;
+    scroller.scrollHeight = 1200;
+    rerender({ suspended: false, messages: [createLeftMessage('hello'), createRightMessage('queued')] });
+    act(() => {
+      resizeObserverCallback?.([], {} as ResizeObserver);
+      vi.runAllTimers();
+    });
+    expect(scroller.scrollTop).toBe(240);
+    expect(result.current.showScrollButton).toBe(true);
+  });
+
+  it('does not snap back after jumping to history before the next scroll event', () => {
+    const scroller = createScroller();
+    const { result } = renderHook(() => useAutoScroll({ messages: [createLeftMessage('hello')], itemCount: 1 }));
+    attachElements(result, scroller, createContent());
+    act(() => vi.runAllTimers());
+    const target = document.createElement('div');
+    target.scrollIntoView = () => {
+      scroller.scrollTop = 240;
+    };
+    act(() => {
+      result.current.scrollElementIntoView(target, { behavior: 'auto' });
+      resizeObserverCallback?.([], {} as ResizeObserver);
+      vi.runAllTimers();
+    });
+    expect(scroller.scrollTop).toBe(240);
+  });
+
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-05-26T12:00:00.000Z'));
