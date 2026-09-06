@@ -10,7 +10,7 @@ on:
       branch:
         description: 'Branch to build from'
         required: true
-        default: 'main'
+        default: 'stable/aionui-2.1.39'
         type: string
       platform:
         description: 'Platform to build'
@@ -31,10 +31,9 @@ on:
         type: boolean
         default: false
       aioncore_run_id:
-        description: 'Optional AionCore Manual Build workflow run id to bundle instead of the pinned release'
-        required: false
+        description: 'Required AionCore Manual Build run id for the matching modified backend'
+        required: true
         type: string
-        default: ''
 
 env:
   BUN_INSTALL_REGISTRY: 'https://registry.npmjs.org/'

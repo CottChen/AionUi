@@ -4,6 +4,7 @@ import FlexFullContainer from '@/renderer/components/layout/FlexFullContainer';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { useResizableSplit } from '@/renderer/hooks/ui/useResizableSplit';
 import ChatTitleEditor from '@/renderer/pages/conversation/components/ChatTitleEditor';
+import MobileConversationActions from './MobileConversationActions';
 import MobileWorkspaceOverlay from './MobileWorkspaceOverlay';
 import WorkspacePanelHeader, { DesktopWorkspaceToggle } from './WorkspacePanelHeader';
 import { useContainerWidth } from '@/renderer/pages/conversation/hooks/useContainerWidth';
@@ -24,7 +25,6 @@ import {
 import { Layout as ArcoLayout } from '@arco-design/web-react';
 import { ExpandLeft, ExpandRight } from '@icon-park/react';
 import React, { useEffect, useState } from 'react';
-import { createPortal } from 'react-dom';
 import './chat-layout.css';
 
 // headerExtra allows injecting custom actions (e.g., model picker) into the header's right area
@@ -224,9 +224,13 @@ const ChatLayout: React.FC<{
 
   const headerBlock = (
     <>
-      {layout?.isMobile
-        ? mobileActionsSlot && props.headerExtra && createPortal(props.headerExtra, mobileActionsSlot)
-        : desktopHeader}
+      {layout?.isMobile ? (
+        <MobileConversationActions actionsSlot={mobileActionsSlot} conversationId={conversation_id}>
+          {props.headerExtra}
+        </MobileConversationActions>
+      ) : (
+        desktopHeader
+      )}
       {props.tabsSlot}
     </>
   );

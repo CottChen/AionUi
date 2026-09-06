@@ -8,10 +8,46 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { fromApiSearchResult, type ApiMessageSearchItem } from '@/common/adapter/searchMapper';
+import {
+  fromApiConversationTurnPreviews,
+  fromApiSearchResult,
+  type ApiMessageSearchItem,
+} from '@/common/adapter/searchMapper';
 import type { PaginatedResult } from '@/common/adapter/ipcBridge';
 
 describe('searchMapper', () => {
+  describe('fromApiConversationTurnPreviews', () => {
+    it('maps backend ids and preserves searchable text', () => {
+      const result = fromApiConversationTurnPreviews([
+        {
+          index: 1,
+          question: 'question',
+          answer: 'answer',
+          message_id: 'message-1',
+          msg_id: 'client-1',
+        },
+      ]);
+
+      expect(result).toEqual([
+        {
+          index: 1,
+          question: 'question',
+          answer: 'answer',
+          messageId: 'message-1',
+          msgId: 'client-1',
+        },
+      ]);
+    });
+
+    it('omits an absent client message id', () => {
+      const [result] = fromApiConversationTurnPreviews([
+        { index: 1, question: 'question', answer: '', message_id: 'message-1', msg_id: null },
+      ]);
+
+      expect(result.msgId).toBeUndefined();
+    });
+  });
+
   describe('fromApiSearchResult', () => {
     it('preserves total and has_more fields', () => {
       const input: PaginatedResult<ApiMessageSearchItem> = {

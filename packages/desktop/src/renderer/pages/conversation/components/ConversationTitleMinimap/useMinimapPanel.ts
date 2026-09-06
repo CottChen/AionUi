@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ipcBridge } from '@/common';
+import { isBackendHttpError } from '@/common/adapter/httpBridge';
 import { dispatchChatMessageJump } from '@/renderer/utils/chat/chatMinimapEvents';
 import { loadAllConversationMessagesPaged } from '@/renderer/utils/chat/messagePagination';
 import type { RefInputType } from '@arco-design/web-react/es/Input/interface';
@@ -19,7 +21,14 @@ import {
   PANEL_OFFSET,
   PANEL_VISIBLE_ITEM_CAP,
 } from './minimapTypes';
-import { buildTurnPreview, getPanelWidth, isIndexMatch, normalizeText, readPopoverVisualStyle } from './minimapUtils';
+import {
+  buildTurnPreview,
+  buildTurnPreviewItems,
+  getPanelWidth,
+  isIndexMatch,
+  normalizeText,
+  readPopoverVisualStyle,
+} from './minimapUtils';
 
 // Return type for the useMinimapPanel hook
 type UseMinimapPanelReturn = {
@@ -67,9 +76,17 @@ export const useMinimapPanel = (conversation_id?: string): UseMinimapPanelReturn
   const isSearchInputComposingRef = useRef(false);
   const pendingCloseAfterCompositionRef = useRef(false);
   const searchKeywordRef = useRef('');
+  const activeConversationIdRef = useRef(conversation_id);
+  const hasLoadedPreviewRef = useRef(false);
+  const previewRequestSeqRef = useRef(0);
+  const previewRequestRef = useRef<{ conversationId: string; promise: Promise<void> } | null>(null);
 
   // Reset on conversation switch
   useEffect(() => {
+    activeConversationIdRef.current = conversation_id;
+    hasLoadedPreviewRef.current = false;
+    previewRequestSeqRef.current += 1;
+    previewRequestRef.current = null;
     setVisible(false);
     setLoading(false);
     setItems([]);
@@ -103,21 +120,65 @@ export const useMinimapPanel = (conversation_id?: string): UseMinimapPanelReturn
   }, []);
 
   // Fetch data
-  const fetchTurnPreview = useCallback(async () => {
-    if (!conversation_id) {
+  const fetchTurnPreview = useCallback((): Promise<void> => {
+    const conversationId = conversation_id;
+    if (!conversationId) {
       setItems([]);
-      return;
+      return Promise.resolve();
     }
-    setLoading(true);
-    try {
-      const messages = await loadAllConversationMessagesPaged(conversation_id);
-      setItems(buildTurnPreview(messages));
-    } catch (error) {
-      console.error('[ConversationTitleMinimap] Failed to load conversation messages:', error);
-      setItems([]);
-    } finally {
-      setLoading(false);
+
+    const activeRequest = previewRequestRef.current;
+    if (activeRequest?.conversationId === conversationId) {
+      return activeRequest.promise;
     }
+
+    const hadCachedPreview = hasLoadedPreviewRef.current;
+    if (!hadCachedPreview) {
+      setLoading(true);
+    }
+    const requestSeq = ++previewRequestSeqRef.current;
+
+    const request = (async () => {
+      try {
+        let nextItems: TurnPreviewItem[];
+        try {
+          const turns = await ipcBridge.database.getConversationTurnPreviews.invoke({
+            conversation_id: conversationId,
+          });
+          nextItems = buildTurnPreviewItems(turns);
+        } catch (error) {
+          if (!isBackendHttpError(error) || error.status !== 404) {
+            throw error;
+          }
+          const messages = await loadAllConversationMessagesPaged(conversationId, { contentMode: 'compact' });
+          nextItems = buildTurnPreview(messages);
+        }
+
+        if (activeConversationIdRef.current !== conversationId || previewRequestSeqRef.current !== requestSeq) return;
+        hasLoadedPreviewRef.current = true;
+        setItems(nextItems);
+      } catch (error) {
+        console.error('[ConversationTitleMinimap] Failed to load conversation turn previews:', error);
+        if (
+          activeConversationIdRef.current === conversationId &&
+          previewRequestSeqRef.current === requestSeq &&
+          !hadCachedPreview
+        ) {
+          setItems([]);
+        }
+      } finally {
+        if (activeConversationIdRef.current === conversationId && previewRequestSeqRef.current === requestSeq) {
+          setLoading(false);
+        }
+      }
+    })();
+    previewRequestRef.current = { conversationId, promise: request };
+    void request.finally(() => {
+      if (previewRequestRef.current?.promise === request) {
+        previewRequestRef.current = null;
+      }
+    });
+    return request;
   }, [conversation_id]);
 
   // Derived values

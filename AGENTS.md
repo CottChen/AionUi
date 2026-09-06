@@ -152,3 +152,10 @@ When opening a PR, fill in the PR body using [.github/pull_request_template.md](
 | **bump-version** | Version bump workflow: update package.json, checks, branch, PR, tag release | Bumping version, `/bump-version`                                                                       |
 
 > Skills are located in `.claude/skills/` and contain project conventions that apply to **all** agents and contributors.
+
+## 稳定分支构建经验
+
+- AionUI `stable/aionui-2.1.39` 的版本保持 `2.1.39`；不要因构建临时升级版本号。
+- fork AionCore 的新增数据库迁移统一使用 `900xxx` 保留号段；当前会话检索迁移为 `900024`（已有 `900021`～`900023`）。
+- GitHub Actions 无法读取相邻本地仓库的未提交改动。必须先提交并构建对应 AionCore，再把其 Manual Build `run_id` 传给 AionUI；禁止无意回退到官方 AionCore Release。
+- 打包后检查 DMG/DEB 内 `bundled-aioncore/*/manifest.json`，确认来源为对应 Actions artifact 和 run ID。

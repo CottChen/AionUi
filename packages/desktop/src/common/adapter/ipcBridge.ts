@@ -107,7 +107,12 @@ import {
   wsEmitter,
   wsMappedEmitter,
 } from './httpBridge';
-import { fromApiSearchResult, type ApiMessageSearchItem } from './searchMapper';
+import {
+  fromApiConversationTurnPreviews,
+  fromApiSearchResult,
+  type ApiConversationTurnPreview,
+  type ApiMessageSearchItem,
+} from './searchMapper';
 import type { IAddTeamAssistantParams, ICreateTeamParams } from './teamMapper';
 import {
   fromBackendAssistant,
@@ -1063,6 +1068,13 @@ export type GetConversationMessagesParams = {
 };
 
 export const database = {
+  getConversationTurnPreviews: withResponseMap(
+    httpGet<ApiConversationTurnPreview[], { conversation_id: string }>(
+      (p) => `/api/conversations/${p.conversation_id}/turn-previews`,
+      { silentStatuses: [404] }
+    ),
+    fromApiConversationTurnPreviews
+  ),
   getConversationMessages: httpGet<
     MessageCursorPage<import('@/common/chat/chatLib').TMessage>,
     GetConversationMessagesParams

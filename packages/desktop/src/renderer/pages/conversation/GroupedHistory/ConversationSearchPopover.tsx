@@ -12,16 +12,18 @@ import { usePresetAssistantInfo } from '@/renderer/hooks/agent/usePresetAssistan
 import { useAgentLogos } from '@/renderer/utils/model/agentLogo';
 import { resolveConversationLeadingMark } from '@/renderer/pages/conversation/utils/conversationAssistantIdentity';
 import { blockMobileInputFocus, blurActiveElement } from '@/renderer/utils/ui/focus';
-import { Empty, Spin, Typography } from '@arco-design/web-react';
-import { Close, MessageOne, Robot, Search } from '@icon-park/react';
+import { copyText } from '@/renderer/utils/ui/clipboard';
+import { Empty, Message, Spin, Tooltip, Typography } from '@arco-design/web-react';
+import { Close, Copy, MessageOne, Robot, Search } from '@icon-park/react';
 import classNames from 'classnames';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import './ConversationSearchPopover.css';
 
 const PAGE_SIZE = 20;
+const INITIAL_PAGE = 1;
 const MAX_RECENT_SEARCHES = 8;
 const RECENT_SEARCH_STORAGE_KEY = 'conversation.historySearch.recentKeywords';
 const SNIPPET_MAX_LENGTH = 110;
@@ -142,11 +144,13 @@ const ConversationSearchPopover: React.FC<ConversationSearchPopoverProps> = ({
   const [keyword, setKeyword] = useState('');
   const [debouncedKeyword, setDebouncedKeyword] = useState('');
   const [items, setItems] = useState<IMessageSearchItem[]>([]);
-  const [page, setPage] = useState(0);
+  const [page, setPage] = useState(INITIAL_PAGE);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [recentKeywords, setRecentKeywords] = useState<string[]>([]);
+  const searchRequestSeqRef = useRef(0);
+  const loadingPageRef = useRef<{ page: number; requestSeq: number } | null>(null);
 
   useEffect(() => {
     try {
@@ -173,13 +177,18 @@ const ConversationSearchPopover: React.FC<ConversationSearchPopoverProps> = ({
   const runSearch = useCallback(
     async (pageToLoad: number, append: boolean) => {
       if (!debouncedKeyword) {
+        searchRequestSeqRef.current += 1;
+        loadingPageRef.current = null;
         setItems([]);
-        setPage(0);
+        setPage(INITIAL_PAGE);
         setHasMore(false);
         return;
       }
 
+      if (append && loadingPageRef.current?.page === pageToLoad) return;
+      const requestSeq = append ? searchRequestSeqRef.current : ++searchRequestSeqRef.current;
       if (append) {
+        loadingPageRef.current = { page: pageToLoad, requestSeq };
         setLoadingMore(true);
       } else {
         setLoading(true);
@@ -192,26 +201,33 @@ const ConversationSearchPopover: React.FC<ConversationSearchPopoverProps> = ({
           page_size: PAGE_SIZE,
         });
 
+        if (requestSeq !== searchRequestSeqRef.current) return;
         setItems((prev) => (append ? [...prev, ...result.items] : result.items));
         setPage(pageToLoad);
         setHasMore(result.has_more);
       } catch (error) {
+        if (requestSeq !== searchRequestSeqRef.current) return;
         console.error('[ConversationSearchPopover] Search failed:', error);
         if (!append) {
           setItems([]);
-          setPage(0);
+          setPage(INITIAL_PAGE);
           setHasMore(false);
         }
       } finally {
-        setLoading(false);
-        setLoadingMore(false);
+        if (loadingPageRef.current?.page === pageToLoad && loadingPageRef.current.requestSeq === requestSeq) {
+          loadingPageRef.current = null;
+        }
+        if (requestSeq === searchRequestSeqRef.current) {
+          setLoading(false);
+          setLoadingMore(false);
+        }
       }
     },
     [debouncedKeyword]
   );
 
   useEffect(() => {
-    void runSearch(0, false);
+    void runSearch(INITIAL_PAGE, false);
   }, [runSearch]);
 
   useEffect(() => {
@@ -238,11 +254,13 @@ const ConversationSearchPopover: React.FC<ConversationSearchPopoverProps> = ({
   }, [debouncedKeyword]);
 
   const resetSearchState = useCallback(() => {
+    searchRequestSeqRef.current += 1;
+    loadingPageRef.current = null;
     setVisible(false);
     setKeyword('');
     setDebouncedKeyword('');
     setItems([]);
-    setPage(0);
+    setPage(INITIAL_PAGE);
     setHasMore(false);
     setLoading(false);
     setLoadingMore(false);
@@ -280,15 +298,30 @@ const ConversationSearchPopover: React.FC<ConversationSearchPopoverProps> = ({
     [navigate, onConversationSelect, onSessionClick, resetSearchState]
   );
 
+  const handleCopyResult = useCallback(
+    async (event: React.MouseEvent<HTMLButtonElement>, item: IMessageSearchItem) => {
+      event.stopPropagation();
+      try {
+        await copyText(item.preview_text);
+        Message.success(t('common.copySuccess'));
+      } catch {
+        Message.error(t('common.copyFailed'));
+      }
+    },
+    [t]
+  );
+
   const handleClose = useCallback(() => {
     resetSearchState();
   }, [resetSearchState]);
 
   const handleClearKeyword = useCallback(() => {
+    searchRequestSeqRef.current += 1;
+    loadingPageRef.current = null;
     setKeyword('');
     setDebouncedKeyword('');
     setItems([]);
-    setPage(0);
+    setPage(INITIAL_PAGE);
     setHasMore(false);
     setLoading(false);
     setLoadingMore(false);
@@ -376,32 +409,48 @@ const ConversationSearchPopover: React.FC<ConversationSearchPopoverProps> = ({
           {items.map((item) => {
             const snippet = buildSnippet(item.preview_text, debouncedKeyword);
             return (
-              <button
+              <div
                 key={`${item.message_id}-${item.message_created_at}`}
-                type='button'
-                className={classNames(
-                  'conversation-search-modal__result w-full text-left cursor-pointer transition-all duration-150',
-                  'focus:outline-none'
-                )}
-                onClick={() => {
-                  void handleResultClick(item);
-                }}
+                className='conversation-search-modal__result-row'
               >
-                <div className='flex items-start justify-between gap-8px mb-6px'>
-                  <div className='min-w-0 flex-1'>
-                    <div className='conversation-search-modal__result-title-row'>
-                      <ConversationAgentMark conversation={item.conversation} />
-                      <div className='conversation-search-modal__result-title text-15px font-600 text-t-primary truncate'>
-                        {item.conversation.name || t('conversation.historySearch.untitled')}
+                <button
+                  type='button'
+                  className={classNames(
+                    'conversation-search-modal__result w-full text-left cursor-pointer transition-all duration-150',
+                    'focus:outline-none'
+                  )}
+                  onClick={() => {
+                    void handleResultClick(item);
+                  }}
+                >
+                  <div className='flex items-start justify-between gap-8px mb-6px'>
+                    <div className='min-w-0 flex-1'>
+                      <div className='conversation-search-modal__result-title-row'>
+                        <ConversationAgentMark conversation={item.conversation} />
+                        <div className='conversation-search-modal__result-title text-15px font-600 text-t-primary truncate'>
+                          {item.conversation.name || t('conversation.historySearch.untitled')}
+                        </div>
                       </div>
                     </div>
+                    <span className='shrink-0 text-11px text-t-secondary'>{formatTime(item.message_created_at)}</span>
                   </div>
-                  <span className='shrink-0 text-11px text-t-secondary'>{formatTime(item.message_created_at)}</span>
-                </div>
-                <div className='conversation-search-modal__snippet text-13px leading-22px text-t-primary/92 break-words'>
-                  {renderHighlightedText(snippet, debouncedKeyword)}
-                </div>
-              </button>
+                  <div className='conversation-search-modal__snippet text-13px leading-22px text-t-primary/92 break-words'>
+                    {renderHighlightedText(snippet, debouncedKeyword)}
+                  </div>
+                </button>
+                <Tooltip content={t('common.copy', { defaultValue: 'Copy user input' })}>
+                  <button
+                    type='button'
+                    className='conversation-search-modal__copy-btn'
+                    aria-label={t('common.copy', { defaultValue: 'Copy user input' })}
+                    onClick={(event) => {
+                      void handleCopyResult(event, item);
+                    }}
+                  >
+                    <Copy theme='outline' size='16' />
+                  </button>
+                </Tooltip>
+              </div>
             );
           })}
 
@@ -414,7 +463,17 @@ const ConversationSearchPopover: React.FC<ConversationSearchPopoverProps> = ({
         </div>
       </div>
     );
-  }, [debouncedKeyword, handleLoadMore, handleResultClick, items, loading, loadingMore, recentKeywords, t]);
+  }, [
+    debouncedKeyword,
+    handleCopyResult,
+    handleLoadMore,
+    handleResultClick,
+    items,
+    loading,
+    loadingMore,
+    recentKeywords,
+    t,
+  ]);
 
   const hasSearchResults = items.length > 0;
   const useCompactHeight = !debouncedKeyword || (!loading && !hasSearchResults);

@@ -7,6 +7,7 @@
 // Pure utility functions for the conversation minimap panel.
 
 import type { IMessageText, TMessage } from '@/common/chat/chatLib';
+import type { ConversationTurnPreview } from '@/common/adapter/searchMapper';
 import React from 'react';
 import {
   defaultVisualStyle,
@@ -199,4 +200,16 @@ export const buildTurnPreview = (messages: TMessage[]): TurnPreviewItem[] => {
   }
 
   return turns;
+};
+
+export const buildTurnPreviewItems = (turns: ConversationTurnPreview[]): TurnPreviewItem[] => {
+  return turns.map((turn) => ({
+    index: turn.index,
+    question: truncate(turn.question),
+    answer: truncate(turn.answer),
+    questionRaw: turn.question,
+    answerRaw: turn.answer,
+    messageId: turn.messageId,
+    msgId: turn.msgId,
+  }));
 };

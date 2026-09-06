@@ -31,6 +31,32 @@ export interface ApiMessageSearchItem {
   };
 }
 
+export type ApiConversationTurnPreview = {
+  index: number;
+  question: string;
+  answer: string;
+  message_id: string;
+  msg_id?: string | null;
+};
+
+export type ConversationTurnPreview = {
+  index: number;
+  question: string;
+  answer: string;
+  messageId: string;
+  msgId?: string;
+};
+
+export function fromApiConversationTurnPreviews(items: ApiConversationTurnPreview[]): ConversationTurnPreview[] {
+  return items.map((item) => ({
+    index: item.index,
+    question: item.question,
+    answer: item.answer,
+    messageId: item.message_id,
+    ...(item.msg_id ? { msgId: item.msg_id } : {}),
+  }));
+}
+
 export function fromApiSearchResult(
   result: PaginatedResult<ApiMessageSearchItem>
 ): PaginatedResult<IMessageSearchItem> {

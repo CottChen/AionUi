@@ -48,4 +48,6 @@ export type ConversationTitleMinimapProps = {
   conversation_id?: string;
   /** When true, hide the trigger button but keep the shortcut listener and panel active. */
   hideTrigger?: boolean;
+  /** Match the mobile application titlebar's touch target and interaction styling. */
+  mobileTitlebar?: boolean;
 };

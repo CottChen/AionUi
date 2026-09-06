@@ -6,6 +6,7 @@ import { delimiter, dirname, join } from 'node:path';
 const {
   getActionsArtifactName,
   getActionsArtifactMissingMessage,
+  getActionsRepository,
   prepareAioncore,
 } = require('../../../packages/shared-scripts/src/prepare-aioncore');
 
@@ -98,6 +99,7 @@ chmod +x "$out/aioncore"
 
 afterEach(() => {
   delete process.env.AIONUI_BACKEND_RUN_ID;
+  delete process.env.AIONUI_BACKEND_REPOSITORY;
   delete process.env.AIONUI_BACKEND_LOCAL_BINARY;
   rmSync(join(tmpdir(), 'aioncore-prepare', 'v0.1.46'), { recursive: true, force: true });
   rmSync(join(tmpdir(), 'aioncore-prepare-actions', '123'), { recursive: true, force: true });
@@ -131,6 +133,16 @@ describe('prepare-aioncore GitHub Actions artifact resolver', () => {
         'Re-run AionCore Manual Build with platform [ windows-x64 ] or all.',
       ].join(' ')
     );
+  });
+
+  it('resolves Actions artifacts from the configured fork repository', () => {
+    process.env.AIONUI_BACKEND_REPOSITORY = 'CottChen/AionCore';
+    expect(getActionsRepository()).toBe('CottChen/AionCore');
+  });
+
+  it('rejects malformed Actions repository names', () => {
+    process.env.AIONUI_BACKEND_REPOSITORY = 'AionCore';
+    expect(() => getActionsRepository()).toThrow(/Invalid AIONUI_BACKEND_REPOSITORY/);
   });
 
   // These cases execute a temporary POSIX shell-script aioncore binary. Windows
