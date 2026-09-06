@@ -20,6 +20,17 @@ import {
 const previewMocks = vi.hoisted(() => ({
   openPreview: vi.fn(),
 }));
+const modalMocks = vi.hoisted(() => ({
+  confirm: vi.fn(),
+  lastConfig: undefined as
+    | {
+        onOk?: () => void;
+        onCancel?: () => void;
+        okText?: React.ReactNode;
+        cancelText?: React.ReactNode;
+      }
+    | undefined,
+}));
 const localFileLinkMocks = vi.hoisted(() => ({
   payload: {
     path: '/missing/report.xlsx',
@@ -34,7 +45,11 @@ const localFileLinkMocks = vi.hoisted(() => ({
       | undefined,
   },
 }));
-const mockFilePreview = vi.fn(({ path }: { path: string }) => <div data-testid='file-preview'>{path}</div>);
+const mockFilePreview = vi.fn(({ path, onOpen }: { path: string; onOpen?: () => void | Promise<void> }) => (
+  <button type='button' data-testid='file-preview' onClick={() => void onOpen?.()}>
+    {path}
+  </button>
+));
 
 vi.mock('@/common', () => ({
   ipcBridge: {
@@ -128,6 +143,9 @@ vi.mock('@arco-design/web-react', () => ({
   Message: {
     error: vi.fn(),
   },
+  Modal: {
+    confirm: modalMocks.confirm,
+  },
   Tooltip: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
 }));
 
@@ -154,6 +172,12 @@ describe('MessageText attachment paths', () => {
     mockFilePreview.mockClear();
     vi.mocked(copyText).mockClear();
     previewMocks.openPreview.mockClear();
+    modalMocks.confirm.mockReset();
+    modalMocks.lastConfig = undefined;
+    modalMocks.confirm.mockImplementation((config) => {
+      modalMocks.lastConfig = config;
+      return { close: vi.fn(), update: vi.fn() };
+    });
     localFileLinkMocks.payload = {
       path: '/missing/report.xlsx',
       reference: undefined,
@@ -295,6 +319,16 @@ describe('MessageText attachment paths', () => {
     expect(previews[1]).toHaveTextContent('/workspace/demo/uploads/中文 文件.txt');
     expect(previews[2]).toHaveTextContent('/workspace/demo/设计 图.png');
     expect(screen.getByTestId('message-text-content')).toHaveTextContent('look at these');
+  });
+
+  it('offers preview or download when clicking a binary attachment card', () => {
+    renderMessageText('see this file\n\n[[AION_FILES]]\nreports/q2.pdf', { position: 'right' });
+
+    fireEvent.click(screen.getByTestId('file-preview'));
+
+    expect(modalMocks.confirm).toHaveBeenCalledWith(
+      expect.objectContaining({ okText: 'Preview', cancelText: 'Download' })
+    );
   });
 
   it('renders assistant marker mentions as full message text without file previews', () => {
@@ -442,6 +476,10 @@ describe('MessageText attachment paths', () => {
     renderMessageWithLocalLink();
 
     fireEvent.click(screen.getByRole('button', { name: 'open local file' }));
+    expect(modalMocks.confirm).toHaveBeenCalledWith(
+      expect.objectContaining({ okText: 'Preview', cancelText: 'Download' })
+    );
+    modalMocks.lastConfig?.onOk?.();
 
     await waitFor(() => {
       expect(previewMocks.openPreview).toHaveBeenCalledWith(
@@ -536,7 +574,7 @@ describe('MessageText attachment paths', () => {
     expect(metadata).not.toHaveProperty('targetEndLine');
   });
 
-  it('opens office and pdf local markdown links without reading file content', async () => {
+  it('offers preview or download for office and pdf local markdown links', async () => {
     const filePath = '/workspace/demo/reports/q2.pdf';
     localFileLinkMocks.payload = { path: filePath, reference: undefined };
     vi.mocked(ipcBridge.fs.getFileMetadata.invoke).mockResolvedValue(fileMetadata(filePath));
@@ -544,6 +582,10 @@ describe('MessageText attachment paths', () => {
     renderMessageWithLocalLink('[q2.pdf](/workspace/demo/reports/q2.pdf)');
 
     fireEvent.click(screen.getByRole('button', { name: 'open local file' }));
+    expect(modalMocks.confirm).toHaveBeenCalledWith(
+      expect.objectContaining({ okText: 'Preview', cancelText: 'Download' })
+    );
+    modalMocks.lastConfig?.onOk?.();
 
     await waitFor(() => {
       expect(previewMocks.openPreview).toHaveBeenCalledWith(
@@ -562,7 +604,7 @@ describe('MessageText attachment paths', () => {
     expect(ipcBridge.fs.getImageBase64.invoke).not.toHaveBeenCalled();
   });
 
-  it('opens image local markdown links from base64 content without reading text content', async () => {
+  it('offers preview or download for image local markdown links', async () => {
     const filePath = '/workspace/demo/assets/chart.png';
     localFileLinkMocks.payload = { path: filePath, reference: undefined };
     vi.mocked(ipcBridge.fs.getFileMetadata.invoke).mockResolvedValue(fileMetadata(filePath));
@@ -571,6 +613,10 @@ describe('MessageText attachment paths', () => {
     renderMessageWithLocalLink('[chart.png](/workspace/demo/assets/chart.png)');
 
     fireEvent.click(screen.getByRole('button', { name: 'open local file' }));
+    expect(modalMocks.confirm).toHaveBeenCalledWith(
+      expect.objectContaining({ okText: 'Preview', cancelText: 'Download' })
+    );
+    modalMocks.lastConfig?.onOk?.();
 
     await waitFor(() => {
       expect(previewMocks.openPreview).toHaveBeenCalledWith(

@@ -8,7 +8,7 @@ import type { IMessageText } from '@/common/chat/chatLib';
 import { AIONUI_FILES_MARKER } from '@/common/config/constants';
 import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
-import { useLocalFilePreview } from '@/renderer/pages/conversation/Preview/hooks/useLocalFilePreview';
+import { useFileOpenChoice } from '@/renderer/hooks/file/useFileOpenChoice';
 import { iconColors } from '@/renderer/styles/colors';
 import { Alert, Message, Tooltip } from '@arco-design/web-react';
 import { Copy } from '@icon-park/react';
@@ -176,7 +176,7 @@ const MessageText: React.FC<{ message: IMessageText; showCopyRow?: boolean }> = 
   const conversationContext = useConversationContextSafe();
   const layout = useLayoutContext();
   const isMobile = layout?.isMobile ?? false;
-  const handleLocalFileLink = useLocalFilePreview(conversationContext?.workspace);
+  const handleFileOpen = useFileOpenChoice(conversationContext?.workspace);
   const resolvedFiles = useMemo(
     () => files.map((file_path) => resolveMessageFilePath(file_path, conversationContext?.workspace)),
     [conversationContext?.workspace, files]
@@ -244,12 +244,23 @@ const MessageText: React.FC<{ message: IMessageText; showCopyRow?: boolean }> = 
           <div className={classNames('mt-6px', { 'self-end': isUserMessage })}>
             {resolvedFiles.length === 1 ? (
               <div className='flex items-center'>
-                <FilePreview path={resolvedFiles[0]} onRemove={() => undefined} readonly />
+                <FilePreview
+                  path={resolvedFiles[0]}
+                  onRemove={() => undefined}
+                  onOpen={() => handleFileOpen(resolvedFiles[0])}
+                  readonly
+                />
               </div>
             ) : (
               <HorizontalFileList>
                 {resolvedFiles.map((path) => (
-                  <FilePreview key={path} path={path} onRemove={() => undefined} readonly />
+                  <FilePreview
+                    key={path}
+                    path={path}
+                    onRemove={() => undefined}
+                    onOpen={() => handleFileOpen(path)}
+                    readonly
+                  />
                 ))}
               </HorizontalFileList>
             )}
@@ -282,13 +293,13 @@ const MessageText: React.FC<{ message: IMessageText; showCopyRow?: boolean }> = 
               <div data-testid='message-text-content'>
                 <MarkdownView
                   codeStyle={CODE_STYLE}
-                  onLocalFileLink={handleLocalFileLink}
+                  onLocalFileLink={handleFileOpen}
                 >{`\`\`\`json\n${JSON.stringify(data, null, 2)}\n\`\`\``}</MarkdownView>
               </div>
             </CollapsibleContent>
           ) : (
             <div data-testid='message-text-content'>
-              <MarkdownView codeStyle={CODE_STYLE} onLocalFileLink={handleLocalFileLink}>
+              <MarkdownView codeStyle={CODE_STYLE} onLocalFileLink={handleFileOpen}>
                 {data}
               </MarkdownView>
             </div>

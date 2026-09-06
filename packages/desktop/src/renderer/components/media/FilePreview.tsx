@@ -37,9 +37,10 @@ interface FilePreviewProps {
   path: string;
   onRemove: () => void;
   readonly?: boolean;
+  onOpen?: () => void | Promise<void>;
 }
 
-const FilePreview: React.FC<FilePreviewProps> = ({ path, onRemove, readonly = false }) => {
+const FilePreview: React.FC<FilePreviewProps> = ({ path, onRemove, readonly = false, onOpen }) => {
   // Defensive check: ensure path is a string
   if (typeof path !== 'string') {
     console.error('[FilePreview] Invalid path type:', typeof path, path);
@@ -111,9 +112,29 @@ const FilePreview: React.FC<FilePreviewProps> = ({ path, onRemove, readonly = fa
     onRemove();
   };
 
+  const handleOpen = () => {
+    if (onOpen) void onOpen();
+  };
+
+  const handleOpenKeyDown = (e: React.KeyboardEvent) => {
+    if (onOpen && (e.key === 'Enter' || e.key === ' ')) {
+      e.preventDefault();
+      handleOpen();
+    }
+  };
+
+  const openProps = onOpen
+    ? {
+        role: 'button' as const,
+        tabIndex: 0,
+        onClick: handleOpen,
+        onKeyDown: handleOpenKeyDown,
+      }
+    : {};
+
   if (isImage) {
     return (
-      <div className='relative inline-block'>
+      <div className={`relative inline-block ${onOpen ? 'cursor-pointer' : ''}`} {...openProps}>
         <div className='rd-8px overflow-hidden border-1 border-solid b-color-border-2'>
           <Image
             src={imageUrl}
@@ -122,7 +143,7 @@ const FilePreview: React.FC<FilePreviewProps> = ({ path, onRemove, readonly = fa
             height={60}
             className='object-cover cursor-pointer'
             style={{ display: imageUrl ? 'block' : 'none' }}
-            preview={Boolean(imageUrl)}
+            preview={Boolean(imageUrl) && !onOpen}
           />
           {!imageUrl && <div className='w-60px h-60px bg-bg-3'></div>}
         </div>
@@ -141,7 +162,8 @@ const FilePreview: React.FC<FilePreviewProps> = ({ path, onRemove, readonly = fa
   return (
     <div className='relative inline-block mb-10px'>
       <div
-        className='h-60px flex items-center gap-12px px-12px rd-8px bg-bg-2 border border-solid'
+        {...openProps}
+        className={`h-60px flex items-center gap-12px px-12px rd-8px bg-bg-2 border border-solid ${onOpen ? 'cursor-pointer' : ''}`}
         style={{ borderColor: 'var(--border-base)', boxShadow: '0 0 0 1px rgba(0,0,0,0.02)' }}
       >
         <div className='w-40px h-40px rd-8px flex items-center justify-center flex-shrink-0'>
