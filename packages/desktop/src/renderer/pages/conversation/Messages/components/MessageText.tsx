@@ -11,7 +11,10 @@ import { useConversationContextSafe } from '@/renderer/hooks/context/Conversatio
 import { useLocalFilePreview } from '@/renderer/pages/conversation/Preview/hooks/useLocalFilePreview';
 import { iconColors } from '@/renderer/styles/colors';
 import { isElectronDesktop } from '@/renderer/utils/platform';
-import { Alert, Button, Message, Tooltip } from '@arco-design/web-react';
+import { Alert, Button, Message, Modal, Tooltip } from '@arco-design/web-react';
+import { getContentTypeByExtension } from '../../Preview/fileUtils';
+import { textExts } from '@/renderer/services/FileService';
+import { downloadFileFromPath } from '@/renderer/utils/file/download';
 import { Copy } from '@icon-park/react';
 import classNames from 'classnames';
 import React, { useMemo, useState } from 'react';
@@ -270,7 +273,21 @@ const MessageText: React.FC<{
   const conversationContext = useConversationContextSafe();
   const { user } = useAuth();
   const forkConversation = useForkConversation(conversationContext?.conversation_id);
-  const handleLocalFileLink = useLocalFilePreview(conversationContext?.workspace);
+  const previewLocalFile = useLocalFilePreview(conversationContext?.workspace);
+  const [fileAction, setFileAction] = useState<Parameters<typeof previewLocalFile> | null>(null);
+  const handleLocalFileLink: typeof previewLocalFile = async (path, reference) => {
+    const type = getContentTypeByExtension(path);
+    const extension = path
+      .split(/[\\/]/)
+      .pop()
+      ?.match(/\.[^.]+$/)?.[0]
+      .toLowerCase();
+    if (type === 'markdown' || (type === 'code' && (!extension || textExts.includes(extension)))) {
+      await previewLocalFile(path, reference);
+    } else {
+      setFileAction([path, reference]);
+    }
+  };
   const resolvedFiles = useMemo(
     () => files.map((file_path) => resolveMessageFilePath(file_path, conversationContext?.workspace)),
     [conversationContext?.workspace, files]
@@ -344,6 +361,40 @@ const MessageText: React.FC<{
 
   return (
     <>
+      <Modal
+        visible={fileAction !== null}
+        title={fileAction?.[0].split(/[\\/]/).pop()}
+        onCancel={() => setFileAction(null)}
+        footer={
+          <div className='flex gap-8px justify-end'>
+            <Button
+              type='primary'
+              onClick={() => {
+                if (!fileAction) return;
+                const target = fileAction;
+                setFileAction(null);
+                void previewLocalFile(...target);
+              }}
+            >
+              {t('preview.preview')}
+            </Button>
+            <Button
+              onClick={() => {
+                if (!fileAction) return;
+                const path = fileAction[0];
+                setFileAction(null);
+                void downloadFileFromPath(
+                  path,
+                  path.split(/[\\/]/).pop() || path,
+                  conversationContext?.workspace
+                ).catch(() => Message.error(t('common.failed')));
+              }}
+            >
+              {t('common.download')}
+            </Button>
+          </div>
+        }
+      />
       <div className={classNames('min-w-0 flex flex-col group', isUserMessage ? 'items-end' : 'items-start')}>
         {cronMeta && <MessageCronBadge meta={cronMeta} />}
         {isTeammateMessage && senderName && (
@@ -365,12 +416,23 @@ const MessageText: React.FC<{
           <div className={classNames('mt-6px min-w-0 max-w-full', { 'self-end': isUserMessage })}>
             {resolvedFiles.length === 1 ? (
               <div className='flex items-center'>
-                <FilePreview path={resolvedFiles[0]} onRemove={() => undefined} readonly />
+                <FilePreview
+                  path={resolvedFiles[0]}
+                  onRemove={() => undefined}
+                  readonly
+                  onOpen={() => void handleLocalFileLink(resolvedFiles[0])}
+                />
               </div>
             ) : (
               <HorizontalFileList>
                 {resolvedFiles.map((path) => (
-                  <FilePreview key={path} path={path} onRemove={() => undefined} readonly />
+                  <FilePreview
+                    key={path}
+                    path={path}
+                    onRemove={() => undefined}
+                    readonly
+                    onOpen={() => void handleLocalFileLink(path)}
+                  />
                 ))}
               </HorizontalFileList>
             )}

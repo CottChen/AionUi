@@ -8,7 +8,7 @@ import { Close } from '@icon-park/react';
 import React, { useEffect, useState } from 'react';
 import { getFileExtension } from '@/renderer/services/FileService';
 import { ipcBridge } from '@/common';
-import { Image, Tooltip } from '@arco-design/web-react';
+import { Button, Image, Tooltip } from '@arco-design/web-react';
 import fileIcon from '@/renderer/assets/icons/file-icon.svg';
 
 const IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg']);
@@ -39,9 +39,10 @@ interface FilePreviewProps {
   readonly?: boolean;
   /** Optional tooltip shown on the chip (e.g. "sent as a file path"). */
   hint?: string;
+  onOpen?: () => void;
 }
 
-const FilePreview: React.FC<FilePreviewProps> = ({ path, onRemove, readonly = false, hint }) => {
+const FilePreview: React.FC<FilePreviewProps> = ({ path, onRemove, readonly = false, hint, onOpen }) => {
   // Defensive check: ensure path is a string
   if (typeof path !== 'string') {
     console.error('[FilePreview] Invalid path type:', typeof path, path);
@@ -113,7 +114,17 @@ const FilePreview: React.FC<FilePreviewProps> = ({ path, onRemove, readonly = fa
     onRemove();
   };
 
-  const withHint = (chip: React.ReactElement) => (hint ? <Tooltip content={hint}>{chip}</Tooltip> : chip);
+  const withHint = (chip: React.ReactElement) => {
+    const content =
+      readonly && onOpen ? (
+        <Button type='text' style={{ height: 'auto', padding: 0 }} onClick={onOpen} aria-label={file_name}>
+          {chip}
+        </Button>
+      ) : (
+        chip
+      );
+    return hint ? <Tooltip content={hint}>{content}</Tooltip> : content;
+  };
 
   if (isImage) {
     return withHint(
@@ -126,7 +137,7 @@ const FilePreview: React.FC<FilePreviewProps> = ({ path, onRemove, readonly = fa
             height={60}
             className='object-cover cursor-pointer'
             style={{ display: imageUrl ? 'block' : 'none' }}
-            preview={Boolean(imageUrl)}
+            preview={Boolean(imageUrl) && !(readonly && onOpen)}
           />
           {!imageUrl && <div className='w-60px h-60px bg-bg-3'></div>}
         </div>

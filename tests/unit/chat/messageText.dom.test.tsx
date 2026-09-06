@@ -13,6 +13,8 @@ import { ConversationProvider } from '@/renderer/hooks/context/ConversationConte
 import MessageText from '@/renderer/pages/conversation/Messages/components/MessageText';
 import { WORKSPACE_REVEAL_FILE_EVENT } from '@/renderer/utils/workspace/workspaceEvents';
 import { copyText } from '@/renderer/utils/ui/clipboard';
+import { downloadFileFromPath } from '@/renderer/utils/file/download';
+vi.mock('@/renderer/utils/file/download', () => ({ downloadFileFromPath: vi.fn().mockResolvedValue(undefined) }));
 
 const previewMocks = vi.hoisted(() => ({
   openPreview: vi.fn(),
@@ -31,7 +33,11 @@ const localFileLinkMocks = vi.hoisted(() => ({
       | undefined,
   },
 }));
-const mockFilePreview = vi.fn(({ path }: { path: string }) => <div data-testid='file-preview'>{path}</div>);
+const mockFilePreview = vi.fn(({ path, onOpen }: { path: string; onOpen?: () => void }) => (
+  <div data-testid='file-preview' onClick={onOpen}>
+    {path}
+  </div>
+));
 
 const forkMocks = vi.hoisted(() => ({
   fork: vi.fn(),
@@ -155,6 +161,8 @@ vi.mock('@/renderer/utils/ui/clipboard', () => ({
 }));
 
 vi.mock('@arco-design/web-react', () => ({
+  Modal: ({ visible, footer }: { visible: boolean; footer: React.ReactNode }) =>
+    visible ? <div role='dialog'>{footer}</div> : null,
   Alert: () => null,
   Button: ({
     children,
@@ -191,6 +199,24 @@ const fileMetadata = (path: string) => ({
 });
 
 describe('MessageText attachment paths', () => {
+  it('offers preview before download for channel attachments and preserves spaces in the download path', async () => {
+    const path = '01-原始文档/D/迪敏思介绍  有效期（2027）.pptx';
+    renderMessageWithLocalLink(
+      `[AIONUI_CHANNEL_SEND]\n${JSON.stringify({ type: 'file', path })}\n[/AIONUI_CHANNEL_SEND]`
+    );
+    fireEvent.click(screen.getByTestId('file-preview'));
+    const choices = screen.getByRole('dialog').querySelectorAll('button');
+    expect(Array.from(choices).map((button) => button.textContent)).toEqual(['preview.preview', 'common.download']);
+    fireEvent.click(screen.getByRole('button', { name: 'common.download' }));
+    await waitFor(() =>
+      expect(downloadFileFromPath).toHaveBeenCalledWith(
+        `/workspace/demo/${path}`,
+        '迪敏思介绍  有效期（2027）.pptx',
+        '/workspace/demo'
+      )
+    );
+    expect(previewMocks.openPreview).not.toHaveBeenCalled();
+  });
   beforeEach(() => {
     mockFilePreview.mockClear();
     vi.mocked(copyText).mockClear();
@@ -577,6 +603,8 @@ describe('MessageText attachment paths', () => {
     renderMessageWithLocalLink();
 
     fireEvent.click(screen.getByRole('button', { name: 'open local file' }));
+    expect(previewMocks.openPreview).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'preview.preview' }));
 
     await waitFor(() => {
       expect(previewMocks.openPreview).toHaveBeenCalledWith(
@@ -718,6 +746,8 @@ describe('MessageText attachment paths', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'open local file' }));
 
+    fireEvent.click(screen.getByRole('button', { name: 'preview.preview' }));
+
     await waitFor(() => {
       expect(previewMocks.openPreview).toHaveBeenCalledWith(
         '',
@@ -743,6 +773,7 @@ describe('MessageText attachment paths', () => {
     renderMessageWithLocalLink('[chart.png](/workspace/demo/assets/chart.png)');
 
     fireEvent.click(screen.getByRole('button', { name: 'open local file' }));
+    fireEvent.click(screen.getByRole('button', { name: 'preview.preview' }));
 
     await waitFor(() => {
       expect(previewMocks.openPreview).toHaveBeenCalledWith(
