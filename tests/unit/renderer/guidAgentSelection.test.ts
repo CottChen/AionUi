@@ -6,6 +6,7 @@ import {
   resolveAssistantSelectionKey,
 } from '@/renderer/pages/guid/hooks/useGuidAssistantSelection';
 import { resolveScopedAgentModeSelection } from '@/renderer/pages/guid/utils/modeSelection';
+import { buildAgentRuntimeModelInfo } from '@/renderer/utils/model/agentRuntimeCatalog';
 
 describe('guid assistant selection helpers', () => {
   const assistants: Assistant[] = [
@@ -65,6 +66,36 @@ describe('guid assistant selection helpers', () => {
         fallbackMode: 'default',
       })
     ).toBe('default');
+  });
+});
+
+describe('runtime model catalog', () => {
+  it('keeps the current model selectable when discovery omits it', () => {
+    const modelInfo = buildAgentRuntimeModelInfo({
+      available_models: {
+        current_model_id: 'gpt-6-astra',
+        available_models: [{ id: 'gpt-5.4', label: 'GPT-5.4' }],
+      },
+    });
+
+    expect(modelInfo?.current_model_id).toBe('gpt-6-astra');
+    expect(modelInfo?.available_models.map((model) => model.id)).toEqual(['gpt-6-astra', 'gpt-5.4']);
+  });
+
+  it('does not duplicate a current model already present in discovery', () => {
+    const modelInfo = buildAgentRuntimeModelInfo({
+      config_options: [
+        {
+          id: 'model',
+          category: 'model',
+          type: 'select',
+          current_value: 'gpt-5.4',
+          options: [{ value: 'gpt-5.4', label: 'GPT-5.4' }],
+        },
+      ],
+    });
+
+    expect(modelInfo?.available_models).toEqual([{ id: 'gpt-5.4', label: 'GPT-5.4', description: undefined }]);
   });
 });
 

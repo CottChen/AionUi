@@ -72,31 +72,46 @@ function normalizeModelOption(value: unknown): { id: string; label: string; desc
   return { id, label, description };
 }
 
-function buildModelInfoFromPayload(value: unknown): AcpModelInfo | null {
-  const payload = parseJsonPayload(value);
-  if (!isRecord(payload) || !Array.isArray(payload.available_models)) {
-    return null;
+function ensureCurrentModelOption(
+  models: Array<{ id: string; label: string; description?: string }>,
+  currentModelId: string | null
+): Array<{ id: string; label: string; description?: string }> {
+  if (!currentModelId || models.some((model) => model.id === currentModelId)) {
+    return models;
   }
 
-  const available_models = payload.available_models.map(normalizeModelOption).filter((item) => item !== null);
-  if (available_models.length === 0) return null;
+  return [{ id: currentModelId, label: currentModelId }, ...models];
+}
+
+function buildModelInfoFromPayload(value: unknown): AcpModelInfo | null {
+  const payload = parseJsonPayload(value);
+  if (!isRecord(payload)) {
+    return null;
+  }
 
   const current_model_id =
     typeof payload.current_model_id === 'string'
       ? payload.current_model_id
       : typeof payload.currentModelId === 'string'
         ? payload.currentModelId
-        : (available_models[0]?.id ?? null);
+        : null;
+  const normalizedModels = Array.isArray(payload.available_models)
+    ? payload.available_models.map(normalizeModelOption).filter((item) => item !== null)
+    : [];
+  const available_models = ensureCurrentModelOption(normalizedModels, current_model_id);
+  if (available_models.length === 0) return null;
+
+  const resolved_current_model_id = current_model_id ?? available_models[0]?.id ?? null;
   const matchedModel = available_models.find((model) => model.id === current_model_id);
   const current_model_label =
     typeof payload.current_model_label === 'string'
       ? payload.current_model_label
       : typeof payload.currentModelLabel === 'string'
         ? payload.currentModelLabel
-        : (matchedModel?.label ?? current_model_id);
+        : (matchedModel?.label ?? resolved_current_model_id);
 
   return {
-    current_model_id,
+    current_model_id: resolved_current_model_id,
     current_model_label,
     available_models,
   };
@@ -142,13 +157,15 @@ function buildModelInfoFromConfigOptions(configOptions: AcpSessionConfigOption[]
     label: option.label || option.name || option.value,
     description: option.description || undefined,
   }));
-  const current_model_id = getConfigOptionCurrentValue(modelOption) || available_models[0]?.id || null;
-  const matchedModel = available_models.find((model) => model.id === current_model_id);
+  const current_model_id = getConfigOptionCurrentValue(modelOption) || null;
+  const mergedAvailableModels = ensureCurrentModelOption(available_models, current_model_id);
+  const resolved_current_model_id = current_model_id || mergedAvailableModels[0]?.id || null;
+  const matchedModel = mergedAvailableModels.find((model) => model.id === resolved_current_model_id);
 
   return {
-    current_model_id,
-    current_model_label: matchedModel?.label ?? current_model_id,
-    available_models,
+    current_model_id: resolved_current_model_id,
+    current_model_label: matchedModel?.label ?? resolved_current_model_id,
+    available_models: mergedAvailableModels,
   };
 }
 

@@ -158,6 +158,7 @@ const DefaultsSection: React.FC<DefaultsSectionProps> = ({
             }}
             disabled={!canEditDefaultModelAndPermission}
             allowClear={false}
+            allowCreate
             showSearch={modelOptions.length > DROPDOWN_SEARCH_THRESHOLD}
             filterOption={filterSelectOption}
             placeholder={t('settings.assistantSelectDefaultModel', { defaultValue: 'Select a model' })}
