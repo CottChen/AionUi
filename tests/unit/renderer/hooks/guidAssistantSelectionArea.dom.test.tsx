@@ -240,7 +240,7 @@ describe('AssistantSelectionArea', () => {
     ).toEqual(['Aion CLI', 'Early', 'Mid', 'Late']);
   });
 
-  it('keeps a selected overflow assistant visible in the top pill row', () => {
+  it('keeps the configured order when the selected assistant is in overflow', () => {
     render(
       <AssistantSelectionArea
         selectedAssistantId='user-finance'
@@ -250,13 +250,15 @@ describe('AssistantSelectionArea', () => {
       />
     );
 
-    // The selected overflow assistant (finance) is pulled into the top row;
-    // translate (the last of the visible-4 before pull-in) drops to overflow.
-    expect(screen.getByTestId('preset-pill-user-finance')).toBeInTheDocument();
-    expect(screen.queryByTestId('preset-pill-user-translate')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('preset-pill-user-finance')).not.toBeInTheDocument();
+    expect(screen.getByTestId('preset-pill-user-translate')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('assistant-more-btn'));
+
+    expect(screen.getByTestId('assistant-overflow-user-finance')).toHaveAttribute('data-assistant-selected', 'true');
   });
 
-  it('uses the last visible slot for an overflow selection at smaller visible counts', () => {
+  it('keeps the first configured assistants visible at smaller limits', () => {
     render(
       <AssistantSelectionArea
         selectedAssistantId='user-finance'
@@ -269,9 +271,9 @@ describe('AssistantSelectionArea', () => {
 
     expect(screen.getAllByTestId(/^preset-pill-/).map((node) => node.getAttribute('data-assistant-id'))).toEqual([
       'bare-aionrs',
-      'user-finance',
+      'user-research',
     ]);
-    expect(screen.queryByTestId('preset-pill-user-research')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('preset-pill-user-finance')).not.toBeInTheDocument();
   });
 
   it('can re-render from an empty assistant catalog without breaking hook order', () => {

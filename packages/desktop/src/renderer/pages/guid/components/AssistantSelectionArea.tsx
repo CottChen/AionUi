@@ -166,18 +166,7 @@ const AssistantSelectionArea: React.FC<AssistantSelectionAreaProps> = ({
     return () => window.removeEventListener('resize', updateAvailableWidth);
   }, []);
 
-  const visibleAssistants = useMemo(() => {
-    if (enabledAssistants.length <= visibleLimit || !selectedId) {
-      return enabledAssistants.slice(0, visibleLimit);
-    }
-
-    const selectedIndex = enabledAssistants.findIndex((assistant) => assistant.id === selectedId);
-    if (selectedIndex < 0 || selectedIndex < visibleLimit) {
-      return enabledAssistants.slice(0, visibleLimit);
-    }
-
-    return [...enabledAssistants.slice(0, visibleLimit - 1), enabledAssistants[selectedIndex]];
-  }, [enabledAssistants, selectedId, visibleLimit]);
+  const visibleAssistants = useMemo(() => enabledAssistants.slice(0, visibleLimit), [enabledAssistants, visibleLimit]);
 
   useLayoutEffect(() => {
     if (visibleLimit <= 1 || !hasTruncatedAssistantLabels(containerRef.current)) {
