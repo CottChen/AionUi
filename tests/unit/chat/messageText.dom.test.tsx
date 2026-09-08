@@ -161,8 +161,25 @@ vi.mock('@/renderer/utils/ui/clipboard', () => ({
 }));
 
 vi.mock('@arco-design/web-react', () => ({
-  Modal: ({ visible, footer }: { visible: boolean; footer: React.ReactNode }) =>
-    visible ? <div role='dialog'>{footer}</div> : null,
+  Modal: ({
+    visible,
+    footer,
+    title,
+    className,
+    style,
+  }: {
+    visible: boolean;
+    footer: React.ReactNode;
+    title?: React.ReactNode;
+    className?: string;
+    style?: React.CSSProperties;
+  }) =>
+    visible ? (
+      <div role='dialog' className={className} style={style}>
+        {title}
+        {footer}
+      </div>
+    ) : null,
   Alert: () => null,
   Button: ({
     children,
@@ -199,6 +216,22 @@ const fileMetadata = (path: string) => ({
 });
 
 describe('MessageText attachment paths', () => {
+  it('keeps the file action dialog compact and readable on narrow screens', () => {
+    const fileName = '迪敏思准入介绍-PP-DYM-25-102501  有效期至2027年10月17日-251028.pptx';
+    localFileLinkMocks.payload = {
+      path: `/workspace/demo/01-原始文档/D/${fileName}`,
+      reference: undefined,
+    };
+    renderMessageWithLocalLink(`[迪敏思准入介绍](<01-原始文档/D/${fileName}>)`);
+
+    fireEvent.click(screen.getByRole('button', { name: 'open local file' }));
+
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveClass('message-file-action-modal');
+    expect(dialog).toHaveStyle({ width: 'calc(100vw - 32px)', maxWidth: '420px' });
+    expect(dialog.querySelector('.message-file-action-title')?.textContent).toBe(fileName);
+  });
+
   it('offers preview before download for channel attachments and preserves spaces in the download path', async () => {
     const path = '01-原始文档/D/迪敏思介绍  有效期（2027）.pptx';
     renderMessageWithLocalLink(

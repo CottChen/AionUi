@@ -362,11 +362,18 @@ const MessageText: React.FC<{
   return (
     <>
       <Modal
+        alignCenter
+        className='message-file-action-modal'
         visible={fileAction !== null}
-        title={fileAction?.[0].split(/[\\/]/).pop()}
+        title={
+          <span className='message-file-action-title' title={fileAction?.[0].split(/[\\/]/).pop()}>
+            {fileAction?.[0].split(/[\\/]/).pop()}
+          </span>
+        }
         onCancel={() => setFileAction(null)}
+        style={{ width: 'calc(100vw - 32px)', maxWidth: 420 }}
         footer={
-          <div className='flex gap-8px justify-end'>
+          <div className='message-file-action-footer flex gap-8px justify-end'>
             <Button
               type='primary'
               onClick={() => {

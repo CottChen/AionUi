@@ -238,6 +238,64 @@ body[arco-theme='dark'] .arco-tag-checked.arco-tag-gray {
   border-top: 1px solid var(--bg-3) !important;
 }
 
+/* Conversation file actions are a compact choice, not a content modal. */
+.message-file-action-modal {
+  border-radius: 8px;
+}
+
+.message-file-action-modal .arco-modal-header {
+  padding: 20px 48px 8px 20px;
+  border-bottom: 0;
+}
+
+.message-file-action-modal .arco-modal-title {
+  min-width: 0;
+  font-size: 16px;
+  line-height: 22px;
+  text-align: left;
+}
+
+.message-file-action-title {
+  display: -webkit-box;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.message-file-action-modal .arco-modal-content {
+  display: none;
+}
+
+.message-file-action-modal .arco-modal-footer {
+  padding: 12px 20px 20px;
+  border-top: 0;
+}
+
+.message-file-action-footer {
+  width: 100%;
+}
+
+@media (max-width: 480px) {
+  .message-file-action-modal .arco-modal-header {
+    padding: 16px 44px 8px 16px;
+  }
+
+  .message-file-action-modal .arco-modal-footer {
+    padding: 8px 16px 16px;
+  }
+
+  .message-file-action-footer {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .message-file-action-footer .arco-btn {
+    width: 100%;
+    margin-left: 0 !important;
+  }
+}
+
 body[arco-theme='dark'] .arco-modal-content {
   background-color: var(--dialog-fill-0) !important;
   border: 1px solid var(--border-base) !important;
