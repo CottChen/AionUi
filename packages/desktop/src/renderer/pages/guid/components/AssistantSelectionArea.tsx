@@ -6,7 +6,7 @@
 
 import styles from '../index.module.css';
 import { assistantRuntimeKey, type Assistant } from '@/common/types/agent/assistantTypes';
-import { Down, Robot } from '@icon-park/react';
+import { Check, Down, Robot } from '@icon-park/react';
 import { Button } from '@arco-design/web-react';
 import { AionSearchInput } from '@/renderer/components/base';
 import { useAssistantOrder } from '@/renderer/hooks/assistant/useAssistantOrder';
@@ -55,6 +55,15 @@ export function hasTruncatedAssistantLabels(root: HTMLElement | null): boolean {
   );
 }
 
+export function prioritizeSelectedAssistant(assistants: Assistant[], selectedAssistantId?: string): Assistant[] {
+  if (!selectedAssistantId || assistants[0]?.id === selectedAssistantId) return assistants;
+
+  const selectedIndex = assistants.findIndex((assistant) => assistant.id === selectedAssistantId);
+  if (selectedIndex < 0) return assistants;
+
+  return [assistants[selectedIndex], ...assistants.slice(0, selectedIndex), ...assistants.slice(selectedIndex + 1)];
+}
+
 type AssistantSelectionAreaProps = {
   selectedAssistantId?: string | null;
   assistants: Assistant[];
@@ -83,10 +92,10 @@ const AssistantSelectionArea: React.FC<AssistantSelectionAreaProps> = ({
   const widthVisibleLimit = Math.min(Math.max(1, maxVisibleAssistants), resolveAssistantVisibleLimit(availableWidth));
   const [adaptiveVisibleLimit, setAdaptiveVisibleLimit] = useState(widthVisibleLimit);
   const visibleLimit = Math.min(widthVisibleLimit, adaptiveVisibleLimit);
-  const enabledAssistants = useMemo(
-    () => selectableAssistants(assistants, assistantOrder),
-    [assistantOrder, assistants]
-  );
+  const enabledAssistants = useMemo(() => {
+    const orderedAssistants = selectableAssistants(assistants, assistantOrder);
+    return prioritizeSelectedAssistant(orderedAssistants, selectedId);
+  }, [assistantOrder, assistants, selectedId]);
 
   useEffect(() => {
     setAdaptiveVisibleLimit(widthVisibleLimit);
@@ -221,15 +230,16 @@ const AssistantSelectionArea: React.FC<AssistantSelectionAreaProps> = ({
         data-assistant-id={assistant.id}
         data-assistant-backend={assistantRuntimeKey(assistant)}
         data-assistant-selected={isSelected ? 'true' : 'false'}
+        aria-pressed={isSelected}
         type='text'
-        className={`!inline-flex !min-w-0 !h-auto !items-center !gap-6px !rounded-999px !border-none !px-12px !py-8px !text-13px transition-all ${
+        className={`!inline-flex !min-w-0 !h-auto !items-center !gap-6px !rounded-999px !border !border-solid !px-12px !py-8px !text-13px transition-all ${
           fullWidth ? '!w-full !justify-start' : ''
         } ${
           isSelected
-            ? 'font-600 text-t-primary shadow-sm'
-            : `text-t-secondary opacity-75 hover:opacity-100 ${styles.assistantSelectorInactive}`
+            ? '!border-primary-5 !bg-primary-1 font-600 !text-primary-6 shadow-sm'
+            : `!border-transparent text-t-secondary opacity-75 hover:opacity-100 ${styles.assistantSelectorInactive}`
         }`}
-        style={isSelected ? { background: 'var(--bg-base, #fff)' } : { background: 'transparent' }}
+        style={isSelected ? undefined : { background: 'transparent' }}
         onClick={() => {
           onSelectAssistant(assistant.id);
           setMoreVisible(false);
@@ -247,6 +257,7 @@ const AssistantSelectionArea: React.FC<AssistantSelectionAreaProps> = ({
         <span data-assistant-label='true' className='min-w-0 max-w-180px truncate whitespace-nowrap'>
           {label}
         </span>
+        {isSelected ? <Check theme='outline' size={13} className='shrink-0' aria-hidden='true' /> : null}
       </Button>
     );
   };

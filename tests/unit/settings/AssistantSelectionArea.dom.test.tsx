@@ -47,7 +47,7 @@ describe('AssistantSelectionArea', () => {
     expect(onSelectAssistant).toHaveBeenCalledWith('writer');
   });
 
-  it('renders assistant pills in sort_order order', () => {
+  it('renders the selected assistant first without losing the configured assistants', () => {
     render(
       <ConfigProvider>
         <AssistantSelectionArea
@@ -63,7 +63,7 @@ describe('AssistantSelectionArea', () => {
       .getAllByTestId(/preset-pill-/)
       .map((element) => element.getAttribute('data-testid')?.replace('preset-pill-', ''));
 
-    expect(presetPills).toEqual(['writer', 'cowork']);
+    expect(presetPills).toEqual(['cowork', 'writer']);
   });
 
   it('prefers localized assistant names for the active locale', () => {

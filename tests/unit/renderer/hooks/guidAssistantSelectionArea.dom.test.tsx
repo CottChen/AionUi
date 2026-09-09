@@ -10,6 +10,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Assistant } from '@/common/types/agent/assistantTypes';
 import AssistantSelectionArea, {
   hasTruncatedAssistantLabels,
+  prioritizeSelectedAssistant,
   resolveAssistantVisibleLimit,
 } from '@/renderer/pages/guid/components/AssistantSelectionArea';
 
@@ -54,6 +55,21 @@ describe('AssistantSelectionArea', () => {
     Object.defineProperty(label, 'scrollWidth', { configurable: true, value: 80 });
 
     expect(hasTruncatedAssistantLabels(root)).toBe(false);
+  });
+
+  it('moves the selected assistant first while preserving the order of all other assistants', () => {
+    const ordered = manyAssistants();
+
+    expect(prioritizeSelectedAssistant(ordered, 'user-finance').map((assistant) => assistant.id)).toEqual([
+      'user-finance',
+      ...ordered.filter((assistant) => assistant.id !== 'user-finance').map((assistant) => assistant.id),
+    ]);
+  });
+
+  it('preserves the configured order when the selected assistant is missing', () => {
+    const ordered = assistants();
+
+    expect(prioritizeSelectedAssistant(ordered, 'missing-assistant')).toBe(ordered);
   });
 
   it('keeps the assistant picker visible after an assistant is selected', () => {
@@ -240,7 +256,7 @@ describe('AssistantSelectionArea', () => {
     ).toEqual(['Aion CLI', 'Early', 'Mid', 'Late']);
   });
 
-  it('keeps the configured order when the selected assistant is in overflow', () => {
+  it('moves the selected assistant out of overflow and clearly marks it selected', () => {
     render(
       <AssistantSelectionArea
         selectedAssistantId='user-finance'
@@ -250,15 +266,14 @@ describe('AssistantSelectionArea', () => {
       />
     );
 
-    expect(screen.queryByTestId('preset-pill-user-finance')).not.toBeInTheDocument();
-    expect(screen.getByTestId('preset-pill-user-translate')).toBeInTheDocument();
-
-    fireEvent.click(screen.getByTestId('assistant-more-btn'));
-
-    expect(screen.getByTestId('assistant-overflow-user-finance')).toHaveAttribute('data-assistant-selected', 'true');
+    const selectedAssistant = screen.getByTestId('preset-pill-user-finance');
+    expect(screen.getAllByTestId(/^preset-pill-/)[0]).toBe(selectedAssistant);
+    expect(selectedAssistant).toHaveAttribute('data-assistant-selected', 'true');
+    expect(selectedAssistant).toHaveAttribute('aria-pressed', 'true');
+    expect(selectedAssistant.querySelector('svg')).toBeInTheDocument();
   });
 
-  it('keeps the first configured assistants visible at smaller limits', () => {
+  it('keeps the selected assistant first at smaller limits', () => {
     render(
       <AssistantSelectionArea
         selectedAssistantId='user-finance'
@@ -270,10 +285,10 @@ describe('AssistantSelectionArea', () => {
     );
 
     expect(screen.getAllByTestId(/^preset-pill-/).map((node) => node.getAttribute('data-assistant-id'))).toEqual([
+      'user-finance',
       'bare-aionrs',
-      'user-research',
     ]);
-    expect(screen.queryByTestId('preset-pill-user-finance')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('preset-pill-user-research')).not.toBeInTheDocument();
   });
 
   it('can re-render from an empty assistant catalog without breaking hook order', () => {
