@@ -415,16 +415,19 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId,
       .catch(() => Message.error(t('conversation.explorer.copyFailed')));
   };
 
-  // Copy the node's ABSOLUTE device path. The front end never holds it (project
-  // refs are pe_id + relative_path only) and never receives it: the backend
-  // resolves the path AND writes the clipboard itself (mirrors reveal), returning
-  // void — we only toast on success/failure. Desktop-only: the menu item is
-  // Electron-gated in ExplorerPanel, so this handler only runs there (a remote
-  // WebUI must not surface it). A pe-root node (rel '') resolves to the root
-  // folder's own absolute path server-side.
+  // Electron delegates resolution + clipboard access to the backend. WebUI
+  // already receives each root's human-facing display path in project detail,
+  // so it joins that with the protocol-relative node path and uses the browser
+  // clipboard. A pe-root node (rel '') copies the root folder itself.
   const handleCopyAbsolutePath = (peId: string, rel: string): void => {
-    void ipcBridge.fs.copyAbsolutePath
-      .invoke({ pe_id: peId, relative_path: rel })
+    const operation = isElectronDesktop()
+      ? ipcBridge.fs.copyAbsolutePath.invoke({ pe_id: peId, relative_path: rel })
+      : (() => {
+          const rootDisplayPath = roots.find((root) => root.pe_id === peId)?.displayPath;
+          const absolutePath = joinDisplayPath(rootDisplayPath, rel);
+          return absolutePath ? copyText(absolutePath) : Promise.reject(new Error('project root path unavailable'));
+        })();
+    void operation
       .then(() => Message.success(t('conversation.explorer.pathCopied')))
       .catch(() => Message.error(t('conversation.explorer.copyFailed')));
   };

@@ -12,6 +12,12 @@
     "clearWorkspace": "پاک کردن",
     "specifyWorkspace": "انتخاب پوشه پروژه",
     "searchPlaceholder": "جستجوی پروژه‌ها…",
-    "noProject": "بدون پروژه"
+    "noProject": "بدون پروژه",
+    "createProject": "پروژه جدید",
+    "createProjectTitle": "ایجاد پروژه",
+    "createProjectPlaceholder": "نام پروژه",
+    "projectNameRequired": "نام پروژه را وارد کنید",
+    "projectAlreadyExists": "پروژه‌ای با این نام وجود دارد",
+    "createProjectFailed": "ایجاد پروژه ناموفق بود"
   }
 }

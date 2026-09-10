@@ -12,6 +12,12 @@
     "clearWorkspace": "Temizle",
     "specifyWorkspace": "Proje klasörü seç",
     "searchPlaceholder": "Proje ara…",
-    "noProject": "Proje Yok"
+    "noProject": "Proje Yok",
+    "createProject": "Yeni proje",
+    "createProjectTitle": "Proje oluştur",
+    "createProjectPlaceholder": "Proje adı",
+    "projectNameRequired": "Bir proje adı girin",
+    "projectAlreadyExists": "Bu ada sahip bir proje zaten var",
+    "createProjectFailed": "Proje oluşturulamadı"
   }
 }

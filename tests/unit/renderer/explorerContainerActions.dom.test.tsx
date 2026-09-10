@@ -443,24 +443,31 @@ describe('ExplorerContainer A-paste import', () => {
     await waitFor(() => expect(Message.error).toHaveBeenCalledWith('conversation.explorer.copyFailed'));
   });
 
-  it('copy absolute path: calls the backend copy endpoint (which writes the clipboard) + success toast — front end never touches the abs', async () => {
+  it('copy absolute path: WebUI joins the project display path and copies it in the browser', async () => {
+    renderIt();
+    fireEvent.click(await screen.findByTestId('do-copy-abs'));
+    await waitFor(() => expect(copyText).toHaveBeenCalledWith('/x/src/main.ts'));
+    await waitFor(() => expect(Message.success).toHaveBeenCalledWith('conversation.explorer.pathCopied'));
+    expect(copyAbsolutePath).not.toHaveBeenCalled();
+  });
+
+  it('copy absolute path: WebUI copies the project root for a root node', async () => {
+    renderIt();
+    fireEvent.click(await screen.findByTestId('do-copy-abs-root'));
+    await waitFor(() => expect(copyText).toHaveBeenCalledWith('/x'));
+    await waitFor(() => expect(Message.success).toHaveBeenCalledWith('conversation.explorer.pathCopied'));
+  });
+
+  it('copy absolute path: Electron delegates path resolution and clipboard writing to the backend', async () => {
+    platformMocks.isElectronDesktop.mockReturnValue(true);
     renderIt();
     fireEvent.click(await screen.findByTestId('do-copy-abs'));
     await waitFor(() => expect(copyAbsolutePath).toHaveBeenCalledWith({ pe_id: 'peA', relative_path: 'src/main.ts' }));
-    await waitFor(() => expect(Message.success).toHaveBeenCalledWith('conversation.explorer.pathCopied'));
-    // The abs never reaches the front end, so it must NOT clipboard-copy locally.
     expect(copyText).not.toHaveBeenCalled();
   });
 
-  it('copy absolute path: a pe-root (relative_path "") is sent as-is; the backend resolves the root abs', async () => {
-    renderIt();
-    fireEvent.click(await screen.findByTestId('do-copy-abs-root'));
-    await waitFor(() => expect(copyAbsolutePath).toHaveBeenCalledWith({ pe_id: 'peA', relative_path: '' }));
-    await waitFor(() => expect(Message.success).toHaveBeenCalledWith('conversation.explorer.pathCopied'));
-  });
-
-  it('copy absolute path: a backend/clipboard failure surfaces an error toast', async () => {
-    copyAbsolutePath.mockRejectedValueOnce(new Error('not a local path'));
+  it('copy absolute path: a WebUI clipboard failure surfaces an error toast', async () => {
+    copyText.mockRejectedValueOnce(new Error('denied'));
     renderIt();
     fireEvent.click(await screen.findByTestId('do-copy-abs'));
     await waitFor(() => expect(Message.error).toHaveBeenCalledWith('conversation.explorer.copyFailed'));

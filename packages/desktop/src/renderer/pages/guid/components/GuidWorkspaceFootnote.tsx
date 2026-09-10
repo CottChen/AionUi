@@ -7,7 +7,7 @@
 import { ipcBridge } from '@/common';
 import { addRecentWorkspace, getRecentWorkspaces } from '@/renderer/components/workspace';
 import { AionInlineSearchInput } from '@/renderer/components/base';
-import { Tooltip } from '@arco-design/web-react';
+import { Button, Input, Message, Modal, Tooltip } from '@arco-design/web-react';
 import { Close, Down } from '@icon-park/react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -58,6 +58,9 @@ const GuidWorkspaceFootnote: React.FC<GuidWorkspaceFootnoteProps> = ({
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
+  const [createProjectVisible, setCreateProjectVisible] = useState(false);
+  const [createProjectName, setCreateProjectName] = useState('');
+  const [creatingProject, setCreatingProject] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -75,7 +78,34 @@ const GuidWorkspaceFootnote: React.FC<GuidWorkspaceFootnoteProps> = ({
       .catch((error) => {
         console.error('Failed to open directory dialog:', error);
       });
-  }, [onSelectWorkspace]);
+  }, [onSelectWorkspace, workspaceDir]);
+
+  const handleCreateProject = useCallback(async () => {
+    const name = createProjectName.trim();
+    if (!name) {
+      Message.warning(t('guid.workspace.projectNameRequired'));
+      return;
+    }
+    setCreatingProject(true);
+    try {
+      const result = await ipcBridge.project.create.invoke({ name });
+      addRecentWorkspace(result.path);
+      onSelectWorkspace(result.path);
+      setCreateProjectVisible(false);
+      setCreateProjectName('');
+      setOpen(false);
+      setSearchQuery('');
+    } catch (error) {
+      const code = (error as { code?: string })?.code;
+      Message.error(
+        code === 'project_directory_exists'
+          ? t('guid.workspace.projectAlreadyExists')
+          : t('guid.workspace.createProjectFailed')
+      );
+    } finally {
+      setCreatingProject(false);
+    }
+  }, [createProjectName, onSelectWorkspace, t]);
 
   const handleSelectPath = useCallback(
     (path: string) => {
@@ -184,6 +214,19 @@ const GuidWorkspaceFootnote: React.FC<GuidWorkspaceFootnoteProps> = ({
 
           {filteredRecent.length > 0 && <div className={styles.wsDropdownSep} />}
 
+          <Button
+            type='text'
+            long
+            className={`${styles.wsDropdownItem} ${styles.wsDropdownItemAccent} !h-auto !justify-start !border-none`}
+            icon={<PlusIcon />}
+            onClick={() => {
+              setCreateProjectName('');
+              setCreateProjectVisible(true);
+            }}
+          >
+            {t('guid.workspace.createProject')}
+          </Button>
+
           <div className={`${styles.wsDropdownItem} ${styles.wsDropdownItemAccent}`} onClick={handleBrowseWorkspace}>
             <PlusIcon />
             <span>{t('team.create.chooseDifferentFolder')}</span>
@@ -259,7 +302,7 @@ const GuidWorkspaceFootnote: React.FC<GuidWorkspaceFootnoteProps> = ({
             ref={triggerRef as React.RefObject<HTMLButtonElement>}
             className={styles.workspaceEmptyBtn}
             data-testid='workspace-selector-btn'
-            onClick={recentWorkspaces.length > 0 ? toggleOpen : handleBrowseWorkspace}
+            onClick={toggleOpen}
           >
             <FolderIcon size={14} />
             <span>{t('guid.workspace.workInProject')}</span>
@@ -275,6 +318,25 @@ const GuidWorkspaceFootnote: React.FC<GuidWorkspaceFootnoteProps> = ({
           {dropdownEl}
         </>
       )}
+      <Modal
+        title={t('guid.workspace.createProjectTitle')}
+        visible={createProjectVisible}
+        confirmLoading={creatingProject}
+        onOk={() => void handleCreateProject()}
+        onCancel={() => {
+          if (!creatingProject) setCreateProjectVisible(false);
+        }}
+        autoFocus={false}
+      >
+        <Input
+          autoFocus
+          value={createProjectName}
+          onChange={setCreateProjectName}
+          onPressEnter={() => void handleCreateProject()}
+          placeholder={t('guid.workspace.createProjectPlaceholder')}
+          disabled={creatingProject}
+        />
+      </Modal>
     </div>
   );
 };

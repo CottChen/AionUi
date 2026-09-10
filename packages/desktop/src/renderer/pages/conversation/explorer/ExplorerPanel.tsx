@@ -53,9 +53,9 @@ export type ExplorerPanelProps = {
    * clipboard (no OS shell / no absolute path), so it works for files and folders
    * on both Electron and WebUI. Omit to hide the item. */
   onCopyRelativePath?: (peId: string, relativePath: string, name: string) => void;
-  /** Copy the node's ABSOLUTE device path to the clipboard. The absolute path is
-   * resolved backend-side (the front end never holds it), so this is Electron
-   * desktop-only — a remote WebUI must not expose it. Omit to hide the item. */
+  /** Copy the node's absolute device path to the clipboard. Electron resolves
+   * it backend-side; WebUI joins the project entry's existing display path with
+   * the node's relative path. Omit to hide the item. */
   onCopyAbsolutePath?: (peId: string, relativePath: string) => void;
   /** Import OS files (A-paste) dropped onto a node into that node's directory
    * (a file node routes to its parent dir). `filePaths` are absolute OS paths
@@ -320,9 +320,7 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
       // remote and has no shell permission), so gate the menu item on the runtime.
       const canReveal = Boolean(onRevealInFolder) && isElectronDesktop();
       const folderActions = !isFile && (onSearchInFolder || onUploadFiles);
-      // Copy-absolute-path is desktop-only: the absolute path is resolved
-      // backend-side and must not be exposed to a remote WebUI.
-      const canCopyAbsolutePath = Boolean(onCopyAbsolutePath) && isElectronDesktop();
+      const canCopyAbsolutePath = Boolean(onCopyAbsolutePath);
       const showWebActions = !isElectronDesktop();
       const hasMenu =
         onAddToChat ||
@@ -415,6 +413,9 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
       onRename,
       onDelete,
       onAddToChat,
+      onRevealInFolder,
+      onCopyRelativePath,
+      onCopyAbsolutePath,
       onImportFiles,
       onSearchInFolder,
       onUploadFiles,

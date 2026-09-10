@@ -15,7 +15,13 @@
     "clearWorkspace": "Limpiar",
     "specifyWorkspace": "Seleccionar carpeta del proyecto",
     "searchPlaceholder": "Buscar proyectos...",
-    "noProject": "Sin proyecto"
+    "noProject": "Sin proyecto",
+    "createProject": "Nuevo proyecto",
+    "createProjectTitle": "Crear proyecto",
+    "createProjectPlaceholder": "Nombre del proyecto",
+    "projectNameRequired": "Introduce un nombre de proyecto",
+    "projectAlreadyExists": "Ya existe un proyecto con este nombre",
+    "createProjectFailed": "No se pudo crear el proyecto"
   },
   "scanning": {
     "initialMessage": "El agente actual no está disponible, detectando otros agentes disponibles...",

@@ -14,6 +14,12 @@
     "recentProjects": "最近项目",
     "chooseDifferent": "选择其他文件夹",
     "searchPlaceholder": "搜索项目…",
-    "noProject": "不使用项目"
+    "noProject": "不使用项目",
+    "createProject": "新建项目",
+    "createProjectTitle": "新建项目",
+    "createProjectPlaceholder": "输入项目名称",
+    "projectNameRequired": "请输入项目名称",
+    "projectAlreadyExists": "该项目名称已存在",
+    "createProjectFailed": "新建项目失败"
   }
 }

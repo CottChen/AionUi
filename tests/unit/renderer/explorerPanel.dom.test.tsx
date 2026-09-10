@@ -229,6 +229,23 @@ describe('ExplorerPanel reveal highlight + scroll-into-view', () => {
 });
 
 describe('ExplorerPanel folder context actions', () => {
+  it('offers absolute-path copying for a WebUI project folder', async () => {
+    const onCopyAbsolutePath = vi.fn();
+    configureExplorerStore(makePort({ [peKey('pe1', '')]: [dir('sub')] }));
+    render(
+      <ExplorerPanel
+        projectId='p1'
+        roots={[{ pe_id: 'pe1', title: 'app', role: 'workspace' }]}
+        onCopyAbsolutePath={onCopyAbsolutePath}
+      />
+    );
+
+    fireEvent.contextMenu(await screen.findByText('sub'));
+    fireEvent.click(await screen.findByText('conversation.explorer.contextMenu.copyAbsolutePath'));
+
+    expect(onCopyAbsolutePath).toHaveBeenCalledWith('pe1', 'sub');
+  });
+
   it('selects a directory as the scoped-search root without opening it', async () => {
     const onSearchInFolder = vi.fn();
     configureExplorerStore(makePort({ [peKey('pe1', '')]: [dir('sub')] }));

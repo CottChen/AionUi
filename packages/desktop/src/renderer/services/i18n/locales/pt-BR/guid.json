@@ -12,6 +12,12 @@
     "clearWorkspace": "Limpar",
     "specifyWorkspace": "Selecionar pasta do projeto",
     "searchPlaceholder": "Procurar projetos…",
-    "noProject": "Nenhum Projeto"
+    "noProject": "Nenhum Projeto",
+    "createProject": "Novo projeto",
+    "createProjectTitle": "Criar projeto",
+    "createProjectPlaceholder": "Nome do projeto",
+    "projectNameRequired": "Digite um nome de projeto",
+    "projectAlreadyExists": "Já existe um projeto com este nome",
+    "createProjectFailed": "Falha ao criar o projeto"
   }
 }

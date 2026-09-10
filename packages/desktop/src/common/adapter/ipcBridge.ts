@@ -99,7 +99,13 @@ import type {
   AgentSessionSummary,
 } from '@/common/types/agent/cliSessionTypes';
 import type { Theme } from '@/common/theme/types';
-import type { AttachFolderRequest, ProjectDetailDto, ProjectEntryDto } from '@/common/types/project';
+import type {
+  AttachFolderRequest,
+  CreateProjectRequest,
+  CreateProjectResponseDto,
+  ProjectDetailDto,
+  ProjectEntryDto,
+} from '@/common/types/project';
 import type { ChatFileRef, ContentEncoding } from '@/common/types/chatFile';
 import type { ProtocolDetectionRequest, ProtocolDetectionResponse } from '../utils/protocolDetector';
 import {
@@ -449,6 +455,8 @@ export const runtime = {
 // ---------------------------------------------------------------------------
 
 export const project = {
+  /** POST /api/projects → create a managed project directory and return its path. */
+  create: httpPost<CreateProjectResponseDto, CreateProjectRequest>('/api/projects', (p) => ({ name: p.name })),
   /** GET /api/projects/{id} → full project detail incl. all pe roots (entries). */
   get: httpGet<ProjectDetailDto, { project_id: string }>((p) => `/api/projects/${encodeURIComponent(p.project_id)}`),
   /**

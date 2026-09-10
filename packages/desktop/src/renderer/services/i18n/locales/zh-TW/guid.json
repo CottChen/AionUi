@@ -12,6 +12,12 @@
     "clearWorkspace": "清除",
     "specifyWorkspace": "選擇專案資料夾",
     "searchPlaceholder": "搜尋專案…",
-    "noProject": "不使用專案"
+    "noProject": "不使用專案",
+    "createProject": "新增專案",
+    "createProjectTitle": "新增專案",
+    "createProjectPlaceholder": "輸入專案名稱",
+    "projectNameRequired": "請輸入專案名稱",
+    "projectAlreadyExists": "該專案名稱已存在",
+    "createProjectFailed": "新增專案失敗"
   }
 }

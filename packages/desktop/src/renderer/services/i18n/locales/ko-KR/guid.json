@@ -12,6 +12,12 @@
     "clearWorkspace": "지우기",
     "specifyWorkspace": "프로젝트 폴더 선택",
     "searchPlaceholder": "프로젝트 검색…",
-    "noProject": "프로젝트 없음"
+    "noProject": "프로젝트 없음",
+    "createProject": "새 프로젝트",
+    "createProjectTitle": "프로젝트 만들기",
+    "createProjectPlaceholder": "프로젝트 이름",
+    "projectNameRequired": "프로젝트 이름을 입력하세요",
+    "projectAlreadyExists": "같은 이름의 프로젝트가 이미 있습니다",
+    "createProjectFailed": "프로젝트를 만들지 못했습니다"
   }
 }

@@ -10,7 +10,8 @@
  * roots / display_path / runtime_status) is HTTP; the data plane (directory
  * contents) is the WS `fs/*` monitor. These shapes mirror the backend
  * `aionui-api-types/project` DTOs 1:1 — no absolute path / canonical / folder_id
- * is ever sent to the front-end (it only ever deals in `{ pe_id, relative_path }`).
+ * is addressed by `{ pe_id, relative_path }`; `display_path` is additionally
+ * exposed for rendering and explicit clipboard actions.
  */
 
 /** Whether a root's underlying folder is currently reachable (root-row status). */
@@ -44,6 +45,16 @@ export type ProjectDetailDto = {
     workspace_pe_id: string;
     entries: ProjectEntryDto[];
   };
+};
+
+/** `POST /api/projects` response for a newly created managed project folder. */
+export type CreateProjectResponseDto = {
+  path: string;
+};
+
+/** `POST /api/projects` body. The backend chooses the managed parent folder. */
+export type CreateProjectRequest = {
+  name: string;
 };
 
 /** `POST /api/projects/{id}/folders` request body. `uri` is a `file://…` URI. */

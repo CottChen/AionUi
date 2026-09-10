@@ -14,6 +14,12 @@
     "recentProjects": "Recent projects",
     "chooseDifferent": "Choose another folder",
     "searchPlaceholder": "Search projects…",
-    "noProject": "No Project"
+    "noProject": "No Project",
+    "createProject": "New project",
+    "createProjectTitle": "Create project",
+    "createProjectPlaceholder": "Project name",
+    "projectNameRequired": "Enter a project name",
+    "projectAlreadyExists": "A project with this name already exists",
+    "createProjectFailed": "Failed to create project"
   }
 }

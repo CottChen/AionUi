@@ -12,6 +12,12 @@
     "clearWorkspace": "Очистити",
     "specifyWorkspace": "Вибрати папку проєкту",
     "searchPlaceholder": "Пошук проєктів…",
-    "noProject": "Без проєкту"
+    "noProject": "Без проєкту",
+    "createProject": "Новий проєкт",
+    "createProjectTitle": "Створити проєкт",
+    "createProjectPlaceholder": "Назва проєкту",
+    "projectNameRequired": "Введіть назву проєкту",
+    "projectAlreadyExists": "Проєкт із такою назвою вже існує",
+    "createProjectFailed": "Не вдалося створити проєкт"
   }
 }

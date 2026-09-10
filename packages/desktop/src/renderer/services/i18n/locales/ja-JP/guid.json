@@ -12,6 +12,12 @@
     "clearWorkspace": "クリア",
     "specifyWorkspace": "プロジェクトフォルダを選択",
     "searchPlaceholder": "プロジェクトを検索…",
-    "noProject": "プロジェクトなし"
+    "noProject": "プロジェクトなし",
+    "createProject": "新規プロジェクト",
+    "createProjectTitle": "プロジェクトを作成",
+    "createProjectPlaceholder": "プロジェクト名",
+    "projectNameRequired": "プロジェクト名を入力してください",
+    "projectAlreadyExists": "同じ名前のプロジェクトが既にあります",
+    "createProjectFailed": "プロジェクトを作成できませんでした"
   }
 }
