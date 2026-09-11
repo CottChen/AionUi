@@ -288,6 +288,25 @@
   transition: background 0.1s;
 }
 
+.wsDropdownItemButton {
+  height: auto;
+  justify-content: flex-start;
+  border: none;
+  text-align: left;
+}
+
+.wsDropdownItemButton :global(.arco-btn-content) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.wsDropdownItemButton :global(.arco-btn-icon) {
+  display: inline-flex;
+  margin-right: 0;
+}
+
 .wsDropdownItem:hover {
   background: var(--color-fill-2);
 }

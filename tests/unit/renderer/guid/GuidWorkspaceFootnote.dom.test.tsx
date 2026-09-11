@@ -47,6 +47,7 @@ afterEach(() => {
 const openCreateDialog = async (): Promise<HTMLInputElement> => {
   fireEvent.click(screen.getByText('guid.workspace.workInProject'));
   fireEvent.click(await screen.findByText('guid.workspace.createProject'));
+  expect(screen.queryByText('guid.workspace.createProject')).toBeNull();
   return screen.getByPlaceholderText('guid.workspace.createProjectPlaceholder');
 };
 

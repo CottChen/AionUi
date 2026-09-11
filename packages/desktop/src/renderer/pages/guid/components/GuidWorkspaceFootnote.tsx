@@ -217,9 +217,10 @@ const GuidWorkspaceFootnote: React.FC<GuidWorkspaceFootnoteProps> = ({
           <Button
             type='text'
             long
-            className={`${styles.wsDropdownItem} ${styles.wsDropdownItemAccent} !h-auto !justify-start !border-none`}
+            className={`${styles.wsDropdownItem} ${styles.wsDropdownItemButton} ${styles.wsDropdownItemAccent}`}
             icon={<PlusIcon />}
             onClick={() => {
+              closeDropdown();
               setCreateProjectName('');
               setCreateProjectVisible(true);
             }}
