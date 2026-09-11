@@ -108,7 +108,9 @@ export function revalidateAcpConfigOptions(conversation_id: string): Promise<Acp
   // Drop the process-local snapshot before asking SWR to revalidate. Without
   // this, the shared fetcher would legitimately return the old conversation
   // config and a session change would never reach the ACP agent.
+  invalidateConfigOptions(conversation_id);
   configOptionsCache.delete(conversation_id);
+  configOptionsInFlight.delete(conversation_id);
   return swrMutate(getRuntimeConfigOptionsKey(conversation_id));
 }
 
@@ -144,10 +146,20 @@ const ensureRuntimeConfigOptions: AcpConfigOptionsLoader = async (conversation_i
 
 const configOptionsInFlight = new Map<string, Promise<AcpConfigOptionDto[] | null>>();
 const configOptionsCache = new Map<string, AcpConfigOptionDto[] | null>();
+const configOptionsGeneration = new Map<string, number>();
+
+function getConfigOptionsGeneration(conversation_id: string): number {
+  return configOptionsGeneration.get(conversation_id) ?? 0;
+}
+
+function invalidateConfigOptions(conversation_id: string): void {
+  configOptionsGeneration.set(conversation_id, getConfigOptionsGeneration(conversation_id) + 1);
+}
 
 export function resetAcpConfigOptionsStateForTests(): void {
   configOptionsInFlight.clear();
   configOptionsCache.clear();
+  configOptionsGeneration.clear();
   statusByConversation.clear();
   statusListeners.clear();
 }
@@ -164,9 +176,15 @@ function fetchConfigOptionsOnce(
   const existing = configOptionsInFlight.get(conversation_id);
   if (existing) return existing;
 
+  const requestGeneration = getConfigOptionsGeneration(conversation_id);
   const promise = loadConfigOptions(conversation_id)
     .then((options) => {
       const resolved = options ?? null;
+      if (getConfigOptionsGeneration(conversation_id) !== requestGeneration) {
+        // A realtime config event or an explicit revalidation won the race.
+        // Never let this older request replace that newer snapshot.
+        return configOptionsCache.has(conversation_id) ? configOptionsCache.get(conversation_id)! : null;
+      }
       configOptionsCache.set(conversation_id, resolved);
       return resolved;
     })
@@ -195,6 +213,13 @@ export function useAcpConfigOptions({
   const [setStatus, setSetStatus] = useState<AcpConfigSetStatus>(() => getConversationSetStatus(conversation_id));
   const [isReloading, setIsReloading] = useState(false);
   const optionsRef = useRef<AcpConfigOptionDto[] | null>(null);
+  const stableValuesRef = useRef<{ conversationId: string; values: Map<string, string> }>({
+    conversationId: conversation_id,
+    values: new Map(),
+  });
+  if (stableValuesRef.current.conversationId !== conversation_id) {
+    stableValuesRef.current = { conversationId: conversation_id, values: new Map() };
+  }
   const key = useMemo(() => getRuntimeConfigOptionsKey(conversation_id), [conversation_id]);
   const {
     data: snapshotData,
@@ -211,6 +236,9 @@ export function useAcpConfigOptions({
 
   useEffect(() => {
     optionsRef.current = configOptions;
+    configOptions?.forEach((option) => {
+      if (option.current_value) stableValuesRef.current.values.set(option.id, option.current_value);
+    });
   }, [configOptions]);
 
   useEffect(() => {
@@ -220,8 +248,14 @@ export function useAcpConfigOptions({
 
   const replaceSnapshot = useCallback(
     (next: AcpConfigOptionDto[]) => {
+      invalidateConfigOptions(conversation_id);
       configOptionsCache.set(conversation_id, next);
       optionsRef.current = next;
+      if (stableValuesRef.current.conversationId === conversation_id) {
+        next.forEach((option) => {
+          if (option.current_value) stableValuesRef.current.values.set(option.id, option.current_value);
+        });
+      }
       void mutate(next, false);
     },
     [conversation_id, mutate]
@@ -231,8 +265,9 @@ export function useAcpConfigOptions({
     setIsReloading(true);
     try {
       await prepareRuntime?.();
-      const next = await fetchConfigOptionsOnce(key, loadConfigOptions);
-      if (next) replaceSnapshot(next);
+      const requestGeneration = getConfigOptionsGeneration(conversation_id);
+      const next = await fetchConfigOptionsOnce(key, loadConfigOptions, true);
+      if (next && getConfigOptionsGeneration(conversation_id) === requestGeneration) replaceSnapshot(next);
       setIsReloading(false);
       return next;
     } catch (error) {
@@ -297,7 +332,12 @@ export function useAcpConfigOptions({
     setStatus,
     mode: deriveSelectOption(configOptions, 'mode', ['mode']),
     model: deriveSelectOption(configOptions, 'model', ['model']),
-    thoughtLevel: deriveSelectOption(configOptions, 'thought_level', ['thought_level', 'reasoning_effort']),
+    thoughtLevel: (() => {
+      const derived = deriveSelectOption(configOptions, 'thought_level', ['thought_level', 'reasoning_effort']);
+      if (!derived || derived.currentValue) return derived;
+      const previous = stableValuesRef.current.values.get(derived.id);
+      return previous ? { ...derived, currentValue: previous } : derived;
+    })(),
     reload,
     setConfigOption,
   };

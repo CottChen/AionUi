@@ -275,6 +275,36 @@ describe('useAcpModelInfo', () => {
     });
   });
 
+  it('refreshes the runtime model after the session becomes active again', async () => {
+    const loadConfigOptions = vi
+      .fn()
+      .mockResolvedValueOnce(buildConfigOptions('sonnet-4'))
+      .mockResolvedValueOnce(buildConfigOptions('opus-4'));
+
+    const { result } = renderUseAcpModelInfo({
+      conversation_id: 'conv-1',
+      backend: 'claude',
+      loadConfigOptions,
+    });
+
+    await waitFor(() => {
+      expect(result.current.model_info?.current_model_id).toBe('sonnet-4');
+    });
+
+    act(() => {
+      emitStream({
+        type: 'agent_status',
+        conversation_id: 'conv-1',
+        data: { status: 'session_active' },
+      } as unknown as IResponseMessage);
+    });
+
+    await waitFor(() => {
+      expect(result.current.model_info?.current_model_id).toBe('opus-4');
+    });
+    expect(loadConfigOptions).toHaveBeenCalledTimes(2);
+  });
+
   it('preserves model option descriptions from config options', async () => {
     ensureRuntimeInvokeMock.mockResolvedValue({
       recovered: true,
@@ -462,6 +492,104 @@ describe('useAcpModelInfo', () => {
       expect(second.result.current.canSwitch).toBe(true);
     });
     expect(ensureRuntimeInvokeMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a newer stream snapshot when an older runtime load resolves later', async () => {
+    const ensureDeferred = deferred<{
+      recovered: boolean;
+      config_options: AcpConfigOptionDto[];
+      runtime: null;
+    }>();
+    ensureRuntimeInvokeMock.mockReturnValue(ensureDeferred.promise);
+
+    const { result } = renderUseAcpModelInfo({
+      conversation_id: 'conv-1',
+      backend: 'claude',
+      initialModelId: 'sonnet-4',
+    });
+
+    await waitFor(() => {
+      expect(ensureRuntimeInvokeMock).toHaveBeenCalledTimes(1);
+    });
+
+    act(() => {
+      emitStream({
+        type: 'acp_config_option',
+        conversation_id: 'conv-1',
+        data: { config_options: buildConfigOptions('opus-4') },
+      } as unknown as IResponseMessage);
+    });
+
+    await waitFor(() => {
+      expect(result.current.model_info?.current_model_id).toBe('opus-4');
+    });
+
+    await act(async () => {
+      ensureDeferred.resolve({
+        recovered: true,
+        config_options: buildConfigOptions('sonnet-4'),
+        runtime: null,
+      });
+      await ensureDeferred.promise;
+    });
+
+    await waitFor(() => {
+      expect(result.current.model_info?.current_model_id).toBe('opus-4');
+    });
+  });
+
+  it('keeps the last observed thought level during a transient empty snapshot', async () => {
+    const { result } = renderUseAcpModelInfo({
+      conversation_id: 'conv-1',
+      backend: 'claude',
+    });
+
+    await waitFor(() => {
+      expect(result.current.thoughtLevel?.currentValue).toBe('medium');
+    });
+
+    const transientOptions = buildConfigOptions('sonnet-4');
+    transientOptions[1] = { ...transientOptions[1], current_value: null };
+    act(() => {
+      emitStream({
+        type: 'acp_config_option',
+        conversation_id: 'conv-1',
+        data: { config_options: transientOptions },
+      } as unknown as IResponseMessage);
+    });
+
+    await waitFor(() => {
+      expect(result.current.thoughtLevel?.currentValue).toBe('medium');
+    });
+  });
+
+  it('does not carry the previous conversation model into a new conversation', async () => {
+    const loadConfigOptions = vi.fn((conversationId: string) =>
+      Promise.resolve(buildConfigOptions(conversationId === 'conv-1' ? 'opus-4' : 'sonnet-4'))
+    );
+    const { result, rerender } = renderHook(
+      ({ conversationId }: { conversationId: string }) =>
+        useAcpModelInfo({
+          conversation_id: conversationId,
+          backend: 'claude',
+          loadConfigOptions,
+        }),
+      {
+        initialProps: { conversationId: 'conv-1' },
+        wrapper: createSwrWrapper(),
+      }
+    );
+
+    await waitFor(() => {
+      expect(result.current.model_info?.current_model_id).toBe('opus-4');
+    });
+
+    rerender({ conversationId: 'conv-2' });
+
+    expect(result.current.model_info?.current_model_id).not.toBe('opus-4');
+    await waitFor(() => {
+      expect(result.current.model_info?.current_model_id).toBe('sonnet-4');
+    });
   });
 
   it('uses legacy acp_model_info stream only before config options are available', async () => {

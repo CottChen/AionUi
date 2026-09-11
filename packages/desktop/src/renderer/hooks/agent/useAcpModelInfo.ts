@@ -13,7 +13,7 @@ import {
   type AcpDerivedOption,
   useAcpConfigOptions,
 } from './useAcpConfigOptions';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 type UseAcpModelInfoArgs = {
   conversation_id: string;
@@ -81,11 +81,24 @@ export const useAcpModelInfo = ({
     loadConfigOptions,
     enabled,
   });
-  const [legacyModelInfo, setLegacyModelInfo] = useState<AcpModelInfo | null>(null);
-
+  const [legacyModelState, setLegacyModelState] = useState<{
+    conversationId: string;
+    info: AcpModelInfo | null;
+  }>({ conversationId: conversation_id, info: null });
+  const legacyModelInfo = legacyModelState.conversationId === conversation_id ? legacyModelState.info : null;
+  // Keep the last non-empty runtime identity while ACP refreshes its options.
+  // The backend may publish an intermediate snapshot without current_value;
+  // showing that transient value makes the header flicker or become blank.
+  const stableModelRef = useRef<{ conversationId: string; info: AcpModelInfo | null }>({
+    conversationId: conversation_id,
+    info: null,
+  });
+  if (stableModelRef.current.conversationId !== conversation_id) {
+    stableModelRef.current = { conversationId: conversation_id, info: null };
+  }
   const configModelInfo = useMemo<AcpModelInfo | null>(() => {
     if (!model) return null;
-    const currentModelId = model.currentValue || initialModelId || null;
+    const currentModelId = model.currentValue || null;
     return {
       current_model_id: currentModelId,
       current_model_label: model.options.find((item) => item.value === currentModelId)?.label || currentModelId || null,
@@ -96,6 +109,15 @@ export const useAcpModelInfo = ({
       })),
     };
   }, [initialModelId, model]);
+
+  useEffect(() => {
+    const candidate = configModelInfo?.current_model_id
+      ? configModelInfo
+      : legacyModelInfo?.current_model_id
+        ? legacyModelInfo
+        : null;
+    if (candidate) stableModelRef.current.info = candidate;
+  }, [configModelInfo, conversation_id, legacyModelInfo]);
   const persistedModelInfo = useMemo<AcpModelInfo | null>(() => {
     if (!initialModelId) return null;
     return {
@@ -106,10 +128,12 @@ export const useAcpModelInfo = ({
   }, [initialModelId]);
 
   useEffect(() => {
-    if (!enabled) {
-      setLegacyModelInfo(null);
-    }
-  }, [enabled]);
+    setLegacyModelState({ conversationId: conversation_id, info: null });
+  }, [conversation_id]);
+
+  useEffect(() => {
+    if (!enabled) setLegacyModelState({ conversationId: conversation_id, info: null });
+  }, [conversation_id, enabled]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -117,7 +141,12 @@ export const useAcpModelInfo = ({
       if (message.conversation_id !== conversation_id) return;
       if (message.type === 'acp_model_info' && message.data) {
         const incoming = normalizeInitialModel(message.data as AcpModelInfo, initialModelId);
-        setLegacyModelInfo((previous) => (sameModelInfo(previous, incoming) ? previous : incoming));
+        setLegacyModelState((previous) => ({
+          conversationId: conversation_id,
+          info: sameModelInfo(previous.conversationId === conversation_id ? previous.info : null, incoming)
+            ? previous.info
+            : incoming,
+        }));
       } else if (message.type === 'codex_model_info' && message.data) {
         const data = message.data as { model?: string };
         if (!data.model) return;
@@ -126,13 +155,37 @@ export const useAcpModelInfo = ({
           current_model_label: data.model,
           available_models: [],
         };
-        setLegacyModelInfo((previous) => (sameModelInfo(previous, incoming) ? previous : incoming));
+        setLegacyModelState((previous) => ({
+          conversationId: conversation_id,
+          info: sameModelInfo(previous.conversationId === conversation_id ? previous.info : null, incoming)
+            ? previous.info
+            : incoming,
+        }));
       }
     };
     return ipcBridge.acpConversation.responseStream.on(handler);
   }, [conversation_id, enabled, initialModelId]);
 
-  const model_info = configModelInfo ?? legacyModelInfo ?? persistedModelInfo;
+  const model_info = useMemo(() => {
+    const current = configModelInfo?.current_model_id
+      ? configModelInfo
+      : legacyModelInfo?.current_model_id
+        ? legacyModelInfo
+        : null;
+    if (current?.current_model_id) return current;
+    const stable = stableModelRef.current.info;
+    if (configModelInfo && stable?.current_model_id) {
+      const matched = configModelInfo.available_models.find(
+        (availableModel) => availableModel.id === stable.current_model_id
+      );
+      return {
+        ...configModelInfo,
+        current_model_id: stable.current_model_id,
+        current_model_label: matched?.label || stable.current_model_label,
+      };
+    }
+    return stable ?? persistedModelInfo;
+  }, [configModelInfo, conversation_id, legacyModelInfo, persistedModelInfo]);
 
   const selectModel = useCallback(
     (model_id: string) => {
