@@ -7,7 +7,6 @@
 import type { IMessageText } from '@/common/chat/chatLib';
 import { AIONUI_FILES_MARKER } from '@/common/config/constants';
 import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
-import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { useFileOpenChoice } from '@/renderer/hooks/file/useFileOpenChoice';
 import { iconColors } from '@/renderer/styles/colors';
 import { Alert, Message, Tooltip } from '@arco-design/web-react';
@@ -174,8 +173,6 @@ const MessageText: React.FC<{ message: IMessageText; showCopyRow?: boolean }> = 
   const { data, json } = useFormatContent(text);
   const shouldRenderPlainText = isUserMessage;
   const conversationContext = useConversationContextSafe();
-  const layout = useLayoutContext();
-  const isMobile = layout?.isMobile ?? false;
   const handleFileOpen = useFileOpenChoice(conversationContext?.workspace);
   const resolvedFiles = useMemo(
     () => files.map((file_path) => resolveMessageFilePath(file_path, conversationContext?.workspace)),
@@ -204,8 +201,17 @@ const MessageText: React.FC<{ message: IMessageText; showCopyRow?: boolean }> = 
   const copyButton = (
     <Tooltip content={t('common.copy', { defaultValue: 'Copy' })}>
       <div
-        className='p-4px rd-4px cursor-pointer hover:bg-3 transition-colors opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto'
+        className='p-4px rd-4px cursor-pointer hover:bg-3 transition-colors opacity-100 pointer-events-auto'
+        role='button'
+        tabIndex={0}
+        aria-label={t('common.copy', { defaultValue: 'Copy' })}
         onClick={handleCopy}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            handleCopy();
+          }
+        }}
         style={{ lineHeight: 0 }}
       >
         <Copy theme='outline' size='16' fill={iconColors.secondary} />
@@ -305,11 +311,9 @@ const MessageText: React.FC<{ message: IMessageText; showCopyRow?: boolean }> = 
             </div>
           )}
         </div>
-        {/* Hover-revealed copy + timestamp row. Mobile has no hover affordance,
-            so we drop the row entirely — system-level long-press still copies.
-            For AI replies split across several text messages, only the last text
-            of the turn shows this row (showCopyRow); user messages always do. */}
-        {!isMobile && showCopyRow && (
+        {/* Copy + timestamp row. The copy action stays visible on touch devices,
+            where hover-only controls are not discoverable. */}
+        {showCopyRow && (
           <div
             className={classNames('h-32px flex items-center mt-4px gap-8px', {
               'flex-row-reverse': isUserMessage,

@@ -12,6 +12,11 @@
     "clearWorkspace": "Clear",
     "specifyWorkspace": "Select project folder",
     "searchPlaceholder": "Search projects…",
-    "noProject": "No Project"
+    "noProject": "No Project",
+    "createDirectory": "Create new project folder",
+    "createDirectoryName": "Folder name",
+    "createDirectorySuccess": "Project folder created",
+    "createDirectoryFailed": "Failed to create project folder",
+    "chooseParentAgain": "Choose another parent folder"
   }
 }

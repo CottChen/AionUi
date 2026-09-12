@@ -361,6 +361,11 @@
     "contextMenu": {
       "open": "Open",
       "openLocation": "Show in folder",
+      "copyRelativePath": "Copy relative path",
+      "copyRelativePathSuccess": "Relative path copied",
+      "copyAbsolutePath": "Copy absolute path",
+      "copyAbsolutePathSuccess": "Absolute path copied",
+      "searchInFolder": "Search in this folder",
       "preview": "Preview",
       "previewFailed": "Failed to preview",
       "deleteTitle": "Delete file",
@@ -416,7 +421,18 @@
       "vscode": "VS Code",
       "terminal": "Terminal",
       "explorer": "File Explorer"
-    }
+    },
+    "searchMode": {
+      "all": "All",
+      "name": "Names",
+      "content": "Contents"
+    },
+    "searchScope": {
+      "workspace": "Project",
+      "currentFolder": "Folder",
+      "selectedFolder": "Folder: {{folder}}"
+    },
+    "searchContinue": "Continue search"
   },
   "minimap": {
     "searchAria": "Search conversation",

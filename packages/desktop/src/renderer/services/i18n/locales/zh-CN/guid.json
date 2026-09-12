@@ -12,6 +12,11 @@
     "clearWorkspace": "清除",
     "specifyWorkspace": "选择项目文件夹",
     "searchPlaceholder": "搜索项目…",
-    "noProject": "不使用项目"
+    "noProject": "不使用项目",
+    "createDirectory": "新建项目目录",
+    "createDirectoryName": "目录名称",
+    "createDirectorySuccess": "项目目录已创建",
+    "createDirectoryFailed": "项目目录创建失败",
+    "chooseParentAgain": "重新选择父目录"
   }
 }

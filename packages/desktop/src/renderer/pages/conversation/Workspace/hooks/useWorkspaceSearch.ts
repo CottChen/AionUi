@@ -8,10 +8,13 @@ import { ipcBridge } from '@/common';
 import type { IDirOrFile } from '@/common/adapter/ipcBridge';
 import useDebounce from '@/renderer/hooks/ui/useDebounce';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { buildSearchTree } from '../utils/treeHelpers';
+
+export type WorkspaceSearchMode = 'all' | 'name' | 'content';
+export type WorkspaceSearchScope = 'workspace' | 'currentFolder';
 
 type UseWorkspaceSearchParams = {
   workspace: string;
+  conversation_id: string;
   expandedKeys: string[];
   setFiles: React.Dispatch<React.SetStateAction<IDirOrFile[]>>;
   setExpandedKeys: React.Dispatch<React.SetStateAction<string[]>>;
@@ -19,18 +22,31 @@ type UseWorkspaceSearchParams = {
   refreshWorkspace: () => void;
 };
 
-/**
- * Manages workspace search state.
- *
- * Search is now performed entirely on the frontend: it pulls the workspace's
- * full recursive file list once (`fs.listWorkspaceFiles`, which the backend
- * already returns as a flat list of every file at any depth) and filters by
- * name/path locally. Matches at ANY nesting level surface, and their parent
- * folders are auto-expanded — fixing the old behavior where only first-level
- * names could be found. Clearing the box restores the normal lazy-loaded tree.
- */
+const mergeSearchNodes = (left: IDirOrFile, right: IDirOrFile): IDirOrFile => {
+  if (left.isFile || right.isFile) return right;
+  const children = [...(left.children ?? [])];
+  for (const rightChild of right.children ?? []) {
+    const index = children.findIndex((child) => child.relativePath === rightChild.relativePath);
+    if (index === -1) children.push(rightChild);
+    else children[index] = mergeSearchNodes(children[index], rightChild);
+  }
+  return { ...left, ...right, children };
+};
+
+const mergeSearchTrees = (current: IDirOrFile[], incoming: IDirOrFile[]): IDirOrFile[] => {
+  const merged = [...current];
+  for (const incomingNode of incoming) {
+    const index = merged.findIndex((node) => node.relativePath === incomingNode.relativePath);
+    if (index === -1) merged.push(incomingNode);
+    else merged[index] = mergeSearchNodes(merged[index], incomingNode);
+  }
+  return merged;
+};
+
+/** Manages backend-backed workspace search, scope selection, and cursor pages. */
 export function useWorkspaceSearch({
   workspace,
+  conversation_id,
   expandedKeys,
   setFiles,
   setExpandedKeys,
@@ -39,98 +55,149 @@ export function useWorkspaceSearch({
 }: UseWorkspaceSearchParams) {
   const [searchText, setSearchText] = useState('');
   const [showSearch, setShowSearch] = useState(true);
+  const [searchMode, setSearchMode] = useState<WorkspaceSearchMode>('all');
+  const [searchScope, setSearchScope] = useState<WorkspaceSearchScope>('workspace');
+  const [searchFolderPath, setSearchFolderPath] = useState(workspace);
+  const [searchFolderLabel, setSearchFolderLabel] = useState('');
+  const [nextCursor, setNextCursor] = useState<string | undefined>();
+  const [searchLoading, setSearchLoading] = useState(false);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
-
-  // Host file selector state (WebUI: use DirectorySelectionModal instead of native dialog)
   const [showHostFileSelector, setShowHostFileSelector] = useState(false);
-
-  // Only focus search input when user actively opens search, not on conversation switch
   const previousShowSearchRef = useRef<boolean | null>(null);
+  const preSearchExpandedKeysRef = useRef<string[] | null>(null);
+  const expandedKeysRef = useRef(expandedKeys);
+  expandedKeysRef.current = expandedKeys;
+  const searchSeqRef = useRef(0);
+
   useEffect(() => {
-    // Skip focus on first render or conversation switch
+    searchSeqRef.current += 1;
+    preSearchExpandedKeysRef.current = null;
+    setSearchText('');
+    setSearchMode('all');
+    setSearchScope('workspace');
+    setSearchFolderPath(workspace);
+    setSearchFolderLabel('');
+    setNextCursor(undefined);
+  }, [workspace]);
+
+  useEffect(() => {
     if (previousShowSearchRef.current === null) {
       previousShowSearchRef.current = showSearch;
       return;
     }
-
-    // Only focus when transitioning from false to true (user actively opens search)
     if (showSearch && !previousShowSearchRef.current) {
-      const timer = window.setTimeout(() => {
-        searchInputRef.current?.focus?.();
-      }, 0);
+      const timer = window.setTimeout(() => searchInputRef.current?.focus(), 0);
       previousShowSearchRef.current = showSearch;
-      return () => {
-        window.clearTimeout(timer);
-      };
+      return () => window.clearTimeout(timer);
     }
-
     previousShowSearchRef.current = showSearch;
   }, [showSearch]);
 
-  // Snapshot of expandedKeys taken just before a search starts, so clearing
-  // the search box restores exactly what was expanded before — not the much
-  // larger set that the search results opened.
-  const preSearchExpandedKeysRef = useRef<string[] | null>(null);
-  const expandedKeysRef = useRef(expandedKeys);
-  expandedKeysRef.current = expandedKeys;
-
-  // Ignore stale flat-list responses when the term changes quickly.
-  const searchSeqRef = useRef(0);
-
   const runSearch = useCallback(
-    (value: string) => {
+    async (
+      value: string,
+      mode = searchMode,
+      scope = searchScope,
+      folderPath = searchFolderPath,
+      cursor?: string,
+      append = false
+    ) => {
       const term = value.trim();
       if (!term) {
-        // Restore the normal tree. If we have a pre-search snapshot, restore
-        // the expansion state to what it was before the search, then refresh.
-        // This avoids triggering a parallel fetch for every dir the search opened.
-        searchSeqRef.current++;
-        setShowSearch(true);
+        searchSeqRef.current += 1;
+        setNextCursor(undefined);
+        setSearchLoading(false);
         if (preSearchExpandedKeysRef.current !== null) {
           setExpandedKeys(preSearchExpandedKeysRef.current);
           preSearchExpandedKeysRef.current = null;
         }
+        setShowSearch(true);
         refreshWorkspace();
         return;
       }
-      // Save expansion state before the first search keystroke.
+
       if (preSearchExpandedKeysRef.current === null) {
         preSearchExpandedKeysRef.current = [...expandedKeysRef.current];
       }
-      const seq = ++searchSeqRef.current;
-      void ipcBridge.fs.listWorkspaceFiles
-        .invoke({ root: workspace })
-        .then((flatFiles) => {
-          if (seq !== searchSeqRef.current) return;
-          const { tree, expandedKeys: searchExpandedKeys } = buildSearchTree(flatFiles, workspace, term);
-          setFiles(tree);
-          setExpandedKeys(searchExpandedKeys);
-          setTreeKey(Math.random());
-          // Keep the search box visible even with zero matches so the user can
-          // edit the term; the tree area shows the empty state.
-          setShowSearch(true);
-        })
-        .catch((err) => {
-          if (seq !== searchSeqRef.current) return;
-          console.error('[useWorkspaceSearch] search failed:', err);
+      const seq = append ? searchSeqRef.current : ++searchSeqRef.current;
+      setSearchLoading(true);
+      try {
+        const result = await ipcBridge.conversation.searchWorkspace.invoke({
+          conversation_id,
+          workspace,
+          path: scope === 'currentFolder' ? folderPath : workspace,
+          search: term,
+          searchMode: mode,
+          cursor,
+          respectGitignore: scope === 'workspace',
         });
+        if (seq !== searchSeqRef.current) return;
+        setFiles((previous) => (append ? mergeSearchTrees(previous, result.tree) : result.tree));
+        setExpandedKeys((previous) =>
+          append ? [...new Set([...previous, ...collectExpandedKeys(result.tree)])] : collectExpandedKeys(result.tree)
+        );
+        setTreeKey(Math.random());
+        setNextCursor(result.nextCursor);
+        setShowSearch(true);
+      } catch (error) {
+        if (seq === searchSeqRef.current) console.error('[useWorkspaceSearch] search failed:', error);
+      } finally {
+        if (seq === searchSeqRef.current) setSearchLoading(false);
+      }
     },
-    [workspace, setFiles, setExpandedKeys, setTreeKey, refreshWorkspace]
+    [
+      conversation_id,
+      refreshWorkspace,
+      searchFolderPath,
+      searchMode,
+      searchScope,
+      setExpandedKeys,
+      setFiles,
+      setTreeKey,
+      workspace,
+    ]
   );
 
-  // Debounced search handler
-  const onSearch = useDebounce((value: string) => runSearch(value), 200, [runSearch]);
+  const onSearch = useDebounce((value: string) => void runSearch(value), 200, [runSearch]);
 
-  // Handle host file selection callback (WebUI)
+  const updateSearchMode = useCallback(
+    (mode: WorkspaceSearchMode) => {
+      setSearchMode(mode);
+      if (searchText.trim()) void runSearch(searchText, mode);
+    },
+    [runSearch, searchText]
+  );
+
+  const updateSearchScope = useCallback(
+    (scope: WorkspaceSearchScope) => {
+      setSearchScope(scope);
+      if (searchText.trim()) void runSearch(searchText, searchMode, scope);
+    },
+    [runSearch, searchMode, searchText]
+  );
+
+  const selectSearchFolder = useCallback(
+    (folderPath: string, folderLabel: string) => {
+      setSearchFolderPath(folderPath);
+      setSearchFolderLabel(folderLabel);
+      setSearchScope('currentFolder');
+      if (searchText.trim()) void runSearch(searchText, searchMode, 'currentFolder', folderPath);
+    },
+    [runSearch, searchMode, searchText]
+  );
+
+  const loadMore = useCallback(() => {
+    if (!nextCursor || searchLoading || !searchText.trim()) return;
+    void runSearch(searchText, searchMode, searchScope, searchFolderPath, nextCursor, true);
+  }, [nextCursor, runSearch, searchFolderPath, searchLoading, searchMode, searchScope, searchText]);
+
   const handleHostFileSelected = useCallback(
     (
       paths: string[] | undefined,
       handleFilesToAdd: (files: Array<{ name: string; path: string }>) => Promise<void>
     ) => {
       setShowHostFileSelector(false);
-      if (paths && paths.length > 0) {
-        void handleFilesToAdd(paths.map((p) => ({ name: p.split('/').pop() || p, path: p })));
-      }
+      if (paths?.length) void handleFilesToAdd(paths.map((path) => ({ name: path.split('/').pop() || path, path })));
     },
     []
   );
@@ -140,6 +207,15 @@ export function useWorkspaceSearch({
     setSearchText,
     showSearch,
     setShowSearch,
+    searchMode,
+    setSearchMode: updateSearchMode,
+    searchScope,
+    setSearchScope: updateSearchScope,
+    searchFolderLabel,
+    selectSearchFolder,
+    hasMore: Boolean(nextCursor),
+    searchLoading,
+    loadMore,
     searchInputRef,
     onSearch,
     showHostFileSelector,
@@ -147,3 +223,13 @@ export function useWorkspaceSearch({
     handleHostFileSelected,
   };
 }
+
+const collectExpandedKeys = (nodes: IDirOrFile[]): string[] => {
+  const keys: string[] = [];
+  const visit = (node: IDirOrFile) => {
+    if (!node.isFile && node.relativePath) keys.push(node.relativePath);
+    node.children?.forEach(visit);
+  };
+  nodes.forEach(visit);
+  return keys;
+};

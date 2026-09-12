@@ -124,9 +124,9 @@ export function collectExpandedDirs(
  * Build a tree that contains only the files whose name or path matches the
  * search term, keeping the directory nodes on the path to each match so the
  * result renders as a normal (pruned) tree. Directories themselves are matched
- * by name too, in which case their whole subtree is not expanded here — only
- * the branch nodes leading to file matches are reconstructed. Input is the
- * flat recursive file list from `fs.listWorkspaceFiles`.
+ * by name too, in which case files below that directory are retained so the
+ * matching directory is useful as a result. Input is the flat recursive file
+ * list from `fs.listWorkspaceFiles`.
  *
  * Returns `{ tree, expandedKeys }` where the tree mirrors getWorkspace's shape
  * (single root node with `relativePath === ''`) and expandedKeys expands every
@@ -135,7 +135,9 @@ export function collectExpandedDirs(
 export function buildSearchTree(
   flatFiles: IWorkspaceFlatFile[],
   workspace: string,
-  term: string
+  term: string,
+  mode: 'all' | 'name' | 'content' = 'name',
+  contentMatches: ReadonlyMap<string, number> = new Map()
 ): { tree: IDirOrFile[]; expandedKeys: string[] } {
   const ws = stripTrailingSlash(normalizeSlashes(workspace));
   const rootName = ws.split('/').pop() || '';
@@ -171,6 +173,7 @@ export function buildSearchTree(
       isFile: false,
       children: [],
     };
+    if (name.toLowerCase().includes(needle)) node.searchMatchKind = 'name';
     parent.children!.push(node);
     dirByPath.set(relPath, node);
     expanded.add(relPath);
@@ -180,20 +183,32 @@ export function buildSearchTree(
   for (const file of flatFiles) {
     const relPath = normalizeSlashes(file.relativePath || '');
     if (!relPath) continue;
-    // Match on file name OR any segment of its path, so searching a folder
-    // name surfaces the files inside it too.
-    if (!relPath.toLowerCase().includes(needle)) continue;
 
-    const segments = relPath.split('/');
+    // Match each path segment independently. This makes a directory name a
+    // first-class hit and keeps its matching subtree visible even when none of
+    // the files directly contain the term in their own name.
+    const pathSegments = relPath.split('/');
+    const nameMatch = pathSegments.some((segment) => segment.toLowerCase().includes(needle));
+    const contentMatchCount = contentMatches.get(file.fullPath) ?? 0;
+    const contentMatch = contentMatchCount > 0;
+    const matches = mode === 'name' ? nameMatch : mode === 'content' ? contentMatch : nameMatch || contentMatch;
+    if (!matches) continue;
+
+    const segments = pathSegments;
     const parentPath = segments.slice(0, -1).join('/');
     const parent = ensureDir(parentPath);
-    parent.children!.push({
+    const fileNode: IDirOrFile = {
       name: segments[segments.length - 1],
       fullPath: file.fullPath,
       relativePath: relPath,
       isDir: false,
       isFile: true,
-    });
+    };
+    if (nameMatch && contentMatch) fileNode.searchMatchKind = 'both';
+    else if (nameMatch) fileNode.searchMatchKind = 'name';
+    else if (contentMatch) fileNode.searchMatchKind = 'content';
+    if (contentMatchCount > 0) fileNode.searchContentMatchCount = contentMatchCount;
+    parent.children!.push(fileNode);
   }
 
   return { tree: [root], expandedKeys: [...expanded] };

@@ -6,12 +6,13 @@
 
 import { iconColors } from '@/renderer/styles/colors';
 import { isElectronDesktop } from '@/renderer/utils/platform';
-import { Dropdown, Menu, Tooltip } from '@arco-design/web-react';
+import { Button, Dropdown, Menu, Radio, Tooltip } from '@arco-design/web-react';
 import { Down, Plus, Refresh } from '@icon-park/react';
 import React from 'react';
 import UploadProgressBar from '@/renderer/components/media/UploadProgressBar';
 import { AionSearchInput } from '@/renderer/components/base';
 import type { TFunction } from 'i18next';
+import type { WorkspaceSearchMode, WorkspaceSearchScope } from '../hooks/useWorkspaceSearch';
 
 type WorkspaceToolbarProps = {
   t: TFunction;
@@ -24,6 +25,14 @@ type WorkspaceToolbarProps = {
   setSearchText: (v: string) => void;
   onSearch: (v: string) => void;
   searchInputRef: React.RefObject<HTMLInputElement | null>;
+  searchMode: WorkspaceSearchMode;
+  setSearchMode: (v: WorkspaceSearchMode) => void;
+  searchScope: WorkspaceSearchScope;
+  setSearchScope: (v: WorkspaceSearchScope) => void;
+  searchFolderLabel: string;
+  hasMore: boolean;
+  searchLoading: boolean;
+  loadMore: () => void;
   // Tree state
   loading: boolean;
   refreshWorkspace: () => void;
@@ -44,6 +53,14 @@ const WorkspaceToolbar: React.FC<WorkspaceToolbarProps> = ({
   setSearchText,
   onSearch,
   searchInputRef,
+  searchMode,
+  setSearchMode,
+  searchScope,
+  setSearchScope,
+  searchFolderLabel,
+  hasMore,
+  searchLoading,
+  loadMore,
   loading,
   refreshWorkspace,
   handleSelectHostFiles,
@@ -85,6 +102,36 @@ const WorkspaceToolbar: React.FC<WorkspaceToolbarProps> = ({
               onSearch(value);
             }}
           />
+          <Radio.Group
+            className='workspace-search-segment mt-6px'
+            size='mini'
+            type='button'
+            value={searchMode}
+            onChange={(value) => setSearchMode(value as WorkspaceSearchMode)}
+          >
+            <Radio value='all'>{t('conversation.workspace.searchMode.all')}</Radio>
+            <Radio value='name'>{t('conversation.workspace.searchMode.name')}</Radio>
+            <Radio value='content'>{t('conversation.workspace.searchMode.content')}</Radio>
+          </Radio.Group>
+          <Radio.Group
+            className='workspace-search-segment mt-6px'
+            size='mini'
+            type='button'
+            value={searchScope}
+            onChange={(value) => setSearchScope(value as WorkspaceSearchScope)}
+          >
+            <Radio value='workspace'>{t('conversation.workspace.searchScope.workspace')}</Radio>
+            <Radio value='currentFolder' disabled={!searchFolderLabel}>
+              {searchScope === 'currentFolder' && searchFolderLabel
+                ? t('conversation.workspace.searchScope.selectedFolder', { folder: searchFolderLabel })
+                : t('conversation.workspace.searchScope.currentFolder')}
+            </Radio>
+          </Radio.Group>
+          {hasMore && (
+            <Button size='mini' loading={searchLoading} onClick={loadMore} className='mt-6px'>
+              {t('conversation.workspace.searchContinue')}
+            </Button>
+          )}
         </div>
       )}
 

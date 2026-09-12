@@ -126,7 +126,9 @@ import {
   absoluteToRelativePath,
   fromBackendWorkspaceFlatFiles,
   fromBackendWorkspaceList,
+  fromBackendWorkspaceSearch,
   type RawWorkspaceFlatFile,
+  type RawWorkspaceSearchResponse,
 } from './workspaceMapper';
 
 const httpGetClientSetting = <T>(key: string) => ({
@@ -344,6 +346,37 @@ export const conversation = {
       const raw = await httpRequest<Array<{ name: string; type: string }>>('GET', url);
       return fromBackendWorkspaceList(raw, p.workspace, rel);
     }) as (p: { conversation_id: string; workspace: string; path: string; search?: string }) => Promise<IDirOrFile[]>,
+  },
+  searchWorkspace: {
+    provider: () => {},
+    invoke: (async (p: {
+      conversation_id: string;
+      workspace: string;
+      path?: string;
+      search: string;
+      searchMode?: 'all' | 'name' | 'content';
+      cursor?: string;
+      respectGitignore?: boolean;
+    }) => {
+      const rel = absoluteToRelativePath(p.path || p.workspace, p.workspace);
+      const params = new URLSearchParams({ path: rel, search: p.search });
+      if (p.searchMode) params.set('search_mode', p.searchMode);
+      if (p.cursor) params.set('cursor', p.cursor);
+      if (p.respectGitignore != null) params.set('respect_gitignore', String(p.respectGitignore));
+      const raw = await httpRequest<RawWorkspaceSearchResponse>(
+        'GET',
+        `/api/conversations/${p.conversation_id}/workspace/search?${params.toString()}`
+      );
+      return fromBackendWorkspaceSearch(raw, p.workspace);
+    }) as (p: {
+      conversation_id: string;
+      workspace: string;
+      path?: string;
+      search: string;
+      searchMode?: 'all' | 'name' | 'content';
+      cursor?: string;
+      respectGitignore?: boolean;
+    }) => Promise<ReturnType<typeof fromBackendWorkspaceSearch>>,
   },
   responseSearchWorkSpace: stubProvider<void, { file: number; dir: number; match?: IDirOrFile }>(
     'responseSearchWorkSpace',
@@ -563,6 +596,7 @@ export const fs = {
   readFile: httpPost<string | null, { path: string; workspace?: string }>('/api/fs/read'),
   readFileBuffer: httpPost<string | null, { path: string; workspace?: string }>('/api/fs/read-buffer'),
   createTempFile: httpPost<string, { file_name: string }>('/api/fs/temp'),
+  createDirectory: httpPost<{ path: string }, { parent_path: string; name: string }>('/api/fs/create-directory'),
   writeFile: httpPost<boolean, { path: string; data: string; workspace?: string }>('/api/fs/write'),
   createZip: httpPost<
     boolean,
@@ -1585,6 +1619,9 @@ export interface IDirOrFile {
   relativePath: string;
   isDir: boolean;
   isFile: boolean;
+  /** Search metadata is present only in filtered workspace results. */
+  searchMatchKind?: 'name' | 'content' | 'both';
+  searchContentMatchCount?: number;
   children?: Array<IDirOrFile>;
 }
 

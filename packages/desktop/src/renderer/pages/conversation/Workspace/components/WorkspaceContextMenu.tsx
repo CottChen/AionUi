@@ -5,6 +5,8 @@
  */
 
 import type { IDirOrFile } from '@/common/adapter/ipcBridge';
+import { copyText } from '@/renderer/utils/ui/clipboard';
+import { Message } from '@arco-design/web-react';
 import React from 'react';
 import type { TFunction } from 'i18next';
 import { isPreviewSupportedExt } from '../utils/filePreview';
@@ -22,6 +24,7 @@ type WorkspaceContextMenuProps = {
   handleDownloadFile: (node: IDirOrFile) => Promise<void>;
   handleDeleteNode: (node: IDirOrFile) => void;
   openRenameModal: (node: IDirOrFile) => void;
+  onSearchInFolder: (node: IDirOrFile) => void;
   closeContextMenu: () => void;
 };
 
@@ -42,6 +45,7 @@ const WorkspaceContextMenu: React.FC<WorkspaceContextMenuProps> = ({
   handleDownloadFile,
   handleDeleteNode,
   openRenameModal,
+  onSearchInFolder,
   closeContextMenu,
 }) => {
   if (!visible || !node || !style) return null;
@@ -49,6 +53,12 @@ const WorkspaceContextMenu: React.FC<WorkspaceContextMenuProps> = ({
   const isFile = !!node.isFile;
   const isRoot = !node.relativePath || node.relativePath === '';
   const isPreviewSupported = isFile && !!node.name && isPreviewSupportedExt(node.name);
+  const copyPath = (value: string, successMessage: string) => {
+    void copyText(value)
+      .then(() => Message.success(successMessage))
+      .catch(() => Message.error(t('common.copyFailed')));
+    closeContextMenu();
+  };
 
   return (
     <div
@@ -90,6 +100,36 @@ const WorkspaceContextMenu: React.FC<WorkspaceContextMenuProps> = ({
         >
           {t('conversation.workspace.contextMenu.openLocation')}
         </button>
+        <button
+          type='button'
+          className={MENU_BUTTON_BASE}
+          onClick={() => {
+            copyPath(node.relativePath || '.', t('conversation.workspace.contextMenu.copyRelativePathSuccess'));
+          }}
+        >
+          {t('conversation.workspace.contextMenu.copyRelativePath')}
+        </button>
+        <button
+          type='button'
+          className={MENU_BUTTON_BASE}
+          onClick={() => {
+            copyPath(node.fullPath, t('conversation.workspace.contextMenu.copyAbsolutePathSuccess'));
+          }}
+        >
+          {t('conversation.workspace.contextMenu.copyAbsolutePath')}
+        </button>
+        {!isFile && (
+          <button
+            type='button'
+            className={MENU_BUTTON_BASE}
+            onClick={() => {
+              onSearchInFolder(node);
+              closeContextMenu();
+            }}
+          >
+            {t('conversation.workspace.contextMenu.searchInFolder')}
+          </button>
+        )}
         {isFile && isPreviewSupported && (
           <button
             type='button'

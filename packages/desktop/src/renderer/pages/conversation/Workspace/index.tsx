@@ -94,6 +94,7 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
 
   const searchHook = useWorkspaceSearch({
     workspace,
+    conversation_id,
     expandedKeys: treeHook.expandedKeys,
     setFiles: treeHook.setFiles,
     setExpandedKeys: treeHook.setExpandedKeys,
@@ -299,6 +300,14 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
             setSearchText={searchHook.setSearchText}
             onSearch={searchHook.onSearch}
             searchInputRef={searchHook.searchInputRef}
+            searchMode={searchHook.searchMode}
+            setSearchMode={searchHook.setSearchMode}
+            searchScope={searchHook.searchScope}
+            setSearchScope={searchHook.setSearchScope}
+            searchFolderLabel={searchHook.searchFolderLabel}
+            hasMore={searchHook.hasMore}
+            searchLoading={searchHook.searchLoading}
+            loadMore={searchHook.loadMore}
             loading={treeHook.loading}
             refreshWorkspace={treeHook.refreshWorkspace}
             handleSelectHostFiles={pasteHook.handleSelectHostFiles}
@@ -323,6 +332,7 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
               handleDownloadFile={fileOpsHook.handleDownloadFile}
               handleDeleteNode={fileOpsHook.handleDeleteNode}
               openRenameModal={fileOpsHook.openRenameModal}
+              onSearchInFolder={(node) => searchHook.selectSearchFolder(node.fullPath, node.name)}
               closeContextMenu={modalsHook.closeContextMenu}
             />
 

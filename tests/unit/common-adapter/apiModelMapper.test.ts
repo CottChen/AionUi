@@ -154,6 +154,16 @@ describe('apiModelMapper', () => {
       expect('model' in body).toBe(false);
     });
 
+    it('forwards the selected workspace in the create request extra', () => {
+      const body = buildCreateConversationBody({
+        name: 'hello',
+        assistant: { id: 'bare:claude' },
+        extra: { workspace: '/tmp/project', custom_workspace: true },
+      });
+
+      expect(body.extra).toEqual({ workspace: '/tmp/project', custom_workspace: true });
+    });
+
     it('strips legacy type when assistant identity is present', () => {
       const body = buildCreateConversationBody({
         type: 'acp',
