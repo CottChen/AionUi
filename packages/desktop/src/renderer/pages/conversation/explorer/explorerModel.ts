@@ -388,10 +388,8 @@ export function buildTreeData(cache: FactCache, expanded: ReadonlySet<PeKey>, ro
 
 // ── File operations (A): pure request builders ──────────────────────────────
 // The tree only knows `{pe_id, relative_path}`, so file ops map to WS fs/*
-// commands over that identity (never absolute paths). Scope mirrors the legacy
-// tree's context menu: rename + delete only (no new-file/new-folder — the old
-// tree never had those). Builders are pure so the path math + no-op detection
-// can be unit-tested away from the UI.
+// commands over that identity (never absolute paths). Builders are pure so the
+// path math + name validation can be unit-tested away from the UI.
 
 /** A rename dialog request. `origRel` is the full pe-relative path being renamed. */
 export type RenameRequest = {
@@ -422,6 +420,20 @@ export function buildRenameRequest(dialog: RenameRequest, rawName: string): FsOp
   if (rel === dialog.origRel) return null;
   const ref = (relative_path: string) => ({ pe_id: dialog.peId, relative_path });
   return { method: 'fs/rename', params: { from: ref(dialog.origRel), to: ref(rel) } };
+}
+
+/**
+ * Build the WS fs/createFile request for an empty file inside a directory.
+ * The UI accepts a single entry name only; the parent directory is selected
+ * by the tree node and must already exist.
+ */
+export function buildCreateFileRequest(peId: string, parentDir: string, rawName: string): FsOpRequest | null {
+  const name = rawName.trim();
+  if (!name || name === '.' || name === '..' || /[/\\\0]/.test(name)) return null;
+  return {
+    method: 'fs/createFile',
+    params: { file: { pe_id: peId, relative_path: joinRel(parentDir, name) } },
+  };
 }
 
 /** Build the WS fs/remove request for deleting an entry. */

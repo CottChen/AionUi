@@ -639,11 +639,13 @@
       "rename": "Renomear",
       "addToChat": "Adicionar ao chat",
       "copyRelativePath": "Copiar caminho relativo",
-      "copyAbsolutePath": "Copiar caminho absoluto"
+      "copyAbsolutePath": "Copiar caminho absoluto",
+      "newFile": "Novo arquivo"
     },
     "namePlaceholder": "Nome",
     "deleteConfirm": "Excluir “{{name}}”? Isso não pode ser desfeito.",
     "renameFailed": "Não foi possível renomear",
+    "newFileFailed": "Falha ao criar arquivo",
     "tabs": {
       "files": "Arquivos",
       "changes": "Alterações"

@@ -636,6 +636,7 @@
     "removeFailed": "Couldn't remove the folder",
     "contextMenu": {
       "rename": "Yeniden adlandır",
+      "newFile": "Yeni dosya",
       "addToChat": "Sohbete ekle",
       "copyRelativePath": "Göreli yolu kopyala",
       "copyAbsolutePath": "Mutlak yolu kopyala"
@@ -643,6 +644,7 @@
     "namePlaceholder": "Ad",
     "deleteConfirm": "“{{name}}” silinsin mi? Bu geri alınamaz.",
     "renameFailed": "Yeniden adlandırılamadı",
+    "newFileFailed": "Dosya oluşturulamadı",
     "tabs": {
       "files": "Dosyalar",
       "changes": "Değişiklikler"

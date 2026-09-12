@@ -634,11 +634,13 @@
       "rename": "Cambiar nombre",
       "addToChat": "Añadir al chat",
       "copyRelativePath": "Copiar ruta relativa",
-      "copyAbsolutePath": "Copiar ruta absoluta"
+      "copyAbsolutePath": "Copiar ruta absoluta",
+      "newFile": "Nuevo archivo"
     },
     "namePlaceholder": "Nombre",
     "deleteConfirm": "¿Eliminar «{{name}}»? Esto no se puede deshacer.",
     "renameFailed": "No se pudo cambiar el nombre",
+    "newFileFailed": "No se pudo crear el archivo",
     "tabs": {
       "files": "Archivos",
       "changes": "Cambios"

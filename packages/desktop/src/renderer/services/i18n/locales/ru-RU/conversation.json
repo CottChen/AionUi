@@ -636,11 +636,13 @@
       "rename": "Переименовать",
       "addToChat": "Добавить в чат",
       "copyRelativePath": "Копировать относительный путь",
-      "copyAbsolutePath": "Копировать абсолютный путь"
+      "copyAbsolutePath": "Копировать абсолютный путь",
+      "newFile": "Новый файл"
     },
     "namePlaceholder": "Имя",
     "deleteConfirm": "Удалить «{{name}}»? Это действие нельзя отменить.",
     "renameFailed": "Не удалось переименовать",
+    "newFileFailed": "Не удалось создать файл",
     "tabs": {
       "files": "Файлы",
       "changes": "Изменения"

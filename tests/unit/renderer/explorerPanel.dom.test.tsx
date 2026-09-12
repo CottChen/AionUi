@@ -279,4 +279,17 @@ describe('ExplorerPanel folder context actions', () => {
 
     expect(onUploadFiles).toHaveBeenCalledWith('pe1', 'sub');
   });
+
+  it('offers new-file creation for the right-clicked directory', async () => {
+    const onNewFile = vi.fn();
+    configureExplorerStore(makePort({ [peKey('pe1', '')]: [dir('sub')] }));
+    render(
+      <ExplorerPanel projectId='p1' roots={[{ pe_id: 'pe1', title: 'app', role: 'workspace' }]} onNewFile={onNewFile} />
+    );
+
+    fireEvent.contextMenu(await screen.findByText('sub'));
+    fireEvent.click(await screen.findByText('conversation.explorer.contextMenu.newFile'));
+
+    expect(onNewFile).toHaveBeenCalledWith('pe1', 'sub');
+  });
 });

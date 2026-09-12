@@ -614,11 +614,13 @@
       "rename": "Renommer",
       "addToChat": "Ajouter au chat",
       "copyRelativePath": "Copier le chemin relatif",
-      "copyAbsolutePath": "Copier le chemin absolu"
+      "copyAbsolutePath": "Copier le chemin absolu",
+      "newFile": "Nouveau fichier"
     },
     "namePlaceholder": "Nom",
     "deleteConfirm": "Supprimer « {{name}} » ? Cette action est irréversible.",
     "renameFailed": "Échec du renommage",
+    "newFileFailed": "Échec de la création du fichier",
     "tabs": {
       "files": "Fichiers",
       "changes": "Modifications"

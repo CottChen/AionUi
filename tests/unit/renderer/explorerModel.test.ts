@@ -5,6 +5,7 @@ import {
   ancestorRels,
   applyDelta,
   applySnapshot,
+  buildCreateFileRequest,
   buildRemoveRequest,
   buildRenameRequest,
   buildTreeData,
@@ -501,5 +502,32 @@ describe('buildRemoveRequest', () => {
       method: 'fs/remove',
       params: { target: { pe_id: 'peY', relative_path: 'a/b.txt' } },
     });
+  });
+});
+
+describe('buildCreateFileRequest', () => {
+  it('builds a project-scoped create-file request under a directory', () => {
+    expect(buildCreateFileRequest('peY', 'src', 'index.ts')).toEqual({
+      method: 'fs/createFile',
+      params: { file: { pe_id: 'peY', relative_path: 'src/index.ts' } },
+    });
+  });
+
+  it('creates at the project root without a leading slash', () => {
+    expect(buildCreateFileRequest('peY', '', 'README.md')).toEqual({
+      method: 'fs/createFile',
+      params: { file: { pe_id: 'peY', relative_path: 'README.md' } },
+    });
+  });
+
+  it('trims the file name and rejects empty or path-like names', () => {
+    expect(buildCreateFileRequest('peY', 'src', '  index.ts  ')).toEqual({
+      method: 'fs/createFile',
+      params: { file: { pe_id: 'peY', relative_path: 'src/index.ts' } },
+    });
+    expect(buildCreateFileRequest('peY', 'src', '')).toBeNull();
+    expect(buildCreateFileRequest('peY', 'src', '   ')).toBeNull();
+    expect(buildCreateFileRequest('peY', 'src', '../escape')).toBeNull();
+    expect(buildCreateFileRequest('peY', 'src', 'nested/file.ts')).toBeNull();
   });
 });

@@ -54,6 +54,7 @@ vi.mock('@/renderer/pages/conversation/explorer/ExplorerPanel', () => ({
     onImportFiles,
     onSearchInFolder,
     onUploadFiles,
+    onNewFile,
   }: {
     roots: Array<{ title: string }>;
     onRemoveRoot?: (id: string) => void;
@@ -64,6 +65,7 @@ vi.mock('@/renderer/pages/conversation/explorer/ExplorerPanel', () => ({
     onImportFiles?: (pe: string, rel: string, paths: string[]) => void;
     onSearchInFolder?: (pe: string, rel: string, name: string) => void;
     onUploadFiles?: (pe: string, rel: string) => void;
+    onNewFile?: (pe: string, rel: string) => void;
   }) => (
     <div>
       <span data-testid='roots'>{roots.map((r) => r.title).join(',')}</span>
@@ -97,6 +99,12 @@ vi.mock('@/renderer/pages/conversation/explorer/ExplorerPanel', () => ({
       </button>
       <button data-testid='do-upload-folder' onClick={() => onUploadFiles?.('peA', 'sub')}>
         upload-folder
+      </button>
+      <button data-testid='do-new-file' onClick={() => onNewFile?.('peA', 'sub')}>
+        new-file
+      </button>
+      <button data-testid='do-new-file-root' onClick={() => onNewFile?.('peA', '')}>
+        new-file-root
       </button>
     </div>
   ),
@@ -471,6 +479,58 @@ describe('ExplorerContainer A-paste import', () => {
     renderIt();
     fireEvent.click(await screen.findByTestId('do-copy-abs'));
     await waitFor(() => expect(Message.error).toHaveBeenCalledWith('conversation.explorer.copyFailed'));
+  });
+});
+
+describe('ExplorerContainer new file', () => {
+  const nameInput = () => screen.findByPlaceholderText('conversation.explorer.namePlaceholder');
+  const clickCreate = () => fireEvent.click(screen.getByRole('button', { name: 'common.create' }));
+
+  it('dispatches fs/createFile with a directory-relative project ref', async () => {
+    renderIt();
+    fireEvent.click(await screen.findByTestId('do-new-file'));
+    fireEvent.change(await nameInput(), { target: { value: 'index.ts' } });
+    clickCreate();
+
+    await waitFor(() =>
+      expect(fsRead).toHaveBeenCalledWith('fs/createFile', {
+        file: { pe_id: 'peA', relative_path: 'sub/index.ts' },
+      })
+    );
+  });
+
+  it('creates at the project root and selects the new file after success', async () => {
+    renderIt();
+    fireEvent.click(await screen.findByTestId('do-new-file-root'));
+    fireEvent.change(await nameInput(), { target: { value: 'README.md' } });
+    clickCreate();
+
+    await waitFor(() =>
+      expect(fsRead).toHaveBeenCalledWith('fs/createFile', {
+        file: { pe_id: 'peA', relative_path: 'README.md' },
+      })
+    );
+    expect(getExplorerSnapshot().selected).toBe('peA\0README.md');
+  });
+
+  it('does not dispatch an empty or path-like file name', async () => {
+    renderIt();
+    fireEvent.click(await screen.findByTestId('do-new-file'));
+    fireEvent.change(await nameInput(), { target: { value: '../escape' } });
+    clickCreate();
+
+    expect(fsRead).not.toHaveBeenCalled();
+    expect(Message.error).not.toHaveBeenCalled();
+  });
+
+  it('shows a creation error when the backend rejects the request', async () => {
+    fsRead.mockRejectedValueOnce(new Error('exists'));
+    renderIt();
+    fireEvent.click(await screen.findByTestId('do-new-file'));
+    fireEvent.change(await nameInput(), { target: { value: 'duplicate.ts' } });
+    clickCreate();
+
+    await waitFor(() => expect(Message.error).toHaveBeenCalledWith('conversation.explorer.newFileFailed'));
   });
 });
 

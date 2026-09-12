@@ -38,10 +38,12 @@ export type ExplorerPanelProps = {
   onRemoveRoot?: (peId: string) => void;
   /** Open a file (leaf) in the preview panel. Called when a file node is selected. */
   onOpenFile?: (peId: string, relativePath: string) => void;
-  /** File operations (A) — parity with the legacy tree: rename + delete only.
+  /** File operations (A): rename/delete entries and create files in directories.
    * Omit to hide the corresponding context-menu item. */
   onRename?: (peId: string, relativePath: string, name: string) => void;
   onDelete?: (peId: string, relativePath: string, name: string) => void;
+  /** Create an empty file inside a directory node. */
+  onNewFile?: (peId: string, targetRelativePath: string) => void;
   /** Add a file/folder node to the active conversation's send box. Omit to hide
    * the item (e.g. no single active conversation, as on the team route). */
   onAddToChat?: (peId: string, relativePath: string, name: string, isFile: boolean) => void;
@@ -129,6 +131,7 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
   onOpenFile,
   onRename,
   onDelete,
+  onNewFile,
   onAddToChat,
   onRevealInFolder,
   onCopyRelativePath,
@@ -266,10 +269,9 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
       const isFile = Boolean(data?.isLeaf);
       const isExpanded = expandedSet.has(key);
 
-      // Right-click file operations, mirroring the legacy tree: non-root nodes
-      // get rename + delete; pe roots (role set) get "remove from project" (they
-      // are pe bindings, not renamed/deleted in place). Matches old-tree parity —
-      // no new-file/new-folder (the old tree never had those).
+      // Right-click file operations: non-root nodes get rename + delete; pe roots
+      // get "remove from project". Directory nodes, including pe roots, can also
+      // create a new file inside themselves.
       const ref = keyToRef(key);
       const peId = ref.pe_id;
       const rel = ref.relative_path;
@@ -319,7 +321,7 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
       // Reveal-in-folder is Electron-only (needs a local OS shell; WebUI may be
       // remote and has no shell permission), so gate the menu item on the runtime.
       const canReveal = Boolean(onRevealInFolder) && isElectronDesktop();
-      const folderActions = !isFile && (onSearchInFolder || onUploadFiles);
+      const folderActions = !isFile && (onSearchInFolder || onUploadFiles || onNewFile);
       const canCopyAbsolutePath = Boolean(onCopyAbsolutePath);
       const showWebActions = !isElectronDesktop();
       const hasMenu =
@@ -345,6 +347,7 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
       const onClickMenuItem = (menuKey: string, event: { stopPropagation?: () => void }) => {
         event?.stopPropagation?.();
         if (menuKey === 'addToChat') onAddToChat?.(peId, rel, name, isFile);
+        else if (menuKey === 'newFile' && !isFile) onNewFile?.(peId, rel);
         else if (menuKey === 'rename') onRename?.(peId, rel, name);
         else if (menuKey === 'delete') onDelete?.(peId, rel, name);
         else if (menuKey === 'remove' && removable) onRemoveRoot?.(peId);
@@ -373,6 +376,9 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
             <Menu.Item key='searchInFolder'>{t('conversation.workspace.contextMenu.searchInFolder')}</Menu.Item>
           )}
           {!isFile && onUploadFiles && <Menu.Item key='uploadFiles'>{t('conversation.workspace.addFile')}</Menu.Item>}
+          {!isFile && onNewFile && (
+            <Menu.Item key='newFile'>{t('conversation.explorer.contextMenu.newFile')}</Menu.Item>
+          )}
           {!isRoot && onRename && <Menu.Item key='rename'>{t('conversation.explorer.contextMenu.rename')}</Menu.Item>}
           {!isRoot && onDelete && <Menu.Item key='delete'>{t('common.delete')}</Menu.Item>}
           {isRoot && onRemoveRoot && (
@@ -412,6 +418,7 @@ export const ExplorerPanel: React.FC<ExplorerPanelProps> = ({
       onRemoveRoot,
       onRename,
       onDelete,
+      onNewFile,
       onAddToChat,
       onRevealInFolder,
       onCopyRelativePath,

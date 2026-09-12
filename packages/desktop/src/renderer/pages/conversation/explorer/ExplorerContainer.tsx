@@ -48,7 +48,14 @@ import type { FileOrFolderItem } from '@/renderer/utils/file/fileTypes';
 import { resolvePreviewPayload } from '@/renderer/utils/file/previewPayload';
 
 import { ExplorerPanel } from './ExplorerPanel';
-import { buildRemoveRequest, buildRenameRequest, parentRel, peKey, type RenameRequest } from './explorerModel';
+import {
+  buildCreateFileRequest,
+  buildRemoveRequest,
+  buildRenameRequest,
+  parentRel,
+  peKey,
+  type RenameRequest,
+} from './explorerModel';
 import { initExplorerRuntime, updateProjectRootFallbackPaths } from './monitorTransport';
 import { toRootRefs } from './projectRoots';
 import { openProject, reveal, select } from './explorerStore';
@@ -301,8 +308,8 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId,
     }
   };
 
-  // ── File operations (A): rename + delete (parity with the legacy tree) ────
-  // Both operate on the tree's `{pe_id, relative_path}` identity over WS fs/*
+  // ── File operations (A): rename + delete + create-file ────────────────────
+  // All operate on the tree's `{pe_id, relative_path}` identity over WS fs/*
   // commands; the change is pushed back as a delta on the parent dir's
   // subscription, so the tree updates itself (single source, no manual refetch).
   // Component switcher tab (host component switcher, this round in-container):
@@ -310,7 +317,8 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId,
   // unmounts the inactive one for `changes`, which is safe because the SCM
   // subscription is owned by its store per project, not by the component's mount
   // (see ScmPanel's lifecycle note) — a tab switch never drops the backend watch.
-  const [renameDialog, setRenameDialog] = useState<RenameRequest | null>(null);
+  type NameDialogState = ({ mode: 'rename' } & RenameRequest) | { mode: 'newFile'; peId: string; targetDir: string };
+  const [nameDialog, setNameDialog] = useState<NameDialogState | null>(null);
   const [nameValue, setNameValue] = useState('');
   const [nameSubmitting, setNameSubmitting] = useState(false);
 
@@ -331,23 +339,38 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId,
   }, [detail, projectId, revealRequest, t]);
 
   const handleRename = (peId: string, rel: string, name: string): void => {
-    setRenameDialog({ peId, targetDir: parentRel(rel), origRel: rel });
+    setNameDialog({ mode: 'rename', peId, targetDir: parentRel(rel), origRel: rel });
     setNameValue(name);
   };
 
-  const submitRenameDialog = async (): Promise<void> => {
-    if (!renameDialog) return;
-    const request = buildRenameRequest(renameDialog, nameValue);
+  const handleNewFile = (peId: string, targetDir: string): void => {
+    setNameDialog({ mode: 'newFile', peId, targetDir });
+    setNameValue('');
+  };
+
+  const submitNameDialog = async (): Promise<void> => {
+    if (!nameDialog) return;
+    const request =
+      nameDialog.mode === 'rename'
+        ? buildRenameRequest(nameDialog, nameValue)
+        : buildCreateFileRequest(nameDialog.peId, nameDialog.targetDir, nameValue);
     if (!request) {
-      setRenameDialog(null); // empty name or no-op rename
+      setNameDialog(null); // empty/invalid name or no-op rename
       return;
     }
     setNameSubmitting(true);
     try {
       await initExplorerRuntime().request(request.method, request.params);
-      setRenameDialog(null);
+      if (nameDialog.mode === 'newFile') {
+        const newRel = `${nameDialog.targetDir ? `${nameDialog.targetDir}/` : ''}${nameValue.trim()}`;
+        reveal({ pe_id: nameDialog.peId, relative_path: nameDialog.targetDir });
+        select(peKey(nameDialog.peId, newRel));
+      }
+      setNameDialog(null);
     } catch {
-      Message.error(t('conversation.explorer.renameFailed'));
+      Message.error(
+        t(nameDialog.mode === 'rename' ? 'conversation.explorer.renameFailed' : 'conversation.explorer.newFileFailed')
+      );
     } finally {
       setNameSubmitting(false);
     }
@@ -597,6 +620,7 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId,
             onOpenFile={handleOpenFile}
             onRename={handleRename}
             onDelete={handleDelete}
+            onNewFile={handleNewFile}
             onAddToChat={activeConversationId ? handleAddToChat : undefined}
             onRevealInFolder={handleRevealInFolder}
             onCopyRelativePath={handleCopyRelativePath}
@@ -642,11 +666,15 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId,
         </div>
       )}
       <Modal
-        title={t('conversation.explorer.contextMenu.rename')}
-        visible={renameDialog !== null}
-        onCancel={() => setRenameDialog(null)}
-        onOk={submitRenameDialog}
-        okText={t('common.save')}
+        title={t(
+          nameDialog?.mode === 'newFile'
+            ? 'conversation.explorer.contextMenu.newFile'
+            : 'conversation.explorer.contextMenu.rename'
+        )}
+        visible={nameDialog !== null}
+        onCancel={() => setNameDialog(null)}
+        onOk={submitNameDialog}
+        okText={t(nameDialog?.mode === 'rename' ? 'common.save' : 'common.create')}
         cancelText={t('common.cancel')}
         confirmLoading={nameSubmitting}
         autoFocus
@@ -656,7 +684,7 @@ export const ExplorerContainer: React.FC<ExplorerContainerProps> = ({ projectId,
           autoFocus
           value={nameValue}
           onChange={setNameValue}
-          onPressEnter={submitRenameDialog}
+          onPressEnter={submitNameDialog}
           placeholder={t('conversation.explorer.namePlaceholder')}
         />
       </Modal>

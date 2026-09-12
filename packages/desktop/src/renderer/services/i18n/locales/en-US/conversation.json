@@ -637,11 +637,13 @@
       "rename": "Rename",
       "addToChat": "Add to chat",
       "copyRelativePath": "Copy relative path",
-      "copyAbsolutePath": "Copy absolute path"
+      "copyAbsolutePath": "Copy absolute path",
+      "newFile": "New file"
     },
     "namePlaceholder": "Name",
     "deleteConfirm": "Delete “{{name}}”? This can’t be undone.",
     "renameFailed": "Couldn't rename",
+    "newFileFailed": "Failed to create file",
     "tabs": {
       "files": "Files",
       "changes": "Changes"

@@ -120,6 +120,8 @@ function outboundMeta(method: string, params: unknown): unknown {
       return { file: refStr(p.file) }; // NB: never log p.content
     case 'fs/mkdir':
       return { dir: refStr(p.dir) };
+    case 'fs/createFile':
+      return { file: refStr(p.file) };
     case 'fs/remove':
       return { target: refStr(p.target) };
     case 'fs/rename':
