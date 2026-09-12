@@ -159,3 +159,9 @@ When opening a PR, fill in the PR body using [.github/pull_request_template.md](
 - fork AionCore 的新增数据库迁移统一使用 `900xxx` 保留号段；当前会话检索迁移为 `900024`（已有 `900021`～`900023`）。
 - GitHub Actions 无法读取相邻本地仓库的未提交改动。必须先提交并构建对应 AionCore，再把其 Manual Build `run_id` 传给 AionUI；禁止无意回退到官方 AionCore Release。
 - 打包后检查 DMG/DEB 内 `bundled-aioncore/*/manifest.json`，确认来源为对应 Actions artifact 和 run ID。
+
+### 性能与构建补充
+
+- 普通文件读取的 256MB 上限是 AionCore 原有配置；预览应使用 4MB 分块接口，避免先读完整文件再由前端截断。
+- 全文搜索需流式读取并限制单文件、总扫描量和并发；cursor 必须绑定查询条件，不能只用裸数字偏移。
+- 构建先构建 fork AionCore，再将对应 Actions `run_id` 传给 AionUi，并设置 `AIONUI_BACKEND_REPOSITORY=CottChen/AionCore`，避免误用官方仓库。
