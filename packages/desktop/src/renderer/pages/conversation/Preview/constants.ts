@@ -57,6 +57,9 @@ export const MIN_SPLIT_WIDTH = 20;
  */
 export const MAX_SPLIT_WIDTH = 80;
 
+/** Initial bytes fetched by the bounded text preview endpoint. */
+export const PREVIEW_INITIAL_READ_BYTES = 4 * 1024 * 1024;
+
 /**
  * 大文本进入预览裁剪的阈值（字符）
  * Threshold for enabling large-text preview truncation (characters)

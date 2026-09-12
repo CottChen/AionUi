@@ -10,6 +10,7 @@ import type { LocalFileLinkReference } from '@/renderer/components/Markdown/mark
 import {
   LARGE_TEXT_PREVIEW_MAX_LENGTH,
   LARGE_TEXT_PREVIEW_THRESHOLD,
+  PREVIEW_INITIAL_READ_BYTES,
 } from '@/renderer/pages/conversation/Preview/constants';
 import { getContentTypeByExtension } from '@/renderer/pages/conversation/Preview/fileUtils';
 import { usePreviewContext } from '@/renderer/pages/conversation/Preview/context/PreviewContext';
@@ -47,11 +48,16 @@ export const useLocalFilePreview = (workspace?: string) => {
           if (imageContent == null) throw null;
           content = imageContent;
         } else if (shouldReadPreviewContent(contentType)) {
-          const textContent = await ipcBridge.fs.readFile.invoke({ path: file_path, workspace });
-          if (textContent == null) throw null;
-          content = textContent;
+          const preview = await ipcBridge.fs.readFilePreview.invoke({
+            path: file_path,
+            workspace,
+            max_bytes: PREVIEW_INITIAL_READ_BYTES,
+          });
+          if (preview == null) throw null;
+          content = preview.content;
+          isLargeTextTruncated = preview.truncated;
 
-          if (contentType === 'code' && content.length > LARGE_TEXT_PREVIEW_THRESHOLD) {
+          if (content.length > LARGE_TEXT_PREVIEW_THRESHOLD) {
             content = content.slice(0, LARGE_TEXT_PREVIEW_MAX_LENGTH);
             isLargeTextTruncated = true;
           }

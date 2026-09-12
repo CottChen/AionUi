@@ -12,6 +12,7 @@ import { usePreviewContext } from '@/renderer/pages/conversation/Preview';
 import {
   LARGE_TEXT_PREVIEW_MAX_LENGTH,
   LARGE_TEXT_PREVIEW_THRESHOLD,
+  PREVIEW_INITIAL_READ_BYTES,
 } from '@/renderer/pages/conversation/Preview/constants';
 import { classifyPreviewError, type PreviewErrorKind } from '@/renderer/utils/previewError';
 import { useCallback, useState } from 'react';
@@ -155,19 +156,23 @@ export const usePreviewLauncher = () => {
             }
 
             // 使用 Promise.race 防止长时间卡死 / Use Promise.race to prevent hanging
-            const content = await Promise.race([
-              ipcBridge.fs.readFile.invoke({ path: pathToRead!, workspace }),
+            const preview = await Promise.race([
+              ipcBridge.fs.readFilePreview.invoke({
+                path: pathToRead!,
+                workspace,
+                max_bytes: PREVIEW_INITIAL_READ_BYTES,
+              }),
               new Promise<never>((_, reject) => setTimeout(() => reject(new Error('File read timeout')), 5000)),
             ]);
-            if (content == null) {
-              setErrorKind(classifyPreviewError(content));
+            if (preview == null) {
+              setErrorKind(classifyPreviewError(preview));
               return;
             }
-            const normalizedContent = normalizeLargeTextPreview(content, contentType);
+            const normalizedContent = normalizeLargeTextPreview(preview.content, contentType);
             openPreview(normalizedContent.content, contentType, {
               ...metadata,
               editable: normalizedContent.truncated ? false : editable,
-              truncated: normalizedContent.truncated,
+              truncated: normalizedContent.truncated || preview.truncated,
             });
             return;
           } catch (error) {

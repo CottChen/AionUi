@@ -13,6 +13,7 @@ import { emitter } from '@/renderer/utils/emitter';
 import {
   LARGE_TEXT_PREVIEW_MAX_LENGTH,
   LARGE_TEXT_PREVIEW_THRESHOLD,
+  PREVIEW_INITIAL_READ_BYTES,
 } from '@/renderer/pages/conversation/Preview/constants';
 import { classifyPreviewError, previewErrorToI18nKey } from '@/renderer/utils/previewError';
 import { removeWorkspaceEntry, renameWorkspaceEntry } from '@/renderer/utils/file/workspaceFs';
@@ -282,14 +283,20 @@ export function useWorkspaceFileOps(options: UseWorkspaceFileOpsOptions) {
           }
         } else {
           // 文本文件：使用 UTF-8 编码读取 / Text files: Read using UTF-8 encoding
-          content = await ipcBridge.fs.readFile.invoke({ path: nodeData.fullPath, workspace });
-          if (content == null) {
+          const preview = await ipcBridge.fs.readFilePreview.invoke({
+            path: nodeData.fullPath,
+            workspace,
+            max_bytes: PREVIEW_INITIAL_READ_BYTES,
+          });
+          if (preview == null) {
             throw null;
           }
+          content = preview.content;
+          isLargeTextTruncated = preview.truncated;
 
           // 大文本仅保留前一段预览内容，避免切换/关闭 tab 时卡顿
           // Keep only first chunk for large text preview to reduce tab switch/close jank
-          if (contentType === 'code' && content.length > LARGE_TEXT_PREVIEW_THRESHOLD) {
+          if (content.length > LARGE_TEXT_PREVIEW_THRESHOLD) {
             content = content.slice(0, LARGE_TEXT_PREVIEW_MAX_LENGTH);
             isLargeTextTruncated = true;
           }

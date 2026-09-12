@@ -4,10 +4,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Button, Spin } from '@arco-design/web-react';
-import { IconFile, IconFolder, IconUp } from '@arco-design/web-react/icon';
+import { Button, Input, Message, Spin } from '@arco-design/web-react';
+import { IconFile, IconFolder, IconPlus, IconUp } from '@arco-design/web-react/icon';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ipcBridge } from '@/common';
 import { getBaseUrl } from '@/common/adapter/httpBridge';
 import { stripWindowsVerbatimPrefix } from '@/renderer/utils/file/fileSelection';
 import AionModal from '@/renderer/components/base/AionModal';
@@ -23,6 +24,7 @@ interface DirectoryData {
   items: DirectoryItem[];
   canGoUp: boolean;
   parentPath?: string;
+  currentPath?: string;
 }
 
 interface DirectorySelectionModalProps {
@@ -44,6 +46,9 @@ const DirectorySelectionModal: React.FC<DirectorySelectionModalProps> = ({
   const [selectedPath, setSelectedPath] = useState<string>('');
   const [currentPath, setCurrentPath] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+  const [createVisible, setCreateVisible] = useState(false);
+  const [createName, setCreateName] = useState('');
+  const [createLoading, setCreateLoading] = useState(false);
 
   const loadDirectory = useCallback(
     async (dirPath = '') => {
@@ -74,16 +79,24 @@ const DirectorySelectionModal: React.FC<DirectorySelectionModalProps> = ({
         // break agent spawning when stored as a workspace (issue #3191).
         // 旧版后端会返回 `\\?\` 前缀的 Windows 路径，存为工作区后会导致 agent 启动失败。
         const normalized: DirectoryData = {
-          ...data,
-          items: (data.items as DirectoryItem[]).map((item) => ({
-            ...item,
+          items: (data.items as Array<DirectoryItem & { is_directory?: boolean; is_file?: boolean }>).map((item) => ({
+            name: item.name,
             path: stripWindowsVerbatimPrefix(item.path),
+            isDirectory: item.isDirectory ?? item.is_directory === true,
+            isFile: item.isFile ?? item.is_file === true,
           })),
+          canGoUp: data.canGoUp ?? data.can_go_up === true,
           parentPath:
-            typeof data.parentPath === 'string' ? stripWindowsVerbatimPrefix(data.parentPath) : data.parentPath,
+            typeof (data.parentPath ?? data.parent_path) === 'string'
+              ? stripWindowsVerbatimPrefix(data.parentPath ?? data.parent_path)
+              : undefined,
+          currentPath:
+            typeof (data.currentPath ?? data.current_path) === 'string'
+              ? stripWindowsVerbatimPrefix(data.currentPath ?? data.current_path)
+              : undefined,
         };
         setDirectoryData(normalized);
-        setCurrentPath(dirPath);
+        setCurrentPath(normalized.currentPath || dirPath);
       } catch (err) {
         console.error('Failed to load directory:', err);
         setError(err instanceof Error ? err.message : 'Failed to load directory');
@@ -97,9 +110,30 @@ const DirectorySelectionModal: React.FC<DirectorySelectionModalProps> = ({
   useEffect(() => {
     if (visible) {
       setSelectedPath('');
+      setCreateVisible(false);
+      setCreateName('');
       loadDirectory('').catch((error) => console.error('Failed to load initial directory:', error));
     }
   }, [visible, loadDirectory]);
+
+  const handleCreateDirectory = async () => {
+    const name = createName.trim();
+    if (!name || !currentPath || createLoading) return;
+    setCreateLoading(true);
+    try {
+      const result = await ipcBridge.fs.createDirectory.invoke({ parent_path: currentPath, name });
+      setCreateVisible(false);
+      setCreateName('');
+      setSelectedPath(result.path);
+      await loadDirectory(currentPath);
+      Message.success(t('fileSelection.createDirectorySuccess'));
+    } catch (createError) {
+      console.error('Failed to create directory:', createError);
+      Message.error(t('fileSelection.createDirectoryFailed'));
+    } finally {
+      setCreateLoading(false);
+    }
+  };
 
   const handleItemClick = (item: DirectoryItem) => {
     if (item.isDirectory) {
@@ -185,6 +219,42 @@ const DirectorySelectionModal: React.FC<DirectorySelectionModalProps> = ({
     >
       <Spin loading={loading} className='w-full'>
         <div className='w-full border border-b-base rd-4px overflow-hidden' style={{ height: 'min(400px, 60vh)' }}>
+          {!isFileMode && (
+            <div className='flex items-center gap-8px border-b border-b-light p-8px'>
+              <Button
+                size='small'
+                icon={<IconPlus />}
+                disabled={!currentPath || loading || createLoading}
+                onClick={() => setCreateVisible((visible) => !visible)}
+              >
+                {t('fileSelection.createDirectory')}
+              </Button>
+              {createVisible && (
+                <div className='flex min-w-0 flex-1 items-center gap-6px'>
+                  <Input
+                    size='small'
+                    autoFocus
+                    value={createName}
+                    placeholder={t('fileSelection.createDirectoryName')}
+                    onChange={setCreateName}
+                    onPressEnter={() => void handleCreateDirectory()}
+                  />
+                  <Button
+                    size='small'
+                    type='primary'
+                    disabled={!createName.trim()}
+                    loading={createLoading}
+                    onClick={() => void handleCreateDirectory()}
+                  >
+                    {t('common.confirm')}
+                  </Button>
+                  <Button size='small' disabled={createLoading} onClick={() => setCreateVisible(false)}>
+                    {t('common.cancel')}
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
           <div className='h-full overflow-y-auto'>
             {directoryData.canGoUp && (
               <div

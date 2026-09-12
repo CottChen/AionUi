@@ -131,6 +131,14 @@ import {
   type RawWorkspaceSearchResponse,
 } from './workspaceMapper';
 
+export type FilePreviewResponse = {
+  content: string;
+  offset: number;
+  next_offset: number | null;
+  total_bytes: number;
+  truncated: boolean;
+};
+
 const httpGetClientSetting = <T>(key: string) => ({
   provider: () => {},
   invoke: (async () => {
@@ -594,6 +602,10 @@ export const fs = {
   getImageBase64: httpPost<string | null, { path: string; workspace?: string }>('/api/fs/image-base64'),
   fetchRemoteImage: httpPost<string, { url: string }>('/api/fs/fetch-remote-image'),
   readFile: httpPost<string | null, { path: string; workspace?: string }>('/api/fs/read'),
+  readFilePreview: httpPost<
+    FilePreviewResponse | null,
+    { path: string; workspace?: string; offset?: number; max_bytes?: number }
+  >('/api/fs/read-preview'),
   readFileBuffer: httpPost<string | null, { path: string; workspace?: string }>('/api/fs/read-buffer'),
   createTempFile: httpPost<string, { file_name: string }>('/api/fs/temp'),
   createDirectory: httpPost<{ path: string }, { parent_path: string; name: string }>('/api/fs/create-directory'),

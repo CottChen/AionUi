@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { ipcBridge } from '@/common';
 import { Check, Close, Down, FolderClose, FolderOpen } from '@icon-park/react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import DirectorySelectionModal from '@renderer/components/settings/DirectorySelectionModal';
 import { DEFAULT_RECENT_WS_KEY, addRecentWorkspace, getRecentWorkspaces } from './recentWorkspaces';
 
 const MENU_GAP = 4;
@@ -54,6 +54,7 @@ const WorkspaceFolderSelect: React.FC<WorkspaceFolderSelectProps> = ({
   menuZIndex = 10010,
 }) => {
   const [menuVisible, setMenuVisible] = useState(false);
+  const [directoryPickerVisible, setDirectoryPickerVisible] = useState(false);
   const [menuPos, setMenuPos] = useState<MenuPosition>({ top: 0, left: 0, width: 0, maxHeight: MAX_MENU_HEIGHT });
   const triggerRef = useRef<HTMLDivElement>(null);
   const recentWorkspaces = getRecentWorkspaces(recentStorageKey);
@@ -101,14 +102,17 @@ const WorkspaceFolderSelect: React.FC<WorkspaceFolderSelectProps> = ({
     };
   }, [menuVisible, updateMenuPosition]);
 
-  const handleBrowse = async () => {
+  const handleBrowse = () => {
     setMenuVisible(false);
+    setDirectoryPickerVisible(true);
+  };
 
-    const files = await ipcBridge.dialog.showOpen.invoke({ properties: ['openDirectory', 'createDirectory'] });
-    if (files?.[0]) {
-      onChange(files[0]);
-      addRecentWorkspace(files[0], recentStorageKey);
-    }
+  const handleDirectoryPickerConfirm = (paths: string[] | undefined) => {
+    const selected = paths?.[0];
+    if (!selected) return;
+    onChange(selected);
+    addRecentWorkspace(selected, recentStorageKey);
+    setDirectoryPickerVisible(false);
   };
 
   const handleSelectRecent = (path: string) => {
@@ -252,6 +256,11 @@ const WorkspaceFolderSelect: React.FC<WorkspaceFolderSelectProps> = ({
           </div>
         </div>
       )}
+      <DirectorySelectionModal
+        visible={directoryPickerVisible}
+        onConfirm={handleDirectoryPickerConfirm}
+        onCancel={() => setDirectoryPickerVisible(false)}
+      />
     </div>
   );
 };

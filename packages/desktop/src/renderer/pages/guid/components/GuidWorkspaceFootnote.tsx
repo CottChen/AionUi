@@ -4,15 +4,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { ipcBridge } from '@/common';
 import { addRecentWorkspace, getRecentWorkspaces } from '@/renderer/components/workspace';
 import { AionInlineSearchInput } from '@/renderer/components/base';
-import { Button, Input, Message, Modal, Tooltip } from '@arco-design/web-react';
+import { Tooltip } from '@arco-design/web-react';
 import { Close, Down } from '@icon-park/react';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import styles from '../index.module.css';
+import DirectorySelectionModal from '@renderer/components/settings/DirectorySelectionModal';
 
 type GuidWorkspaceFootnoteProps = {
   workspaceDir: string;
@@ -58,59 +58,27 @@ const GuidWorkspaceFootnote: React.FC<GuidWorkspaceFootnoteProps> = ({
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
-  const [createDirectoryVisible, setCreateDirectoryVisible] = useState(false);
-  const [createDirectoryParent, setCreateDirectoryParent] = useState('');
-  const [createDirectoryName, setCreateDirectoryName] = useState('');
-  const [createDirectoryLoading, setCreateDirectoryLoading] = useState(false);
+  const [directoryPickerVisible, setDirectoryPickerVisible] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const handleBrowseWorkspace = useCallback(() => {
     setOpen(false);
-    ipcBridge.dialog.showOpen
-      .invoke({ properties: ['openDirectory', 'createDirectory'] })
-      .then((dirs) => {
-        if (dirs && dirs[0]) {
-          addRecentWorkspace(dirs[0]);
-          onSelectWorkspace(dirs[0]);
-        }
-      })
-      .catch((error) => {
-        console.error('Failed to open directory dialog:', error);
-      });
-  }, [onSelectWorkspace]);
-
-  const handleCreateDirectory = useCallback(() => {
-    setOpen(false);
-    void ipcBridge.dialog.showOpen
-      .invoke({ properties: ['openDirectory', 'createDirectory'] })
-      .then((dirs) => {
-        if (!dirs?.[0]) return;
-        setCreateDirectoryParent(dirs[0]);
-        setCreateDirectoryName('');
-        setCreateDirectoryVisible(true);
-      })
-      .catch((error) => console.error('Failed to choose directory parent:', error));
+    setDirectoryPickerVisible(true);
   }, []);
 
-  const submitCreateDirectory = useCallback(async () => {
-    const name = createDirectoryName.trim();
-    if (!name) return;
-    setCreateDirectoryLoading(true);
-    try {
-      const result = await ipcBridge.fs.createDirectory.invoke({ parent_path: createDirectoryParent, name });
-      addRecentWorkspace(result.path);
-      onSelectWorkspace(result.path);
-      setCreateDirectoryVisible(false);
-      Message.success(t('guid.workspace.createDirectorySuccess'));
-    } catch (error) {
-      console.error('Failed to create workspace directory:', error);
-      Message.error(t('guid.workspace.createDirectoryFailed'));
-    } finally {
-      setCreateDirectoryLoading(false);
-    }
-  }, [createDirectoryName, createDirectoryParent, onSelectWorkspace, t]);
+  const handleDirectoryPickerConfirm = useCallback(
+    (paths: string[] | undefined) => {
+      const selected = paths?.[0];
+      if (selected) {
+        addRecentWorkspace(selected);
+        onSelectWorkspace(selected);
+      }
+      setDirectoryPickerVisible(false);
+    },
+    [onSelectWorkspace]
+  );
 
   const handleSelectPath = useCallback(
     (path: string) => {
@@ -219,13 +187,6 @@ const GuidWorkspaceFootnote: React.FC<GuidWorkspaceFootnoteProps> = ({
 
           {filteredRecent.length > 0 && <div className={styles.wsDropdownSep} />}
 
-          <div className={`${styles.wsDropdownItem} ${styles.wsDropdownItemAccent}`} onClick={handleCreateDirectory}>
-            <PlusIcon />
-            <span>{t('guid.workspace.createDirectory')}</span>
-          </div>
-
-          <div className={styles.wsDropdownSep} />
-
           <div className={`${styles.wsDropdownItem} ${styles.wsDropdownItemAccent}`} onClick={handleBrowseWorkspace}>
             <PlusIcon />
             <span>{t('team.create.chooseDifferentFolder')}</span>
@@ -315,28 +276,11 @@ const GuidWorkspaceFootnote: React.FC<GuidWorkspaceFootnoteProps> = ({
           {dropdownEl}
         </>
       )}
-      <Modal
-        visible={createDirectoryVisible}
-        title={t('guid.workspace.createDirectory')}
-        onCancel={() => setCreateDirectoryVisible(false)}
-        onOk={() => void submitCreateDirectory()}
-        okButtonProps={{ disabled: !createDirectoryName.trim(), loading: createDirectoryLoading }}
-        cancelButtonProps={{ disabled: createDirectoryLoading }}
-      >
-        <div className='flex flex-col gap-10px'>
-          <div className='text-13px text-t-secondary break-all'>{createDirectoryParent}</div>
-          <Input
-            autoFocus
-            value={createDirectoryName}
-            placeholder={t('guid.workspace.createDirectoryName')}
-            onChange={setCreateDirectoryName}
-            onPressEnter={() => void submitCreateDirectory()}
-          />
-          <Button type='text' size='small' onClick={handleCreateDirectory} disabled={createDirectoryLoading}>
-            {t('guid.workspace.chooseParentAgain')}
-          </Button>
-        </div>
-      </Modal>
+      <DirectorySelectionModal
+        visible={directoryPickerVisible}
+        onConfirm={handleDirectoryPickerConfirm}
+        onCancel={() => setDirectoryPickerVisible(false)}
+      />
     </div>
   );
 };

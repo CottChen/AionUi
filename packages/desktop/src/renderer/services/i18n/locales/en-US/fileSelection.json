@@ -2,5 +2,9 @@
   "selectFile": "Select File",
   "selectDirectory": "Select Directory",
   "pleaseSelectFile": "Please select a file",
-  "pleaseSelectDirectory": "Please select a directory"
+  "pleaseSelectDirectory": "Please select a directory",
+  "createDirectory": "New folder",
+  "createDirectoryName": "Folder name",
+  "createDirectorySuccess": "Folder created",
+  "createDirectoryFailed": "Failed to create folder"
 }
