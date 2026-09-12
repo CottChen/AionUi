@@ -336,6 +336,31 @@ describe('AcpModelSelector runtime options', () => {
     expect(screen.getByText('No matching models')).toBeInTheDocument();
   });
 
+  it('keeps menu interactions from bubbling out of the model search field', () => {
+    const parentClick = vi.fn();
+    const parentMouseDown = vi.fn();
+    const manyModels = Array.from({ length: 8 }, (_, i) => ({ id: `m-${i}`, label: `Model ${i}` }));
+    useAcpModelInfoMock.mockReturnValue(
+      makeResult({
+        thoughtLevel: null,
+        model_info: { current_model_id: 'm-0', current_model_label: 'Model 0', available_models: manyModels },
+      })
+    );
+
+    render(
+      <div onClick={parentClick} onMouseDown={parentMouseDown}>
+        <AcpModelSelector conversation_id='conversation-1' backend='codex' />
+      </div>
+    );
+
+    const search = screen.getByTestId('runtime-selector-model-search');
+    fireEvent.mouseDown(search);
+    fireEvent.click(search);
+
+    expect(parentMouseDown).not.toHaveBeenCalled();
+    expect(parentClick).not.toHaveBeenCalled();
+  });
+
   it('selects a model through the config setter', () => {
     const selectModel = vi.fn();
     useAcpModelInfoMock.mockReturnValue(makeResult({ selectModel }));

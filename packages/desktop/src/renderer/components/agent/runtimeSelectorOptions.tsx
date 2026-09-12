@@ -144,7 +144,17 @@ export const RuntimeSelectorModelList: React.FC<{
   return (
     <>
       {showSearch ? (
-        <div className='px-6px pt-4px pb-6px' style={{ background: 'var(--color-bg-popup)' }}>
+        <div
+          className='px-6px pt-4px pb-6px'
+          style={{ background: 'var(--color-bg-popup)' }}
+          // Arco Menu closes a popup when pointer/click events bubble from
+          // descendants. The search field is not a menu item, so keep its
+          // interaction inside the search area.
+          onPointerDown={(event) => event.stopPropagation()}
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
+        >
           <AionInlineSearchInput
             value={query}
             onChange={setQuery}
