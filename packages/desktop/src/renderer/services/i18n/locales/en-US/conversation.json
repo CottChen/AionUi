@@ -553,7 +553,10 @@
   },
   "skills": {
     "loaded": "Loaded Skills",
-    "slashHint": "Skill"
+    "slashHint": "Skill",
+    "add": "Add skills",
+    "updated": "Skills updated",
+    "updateFailed": "Failed to update skills"
   },
   "mcp": {
     "loaded": "Loaded MCP",
@@ -564,7 +567,10 @@
       "failed": "Failed",
       "unsupported": "Unsupported"
     },
-    "selected": "Selected MCP"
+    "selected": "Selected MCP",
+    "add": "Add MCP",
+    "updated": "MCP servers updated",
+    "updateFailed": "Failed to update MCP servers"
   },
   "runtimePreparing": {
     "sendboxHint": "Preparing the runtime environment. First startup can take a little longer."

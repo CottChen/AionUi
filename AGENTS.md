@@ -164,4 +164,5 @@ When opening a PR, fill in the PR body using [.github/pull_request_template.md](
 
 - 普通文件读取的 256MB 上限是 AionCore 原有配置；预览应使用 4MB 分块接口，避免先读完整文件再由前端截断。
 - 全文搜索需流式读取并限制单文件、总扫描量和并发；cursor 必须绑定查询条件，不能只用裸数字偏移。
+- 会话侧栏禁止 `limit=10000` 全量加载；首屏分页，滚动到底部再按 cursor 续载。
 - 构建先构建 fork AionCore，再将对应 Actions `run_id` 传给 AionUi，并设置 `AIONUI_BACKEND_REPOSITORY=CottChen/AionCore`，避免误用官方仓库。

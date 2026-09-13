@@ -537,7 +537,10 @@
   },
   "skills": {
     "loaded": "Compétences chargées",
-    "slashHint": "Compétence"
+    "slashHint": "Compétence",
+    "add": "Ajouter des compétences",
+    "updated": "Compétences mises à jour",
+    "updateFailed": "Échec de la mise à jour des compétences"
   },
   "mcp": {
     "loaded": "MCP chargé",
@@ -547,7 +550,11 @@
       "loaded": "Chargé",
       "failed": "Échoué",
       "unsupported": "Non pris en charge"
-    }
+    },
+    "selected": "MCP sélectionné",
+    "add": "Ajouter un MCP",
+    "updated": "MCP mis à jour",
+    "updateFailed": "Échec de la mise à jour des MCP"
   },
   "runtimePreparing": {
     "sendboxHint": "Préparation de l'environnement d'exécution. Le premier démarrage peut prendre un peu plus de temps."

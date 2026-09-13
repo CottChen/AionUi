@@ -537,7 +537,10 @@
   },
   "skills": {
     "loaded": "로드된 스킬",
-    "slashHint": "스킬"
+    "slashHint": "스킬",
+    "add": "스킬 추가",
+    "updated": "스킬이 업데이트되었습니다",
+    "updateFailed": "스킬 업데이트에 실패했습니다"
   },
   "mcp": {
     "loaded": "로드된 MCP",
@@ -548,7 +551,10 @@
       "failed": "실패",
       "unsupported": "지원되지 않음"
     },
-    "selected": "선택된 MCP"
+    "selected": "선택된 MCP",
+    "add": "MCP 추가",
+    "updated": "MCP 업데이트됨",
+    "updateFailed": "MCP 업데이트 실패"
   },
   "runtimePreparing": {
     "sendboxHint": "실행 환경을 준비하는 중입니다. 첫 시작은 조금 더 오래 걸릴 수 있습니다."

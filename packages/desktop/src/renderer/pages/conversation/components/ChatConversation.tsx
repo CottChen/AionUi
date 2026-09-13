@@ -229,6 +229,7 @@ const AionrsConversationPanel: React.FC<{ conversation: AionrsConversation; slid
         cron_job_id={cronJobId}
         loadedSkills={(conversation.extra as { skills?: string[] } | undefined)?.skills}
         loadedMcpServers={(conversation.extra as { mcp_servers?: string[] } | undefined)?.mcp_servers}
+        loadedMcpServerIds={(conversation.extra as { mcp_server_ids?: string[] } | undefined)?.mcp_server_ids}
         loadedMcpStatuses={
           (conversation.extra as { mcp_statuses?: IConversationMcpStatus[] } | undefined)?.mcp_statuses
         }
@@ -283,6 +284,7 @@ const ChatConversation: React.FC<{
             hideSendBox={resolvedHideSendBox}
             loadedSkills={(conversation.extra as { skills?: string[] } | undefined)?.skills}
             loadedMcpServers={(conversation.extra as { mcp_servers?: string[] } | undefined)?.mcp_servers}
+            loadedMcpServerIds={(conversation.extra as { mcp_server_ids?: string[] } | undefined)?.mcp_server_ids}
             loadedMcpStatuses={
               (conversation.extra as { mcp_statuses?: IConversationMcpStatus[] } | undefined)?.mcp_statuses
             }

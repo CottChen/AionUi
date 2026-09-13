@@ -543,7 +543,10 @@
   },
   "skills": {
     "loaded": "Habilidades Carregadas",
-    "slashHint": "Habilidade"
+    "slashHint": "Habilidade",
+    "add": "Adicionar habilidades",
+    "updated": "Habilidades atualizadas",
+    "updateFailed": "Falha ao atualizar habilidades"
   },
   "mcp": {
     "loaded": "MCP carregado",
@@ -554,7 +557,10 @@
       "failed": "Falhou",
       "unsupported": "Não compatível"
     },
-    "selected": "MCP selecionado"
+    "selected": "MCP selecionado",
+    "add": "Adicionar MCP",
+    "updated": "MCP atualizado",
+    "updateFailed": "Falha ao atualizar MCP"
   },
   "runtimePreparing": {
     "sendboxHint": "Preparando o ambiente de execução. A primeira inicialização pode demorar um pouco mais."

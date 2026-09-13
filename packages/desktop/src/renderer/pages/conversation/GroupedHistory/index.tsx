@@ -15,7 +15,7 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { Button, Dropdown, Empty, Input, Menu, Modal, Tooltip } from '@arco-design/web-react';
 import { Delete, FolderOpen, MoreOne, Plus, Right } from '@icon-park/react';
 import classNames from 'classnames';
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 
@@ -51,10 +51,31 @@ const WorkspaceGroupedHistory: React.FC<WorkspaceGroupedHistoryProps> = ({
     expandedWorkspaces,
     pinnedConversations,
     timelineSections,
+    hasMoreConversations,
+    loadingConversations,
+    loadMoreConversations,
     handleToggleWorkspace,
     collapsedSections,
     toggleSection,
   } = useConversations();
+
+  const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const sentinel = loadMoreSentinelRef.current;
+    if (!sentinel || !hasMoreConversations) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          loadMoreConversations();
+        }
+      },
+      { rootMargin: '360px 0px' }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMoreConversations, loadMoreConversations, loadingConversations, conversations.length]);
 
   const SectionLabel = useCallback(
     ({ sectionKey, label, trailing }: { sectionKey: string; label: string; trailing?: React.ReactNode }) => {
@@ -250,6 +271,7 @@ const WorkspaceGroupedHistory: React.FC<WorkspaceGroupedHistoryProps> = ({
         <div className='py-48px flex-center'>
           <Empty description={t('conversation.history.noHistory')} />
         </div>
+        <div ref={loadMoreSentinelRef} className='h-1px w-full' aria-hidden='true' />
       </>
     );
   }
@@ -622,6 +644,7 @@ const WorkspaceGroupedHistory: React.FC<WorkspaceGroupedHistoryProps> = ({
           </div>
         )}
       </div>
+      <div ref={loadMoreSentinelRef} className='h-1px w-full' aria-hidden='true' />
     </>
   );
 };

@@ -9,6 +9,7 @@ import { ipcBridge } from '@/common';
 import { Button, Message, Trigger } from '@arco-design/web-react';
 import { FolderOpen, Lightning, Paperclip, Plus, Right, Shield } from '@icon-park/react';
 import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
+import AionInlineSearchInput from '@/renderer/components/base/AionInlineSearchInput';
 import { iconColors } from '@/renderer/styles/colors';
 import { isElectronDesktop } from '@/renderer/utils/platform';
 import { FileService } from '@/renderer/services/FileService';
@@ -85,17 +86,32 @@ const FileAttachButton: React.FC<FileAttachButtonProps> = ({
   const [uploading, setUploading] = useState(false);
   const [open, setOpen] = useState(false);
   const [skillsOpen, setSkillsOpen] = useState(false);
+  const [skillPickerOpen, setSkillPickerOpen] = useState(false);
+  const [mcpPickerOpen, setMcpPickerOpen] = useState(false);
   const [mcpOpen, setMcpOpen] = useState(false);
+  const [skillQuery, setSkillQuery] = useState('');
+  const [mcpQuery, setMcpQuery] = useState('');
 
   const skillNames = loadedSkills ?? conversationContext?.loadedSkills ?? [];
+  const updateSkills = conversationContext?.updateSkills;
+  const updateMcpServers = conversationContext?.updateMcpServers;
   const mcpStatuses = buildLoadedMcpStatuses(
     loadedMcpStatuses ?? conversationContext?.loadedMcpStatuses,
     conversationContext?.loadedMcpServers
   );
-  const { data: skillIndex } = useSWR(skillNames.length > 0 ? 'skills-index' : null, () =>
-    ipcBridge.fs.listAvailableSkills.invoke()
+  const selectedMcpIds = conversationContext?.loadedMcpServerIds ?? mcpStatuses.map((item) => item.id);
+  const { data: skillIndex } = useSWR('skills-index', () => ipcBridge.fs.listAvailableSkills.invoke());
+  const { data: mcpIndex } = useSWR('mcp-servers-index', () => ipcBridge.mcpService.listServers.invoke());
+  const skillKeyword = skillQuery.trim().toLowerCase();
+  const availableSkills = (skillIndex ?? []).filter((skill) =>
+    skillKeyword ? `${skill.name} ${skill.description}`.toLowerCase().includes(skillKeyword) : true
   );
-  const descriptionByName = new Map((skillIndex ?? []).map((s) => [s.name, s.description]));
+  const mcpKeyword = mcpQuery.trim().toLowerCase();
+  const availableMcpServers = (mcpIndex ?? []).filter(
+    (server) =>
+      !server.builtin &&
+      (mcpKeyword ? `${server.name} ${server.description ?? ''}`.toLowerCase().includes(mcpKeyword) : true)
+  );
 
   const handleSkillClick = useCallback((name: string) => {
     setOpen(false);
@@ -106,8 +122,31 @@ const FileAttachButton: React.FC<FileAttachButtonProps> = ({
     setOpen(false);
     setSkillsOpen(false);
     setMcpOpen(false);
+    setMcpPickerOpen(false);
     void navigate('/settings/tools');
   }, [navigate]);
+
+  const handleToggleSkill = useCallback(
+    (name: string) => {
+      if (!updateSkills || skillNames.includes(name)) return;
+      void updateSkills((current) => (current.includes(name) ? current : [...current, name]))
+        .then(() => Message.success(t('conversation.skills.updated')))
+        .catch(() => Message.error(t('conversation.skills.updateFailed')));
+    },
+    [skillNames, t, updateSkills]
+  );
+
+  const handleToggleMcp = useCallback(
+    (id: string) => {
+      if (!updateMcpServers || selectedMcpIds.includes(id)) return;
+      void updateMcpServers((current) => (current.includes(id) ? current : [...current, id]))
+        .then(() => Message.success(t('conversation.mcp.updated', { defaultValue: 'MCP servers updated' })))
+        .catch(() =>
+          Message.error(t('conversation.mcp.updateFailed', { defaultValue: 'Failed to update MCP servers' }))
+        );
+    },
+    [selectedMcpIds, t, updateMcpServers]
+  );
 
   const handleLocalFileChange = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -129,10 +168,12 @@ const FileAttachButton: React.FC<FileAttachButtonProps> = ({
 
   const isDesktop = isElectronDesktop();
   const hasSkills = skillNames.length > 0;
+  const hasAvailableSkills = (skillIndex?.length ?? 0) > 0;
   const hasMcpServers = mcpStatuses.length > 0;
+  const hasAvailableMcp = availableMcpServers.length > 0;
   const plusIcon = <Plus theme='outline' size='14' strokeWidth={2} fill={iconColors.primary} />;
 
-  if (isDesktop && !hasSkills && !hasMcpServers) {
+  if (isDesktop && !hasSkills && !hasMcpServers && !hasAvailableSkills && !hasAvailableMcp) {
     return (
       <Button
         type='secondary'
@@ -165,6 +206,51 @@ const FileAttachButton: React.FC<FileAttachButtonProps> = ({
           className='mx-6px'
         />
       ))}
+    </div>
+  );
+
+  const skillPickerPanel = (
+    <div
+      style={{
+        ...cardStyle,
+        minWidth: 240,
+        width: 'min(340px, calc(100vw - 96px))',
+        maxWidth: 340,
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {(skillIndex?.length ?? 0) > 5 && (
+        <div className='px-8px pt-4px pb-6px'>
+          <AionInlineSearchInput
+            value={skillQuery}
+            onChange={setSkillQuery}
+            placeholder={t('settings.skillsHub.searchPlaceholder')}
+            data-testid='conversation-skill-search'
+          />
+        </div>
+      )}
+      <div className='max-h-280px overflow-y-auto'>
+        {availableSkills.length === 0 ? (
+          <div className='px-12px py-10px text-12px text-t-tertiary text-center'>
+            {t('agent.model.noResults', { defaultValue: 'No matching skills' })}
+          </div>
+        ) : (
+          availableSkills.map((skill) => {
+            const selected = skillNames.includes(skill.name);
+            return (
+              <MenuItem
+                key={skill.name}
+                icon={<Lightning theme='outline' size={15} strokeWidth={2.5} />}
+                label={skill.name}
+                description={skill.description}
+                suffix={<span className='w-16px text-primary'>{selected ? '\u2713' : ''}</span>}
+                onClick={() => handleToggleSkill(skill.name)}
+                className='mx-6px'
+              />
+            );
+          })
+        )}
+      </div>
     </div>
   );
 
@@ -221,10 +307,55 @@ const FileAttachButton: React.FC<FileAttachButtonProps> = ({
     </div>
   );
 
+  const mcpPickerPanel = (
+    <div
+      style={{
+        ...cardStyle,
+        minWidth: 240,
+        width: 'min(340px, calc(100vw - 96px))',
+        maxWidth: 340,
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {(mcpIndex?.length ?? 0) > 5 && (
+        <div className='px-8px pt-4px pb-6px'>
+          <AionInlineSearchInput
+            value={mcpQuery}
+            onChange={setMcpQuery}
+            placeholder={t('settings.skillsHub.searchPlaceholder', { defaultValue: 'Search MCP servers' })}
+            data-testid='conversation-mcp-search'
+          />
+        </div>
+      )}
+      <div className='max-h-280px overflow-y-auto'>
+        {availableMcpServers.length === 0 ? (
+          <div className='px-12px py-10px text-12px text-t-tertiary text-center'>
+            {t('agent.model.noResults', { defaultValue: 'No matching MCP servers' })}
+          </div>
+        ) : (
+          availableMcpServers.map((server) => {
+            const selected = selectedMcpIds.includes(server.id);
+            return (
+              <MenuItem
+                key={server.id}
+                icon={<Shield theme='outline' size={15} strokeWidth={2.5} />}
+                label={server.name}
+                description={server.description}
+                suffix={<span className='w-16px text-primary'>{selected ? '\u2713' : ''}</span>}
+                onClick={() => handleToggleMcp(server.id)}
+                className='mx-6px'
+              />
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+
   const menu = (
     <div style={cardStyle} onClick={(e) => e.stopPropagation()}>
       {/* Loaded items stay above file actions so the session snapshot is visible */}
-      {(hasMcpServers || hasSkills) && (
+      {(hasMcpServers || hasSkills || hasAvailableSkills || hasAvailableMcp) && (
         <>
           {hasMcpServers && (
             <div className='px-6px'>
@@ -262,6 +393,48 @@ const FileAttachButton: React.FC<FileAttachButtonProps> = ({
                   <MenuItem
                     icon={<Lightning theme='outline' size={15} strokeWidth={2.5} />}
                     label={`${t('common.selectedSkills', { defaultValue: 'Selected skills' })} · ${skillNames.length}`}
+                    suffix={<Right theme='outline' size={12} strokeWidth={3} style={{ color: '#c9cdd4' }} />}
+                  />
+                </div>
+              </Trigger>
+            </div>
+          )}
+          {hasAvailableSkills && (
+            <div className='px-6px'>
+              <Trigger
+                popup={() => skillPickerPanel}
+                trigger='hover'
+                position='right'
+                popupVisible={skillPickerOpen}
+                onVisibleChange={setSkillPickerOpen}
+                mouseEnterDelay={100}
+                mouseLeaveDelay={150}
+              >
+                <div>
+                  <MenuItem
+                    icon={<Lightning theme='outline' size={15} strokeWidth={2.5} />}
+                    label={t('conversation.skills.add', { defaultValue: 'Add skills' })}
+                    suffix={<Right theme='outline' size={12} strokeWidth={3} style={{ color: '#c9cdd4' }} />}
+                  />
+                </div>
+              </Trigger>
+            </div>
+          )}
+          {hasAvailableMcp && (
+            <div className='px-6px'>
+              <Trigger
+                popup={() => mcpPickerPanel}
+                trigger='hover'
+                position='right'
+                popupVisible={mcpPickerOpen}
+                onVisibleChange={setMcpPickerOpen}
+                mouseEnterDelay={100}
+                mouseLeaveDelay={150}
+              >
+                <div>
+                  <MenuItem
+                    icon={<Shield theme='outline' size={15} strokeWidth={2.5} />}
+                    label={t('conversation.mcp.add', { defaultValue: 'Add MCP' })}
                     suffix={<Right theme='outline' size={12} strokeWidth={3} style={{ color: '#c9cdd4' }} />}
                   />
                 </div>

@@ -61,6 +61,9 @@ export const useConversations = () => {
     conversations,
     isConversationGenerating,
     hasCompletionUnread,
+    hasMoreConversations,
+    loadingConversations,
+    loadMoreConversations,
     clearCompletionUnread,
     setActiveConversation,
     groupedHistory,
@@ -104,7 +107,12 @@ export const useConversations = () => {
     if (revealedIdRef.current === id) return;
 
     const location = locateConversation(id, pinnedConversations, timelineSections);
-    if (!location) return; // data not loaded yet; effect re-runs when it arrives
+    if (!location) {
+      // Deep links can target a conversation beyond the first page. Continue
+      // cursor loading until that conversation becomes available.
+      if (hasMoreConversations) loadMoreConversations();
+      return;
+    }
     revealedIdRef.current = id;
 
     // Expand the containing section if collapsed.
@@ -137,7 +145,15 @@ export const useConversations = () => {
       cancelAnimationFrame(outerRafId);
       cancelAnimationFrame(innerRafId);
     };
-  }, [clearCompletionUnread, id, setActiveConversation, pinnedConversations, timelineSections]);
+  }, [
+    clearCompletionUnread,
+    hasMoreConversations,
+    id,
+    loadMoreConversations,
+    pinnedConversations,
+    setActiveConversation,
+    timelineSections,
+  ]);
 
   // Persist workspace expansion state
   useEffect(() => {
@@ -210,6 +226,9 @@ export const useConversations = () => {
     conversations,
     isConversationGenerating,
     hasCompletionUnread,
+    hasMoreConversations,
+    loadingConversations,
+    loadMoreConversations,
     expandedWorkspaces,
     pinnedConversations,
     timelineSections,

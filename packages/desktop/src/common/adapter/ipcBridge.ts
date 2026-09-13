@@ -228,7 +228,14 @@ export const conversation = {
     (list) => list.map(fromApiConversation)
   ),
   remove: httpDelete<boolean, { id: string }>((p) => `/api/conversations/${p.id}`),
-  update: httpPatch<boolean, { id: string; updates: Partial<TChatConversation>; merge_extra?: boolean }>(
+  update: httpPatch<
+    boolean,
+    {
+      id: string;
+      updates: Partial<TChatConversation> | (Record<string, unknown> & { extra?: Record<string, unknown> });
+      merge_extra?: boolean;
+    }
+  >(
     (p) => `/api/conversations/${p.id}`,
     (p) => {
       const updates = p.updates as Record<string, unknown>;

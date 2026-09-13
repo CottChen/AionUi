@@ -106,7 +106,9 @@ const ChatHistory: React.FC<{ onSessionClick?: () => void; collapsed?: boolean }
     const refresh = () => {
       // Get conversations from database instead of file storage
       ipcBridge.database.getUserConversations
-        .invoke({ limit: 10000 })
+        // Keep the legacy history view responsive; older sessions are loaded by
+        // the grouped history view through cursor pagination.
+        .invoke({ limit: 100 })
         .then((result) => {
           const items = result?.items;
           if (items && Array.isArray(items) && items.length > 0) {

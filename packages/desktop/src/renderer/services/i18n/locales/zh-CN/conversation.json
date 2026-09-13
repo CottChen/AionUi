@@ -553,7 +553,10 @@
   },
   "skills": {
     "loaded": "已加载技能",
-    "slashHint": "技能"
+    "slashHint": "技能",
+    "add": "添加技能",
+    "updated": "技能已更新",
+    "updateFailed": "技能更新失败"
   },
   "mcp": {
     "loaded": "已加载 MCP",
@@ -564,7 +567,10 @@
       "failed": "失败",
       "unsupported": "不支持"
     },
-    "selected": "已选 MCP"
+    "selected": "已选 MCP",
+    "add": "添加 MCP",
+    "updated": "MCP 已更新",
+    "updateFailed": "MCP 更新失败"
   },
   "runtimePreparing": {
     "sendboxHint": "正在准备运行环境。首次启动可能会稍慢一些。"

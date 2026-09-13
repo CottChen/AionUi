@@ -416,7 +416,7 @@ const ConversationSearchPopover: React.FC<ConversationSearchPopoverProps> = ({
                 <button
                   type='button'
                   className={classNames(
-                    'conversation-search-modal__result w-full text-left cursor-pointer transition-all duration-150',
+                    'conversation-search-modal__result text-left cursor-pointer transition-all duration-150',
                     'focus:outline-none'
                   )}
                   onClick={() => {
@@ -438,16 +438,17 @@ const ConversationSearchPopover: React.FC<ConversationSearchPopoverProps> = ({
                     {renderHighlightedText(snippet, debouncedKeyword)}
                   </div>
                 </button>
-                <Tooltip content={t('common.copy', { defaultValue: 'Copy user input' })}>
+                <Tooltip content={t('common.copy')}>
                   <button
                     type='button'
                     className='conversation-search-modal__copy-btn'
-                    aria-label={t('common.copy', { defaultValue: 'Copy user input' })}
+                    aria-label={t('common.copy')}
                     onClick={(event) => {
                       void handleCopyResult(event, item);
                     }}
                   >
                     <Copy theme='outline' size='16' />
+                    <span>{t('common.copy')}</span>
                   </button>
                 </Tooltip>
               </div>

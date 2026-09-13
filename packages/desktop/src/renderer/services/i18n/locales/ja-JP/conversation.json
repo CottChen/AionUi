@@ -537,7 +537,10 @@
   },
   "skills": {
     "loaded": "ロード済みスキル",
-    "slashHint": "スキル"
+    "slashHint": "スキル",
+    "add": "スキルを追加",
+    "updated": "スキルを更新しました",
+    "updateFailed": "スキルの更新に失敗しました"
   },
   "mcp": {
     "loaded": "ロード済み MCP",
@@ -548,7 +551,10 @@
       "failed": "失敗",
       "unsupported": "非対応"
     },
-    "selected": "選択済み MCP"
+    "selected": "選択済み MCP",
+    "add": "MCP を追加",
+    "updated": "MCP を更新しました",
+    "updateFailed": "MCP の更新に失敗しました"
   },
   "runtimePreparing": {
     "sendboxHint": "実行環境を準備しています。初回起動は少し時間がかかる場合があります。"

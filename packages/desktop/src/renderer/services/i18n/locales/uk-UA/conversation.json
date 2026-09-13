@@ -537,7 +537,10 @@
   },
   "skills": {
     "loaded": "Завантажені навички",
-    "slashHint": "Навичка"
+    "slashHint": "Навичка",
+    "add": "Додати навички",
+    "updated": "Навички оновлено",
+    "updateFailed": "Не вдалося оновити навички"
   },
   "mcp": {
     "loaded": "Завантажений MCP",
@@ -548,7 +551,10 @@
       "failed": "Помилка",
       "unsupported": "Не підтримується"
     },
-    "selected": "Вибрані MCP"
+    "selected": "Вибрані MCP",
+    "add": "Додати MCP",
+    "updated": "MCP оновлено",
+    "updateFailed": "Не вдалося оновити MCP"
   },
   "runtimePreparing": {
     "sendboxHint": "Готується середовище виконання. Перший запуск може тривати трохи довше."

@@ -99,9 +99,17 @@ type ConversationListSyncSnapshot = {
   conversations: TChatConversation[];
   generatingConversationIds: Set<string>;
   completionUnreadConversationIds: Set<string>;
+  hasMoreConversations: boolean;
+  loadingConversations: boolean;
 };
 
 const listeners = new Set<() => void>();
+const CONVERSATION_PAGE_SIZE = 100;
+let refreshSequence = 0;
+let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+let conversationCursorState: string | undefined;
+let hasMoreConversationsState = false;
+let loadingConversationsState = false;
 
 let isStoreInitialized = false;
 let conversationsState: TChatConversation[] = [];
@@ -114,6 +122,8 @@ let snapshotState: ConversationListSyncSnapshot = {
   conversations: conversationsState,
   generatingConversationIds: generatingConversationIdsState,
   completionUnreadConversationIds: completionUnreadConversationIdsState,
+  hasMoreConversations: hasMoreConversationsState,
+  loadingConversations: loadingConversationsState,
 };
 
 const emitStoreChange = () => {
@@ -121,6 +131,8 @@ const emitStoreChange = () => {
     conversations: conversationsState,
     generatingConversationIds: generatingConversationIdsState,
     completionUnreadConversationIds: completionUnreadConversationIdsState,
+    hasMoreConversations: hasMoreConversationsState,
+    loadingConversations: loadingConversationsState,
   };
   listeners.forEach((listener) => listener());
 };
@@ -134,37 +146,75 @@ const subscribeConversationListSync = (listener: () => void) => {
 
 const getConversationListSyncSnapshot = (): ConversationListSyncSnapshot => snapshotState;
 
-const refreshConversations = () => {
-  void ipcBridge.database.getUserConversations
-    .invoke({ limit: 10000 })
-    .then((result) => {
-      const items = result?.items;
-      if (items && Array.isArray(items)) {
-        const filteredData = items.filter((conv) => {
-          // Legacy rows from the pre-provider-probe health check flow are hidden
-          // from normal history. New health checks must not create conversations.
-          const extra = conv.extra as { is_health_check?: boolean; team_id?: string; teamId?: string } | undefined;
-          return extra?.is_health_check !== true && !extra?.team_id && !extra?.teamId;
-        });
-        conversationsState = filteredData;
-        // Use ALL conversation IDs (including team/legacy health-check rows) so the
-        // responseStream listener recognises them as known and doesn't
-        // trigger an infinite refreshConversations loop.
-        conversation_idsState = new Set(items.map((conversation) => conversation.id));
-        emitStoreChange();
-        return;
-      }
+const loadConversationPage = async (sequence: number, cursor: string | undefined, replace: boolean) => {
+  if (loadingConversationsState || sequence !== refreshSequence) return;
+  loadingConversationsState = true;
+  emitStoreChange();
 
-      conversationsState = [];
-      conversation_idsState = new Set();
-      emitStoreChange();
-    })
-    .catch((error) => {
-      console.error('[WorkspaceGroupedHistory] Failed to load conversations:', error);
-      conversationsState = [];
-      conversation_idsState = new Set();
-      emitStoreChange();
+  try {
+    const result = await ipcBridge.database.getUserConversations.invoke({
+      cursor,
+      limit: CONVERSATION_PAGE_SIZE,
     });
+    if (sequence !== refreshSequence) return;
+
+    const items = result?.items;
+    if (!items || !Array.isArray(items)) {
+      hasMoreConversationsState = false;
+      conversationCursorState = undefined;
+      return;
+    }
+
+    const filteredData = items.filter((conv) => {
+      // Legacy rows from the pre-provider-probe health check flow are hidden
+      // from normal history. New health checks must not create conversations.
+      const extra = conv.extra as { is_health_check?: boolean; team_id?: string; teamId?: string } | undefined;
+      return extra?.is_health_check !== true && !extra?.team_id && !extra?.teamId;
+    });
+    conversationsState = replace ? filteredData : [...conversationsState, ...filteredData];
+    // Use ALL conversation IDs (including team/legacy health-check rows) so the
+    // responseStream listener recognises them as known and avoids a refresh loop.
+    conversation_idsState = new Set([...conversation_idsState, ...items.map((conversation) => conversation.id)]);
+    hasMoreConversationsState = result.has_more === true && items.length > 0;
+    conversationCursorState = hasMoreConversationsState ? items[items.length - 1]?.id : undefined;
+    emitStoreChange();
+  } catch (error) {
+    if (sequence !== refreshSequence) return;
+    console.error('[WorkspaceGroupedHistory] Failed to load conversations:', error);
+    if (replace) {
+      conversationsState = [];
+      conversation_idsState = new Set();
+    }
+    hasMoreConversationsState = false;
+    conversationCursorState = undefined;
+  } finally {
+    if (sequence === refreshSequence) {
+      loadingConversationsState = false;
+      emitStoreChange();
+    }
+  }
+};
+
+const refreshConversations = () => {
+  const sequence = ++refreshSequence;
+  loadingConversationsState = false;
+  conversationCursorState = undefined;
+  hasMoreConversationsState = false;
+  conversation_idsState = new Set();
+  void loadConversationPage(sequence, undefined, true);
+};
+
+const loadMoreConversations = () => {
+  if (!hasMoreConversationsState || loadingConversationsState || !conversationCursorState) return;
+  void loadConversationPage(refreshSequence, conversationCursorState, false);
+};
+
+const scheduleRefreshConversations = () => {
+  if (refreshTimer !== null) clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(() => {
+    refreshTimer = null;
+    refreshConversations();
+  }, 100);
 };
 
 const markGenerating = (conversation_id: string) => {
@@ -247,14 +297,14 @@ const initializeConversationListSyncStore = () => {
   isStoreInitialized = true;
   refreshConversations();
 
-  addEventListener('chat.history.refresh', refreshConversations);
+  addEventListener('chat.history.refresh', scheduleRefreshConversations);
   ipcBridge.conversation.listChanged.on((event) => {
     if (event.action === 'deleted') {
       clearGenerating(event.conversation_id);
       clearCompletionUnreadState(event.conversation_id);
       clearCompleted(event.conversation_id);
     }
-    refreshConversations();
+    scheduleRefreshConversations();
   });
   ipcBridge.conversation.responseStream.on((message) => {
     const conversation_id = message.conversation_id;
@@ -263,7 +313,7 @@ const initializeConversationListSyncStore = () => {
     }
 
     if (!conversation_idsState.has(conversation_id)) {
-      refreshConversations();
+      scheduleRefreshConversations();
     }
 
     if (isTerminalStreamMessage(message)) {
@@ -296,7 +346,7 @@ const initializeConversationListSyncStore = () => {
     }
     markCompleted(event.session_id);
     clearGenerating(event.session_id);
-    refreshConversations();
+    scheduleRefreshConversations();
   });
 };
 
@@ -305,7 +355,13 @@ export const useConversationListSync = () => {
     initializeConversationListSyncStore();
   }, []);
 
-  const { conversations, generatingConversationIds, completionUnreadConversationIds } = useSyncExternalStore(
+  const {
+    conversations,
+    generatingConversationIds,
+    completionUnreadConversationIds,
+    hasMoreConversations,
+    loadingConversations,
+  } = useSyncExternalStore(
     subscribeConversationListSync,
     getConversationListSyncSnapshot,
     getConversationListSyncSnapshot
@@ -337,6 +393,9 @@ export const useConversationListSync = () => {
     conversations,
     isConversationGenerating,
     hasCompletionUnread,
+    hasMoreConversations,
+    loadingConversations,
+    loadMoreConversations,
     clearCompletionUnread,
     setActiveConversation,
   };

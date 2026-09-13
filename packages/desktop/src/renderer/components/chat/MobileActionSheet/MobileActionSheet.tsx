@@ -5,7 +5,8 @@
  */
 
 import { Left, Right } from '@icon-park/react';
-import React, { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import AionInlineSearchInput from '@/renderer/components/base/AionInlineSearchInput';
+import React, { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import styles from './MobileActionSheet.module.css';
@@ -16,6 +17,7 @@ const TRANSITION_MS = 260;
 const MobileActionSheet: React.FC<MobileActionSheetProps> = ({ open, onClose, title, entries }) => {
   const { t } = useTranslation();
   const [activeSubKey, setActiveSubKey] = useState<string | null>(null);
+  const [subQuery, setSubQuery] = useState('');
   // Sub pane stays mounted briefly after deactivation so its slide-out animation
   // can play. `subPhase` drives the animation: 'enter' positions the sub pane
   // off-screen (right) before the next frame flips to 'shown', so the CSS
@@ -33,6 +35,10 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({ open, onClose, ti
   const openRafRef = useRef<number | null>(null);
 
   // Mount / unmount lifecycle — drives DOM presence only.
+  useEffect(() => {
+    setSubQuery('');
+  }, [activeSubKey]);
+
   useEffect(() => {
     if (open) {
       setMounted(true);
@@ -93,6 +99,16 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({ open, onClose, ti
   const activeSub: MobileActionSheetSubMenu | undefined = activeEntry?.submenu;
   const renderedSubEntry = renderedSubKey ? entries.find((e) => e.key === renderedSubKey) : null;
   const renderedSub: MobileActionSheetSubMenu | undefined = renderedSubEntry?.submenu;
+  const filteredSubOptions = useMemo(() => {
+    if (!renderedSub) return [];
+    const keyword = subQuery.trim().toLocaleLowerCase();
+    if (!keyword) return renderedSub.options;
+    return renderedSub.options.filter((option) => {
+      const label = typeof option.label === 'string' ? option.label : '';
+      const description = typeof option.description === 'string' ? option.description : '';
+      return `${label} ${description}`.toLocaleLowerCase().includes(keyword);
+    });
+  }, [renderedSub, subQuery]);
 
   if (!mounted) {
     return null;
@@ -110,9 +126,11 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({ open, onClose, ti
 
   const handleSubSelect = (key: string) => {
     if (!activeSub) return;
+    const option = activeSub.options.find((item) => item.key === key);
+    if (option?.disabled) return;
     activeSub.onSelect(key);
-    // Multi-select (skills / MCP on the home page): toggle and stay so the user
-    // can pick several in a row.
+    // Multi-select (skills / MCP on the home page): stay open so the user can
+    // add several items in a row.
     if (activeSub.multiSelect) {
       return;
     }
@@ -188,17 +206,31 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({ open, onClose, ti
                 </button>
                 <div className={styles.subtitle}>{renderedSub.title}</div>
               </div>
+              {renderedSub.searchable && (
+                <div className={styles.search}>
+                  <AionInlineSearchInput
+                    value={subQuery}
+                    onChange={setSubQuery}
+                    placeholder={
+                      renderedSub.searchPlaceholder ?? t('agent.model.searchPlaceholder', { defaultValue: 'Search' })
+                    }
+                    data-testid={renderedSub.searchTestId ?? 'mobile-action-sheet-search'}
+                  />
+                </div>
+              )}
               <div className={styles.list}>
-                {renderedSub.options.length === 0 ? (
-                  <div className={styles.empty}>{renderedSub.emptyText}</div>
+                {filteredSubOptions.length === 0 ? (
+                  <div className={styles.empty}>
+                    {renderedSub.emptyText ?? t('agent.model.noResults', { defaultValue: 'No results' })}
+                  </div>
                 ) : (
-                  renderedSub.options.map((option) => {
+                  filteredSubOptions.map((option) => {
                     const showRadio = renderedSub.multiSelect !== true && renderedSub.selectable !== false;
                     const showCheckbox = renderedSub.multiSelect === true;
                     return (
                       <div
                         key={option.key}
-                        className={styles.item}
+                        className={`${styles.item} ${option.disabled ? styles.disabled : ''}`}
                         onClick={() => handleSubSelect(option.key)}
                         data-testid={`mobile-action-sheet-option-${option.key}`}
                       >

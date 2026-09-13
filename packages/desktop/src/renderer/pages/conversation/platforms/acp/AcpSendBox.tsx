@@ -45,6 +45,7 @@ import { Message, Tag } from '@arco-design/web-react';
 import { Brain, MagicHat, Shield } from '@icon-park/react';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import useSWR from 'swr';
 import { classifyConversationBusyError } from '../conversationBusyError';
 import { buildSendFailureError } from './buildSendFailureError';
 import { useAcpInitialMessage } from './useAcpInitialMessage';
@@ -131,6 +132,12 @@ const AcpSendBox: React.FC<{
   const isMobile = Boolean(layout?.isMobile);
   const conversationContext = useConversationContextSafe();
   const loadedSkills = conversationContext?.loadedSkills ?? [];
+  const updateSkills = conversationContext?.updateSkills;
+  const loadedMcpServerIds = conversationContext?.loadedMcpServerIds ?? [];
+  const updateMcpServers = conversationContext?.updateMcpServers;
+  const { data: skillIndex = [] } = useSWR('skills-index', () => ipcBridge.fs.listAvailableSkills.invoke());
+  const { data: mcpIndex = [] } = useSWR('mcp-servers-index', () => ipcBridge.mcpService.listServers.invoke());
+  const availableMcpIndex = mcpIndex.filter((server) => !server.builtin);
   const loadedMcpStatuses =
     conversationContext?.loadedMcpStatuses ??
     (conversationContext?.loadedMcpServers ?? []).map<IConversationMcpStatus>((name) => ({
@@ -494,6 +501,9 @@ Please check your local CLI tool authentication status`,
         submenu: {
           title: t('common.model', { defaultValue: 'Model' }),
           options: modelOptions,
+          searchable: true,
+          searchPlaceholder: t('agent.model.searchPlaceholder', { defaultValue: 'Search models' }),
+          searchTestId: 'mobile-model-search',
           onSelect: (id) => selectModel(id),
         },
       });
@@ -546,48 +556,66 @@ Please check your local CLI tool authentication status`,
       });
     });
 
-    if (loadedSkills.length > 0) {
-      const skillOptions: MobileActionSheetOption[] = loadedSkills.map((name) => ({
-        key: name,
-        label: `/${name}`,
+    if (skillIndex.length > 0) {
+      const skillOptions: MobileActionSheetOption[] = skillIndex.map((skill) => ({
+        key: skill.name,
+        label: `/${skill.name}`,
+        description: skill.description,
+        active: loadedSkills.includes(skill.name),
+        disabled: loadedSkills.includes(skill.name),
       }));
       entries.push({
         key: 'skills',
         icon: <MagicHat theme='outline' size='16' />,
-        label: t('common.selectedSkills', { defaultValue: 'Selected skills' }),
+        label: t('conversation.skills.add', { defaultValue: 'Add skills' }),
+        meta: loadedSkills.length > 0 ? t('common.selectedCount', { count: loadedSkills.length }) : undefined,
         variant: 'muted',
         submenu: {
-          title: t('common.selectedSkills', { defaultValue: 'Selected skills' }),
-          selectable: false,
+          title: t('conversation.skills.add', { defaultValue: 'Add skills' }),
+          searchable: true,
+          searchPlaceholder: t('settings.skillsHub.searchPlaceholder'),
+          searchTestId: 'mobile-skill-search',
+          multiSelect: true,
           options: skillOptions,
+          emptyText: t('agent.model.noResults', { defaultValue: 'No matching skills' }),
           onSelect: (name) => {
-            setContent(`/${name} `);
+            if (!updateSkills) return;
+            void updateSkills((current) => (current.includes(name) ? current : [...current, name])).catch(() =>
+              Message.error(t('conversation.skills.updateFailed'))
+            );
           },
         },
       });
     }
 
-    if (loadedMcpStatuses.length > 0) {
-      const mcpOptions: MobileActionSheetOption[] = loadedMcpStatuses.map((item) => ({
-        key: item.id,
-        label: item.name,
-        description:
-          item.status === 'loaded'
-            ? undefined
-            : item.reason
-              ? `${t(`conversation.mcp.status.${item.status}` as const)} · ${item.reason}`
-              : t(`conversation.mcp.status.${item.status}` as const),
+    if (availableMcpIndex.length > 0) {
+      const mcpOptions: MobileActionSheetOption[] = availableMcpIndex.map((server) => ({
+        key: server.id,
+        label: server.name,
+        description: server.description,
+        active: loadedMcpServerIds.includes(server.id),
+        disabled: loadedMcpServerIds.includes(server.id),
       }));
       entries.push({
         key: 'mcp',
         icon: <Shield theme='outline' size='16' />,
-        label: t('conversation.mcp.selected', { defaultValue: 'Selected MCP' }),
-        variant: 'muted',
+        label: t('conversation.mcp.add', { defaultValue: 'Add MCP' }),
+        meta:
+          loadedMcpServerIds.length > 0 ? t('common.selectedCount', { count: loadedMcpServerIds.length }) : undefined,
         submenu: {
-          title: t('conversation.mcp.selected', { defaultValue: 'Selected MCP' }),
-          selectable: false,
+          title: t('conversation.mcp.add', { defaultValue: 'Add MCP' }),
+          searchable: true,
+          searchPlaceholder: t('settings.skillsHub.searchPlaceholder', { defaultValue: 'Search MCP servers' }),
+          searchTestId: 'mobile-mcp-search',
+          multiSelect: true,
           options: mcpOptions,
-          onSelect: () => undefined,
+          emptyText: t('agent.model.noResults', { defaultValue: 'No matching MCP servers' }),
+          onSelect: (id) => {
+            if (!updateMcpServers) return;
+            void updateMcpServers((current) => (current.includes(id) ? current : [...current, id])).catch(() =>
+              Message.error(t('conversation.mcp.updateFailed', { defaultValue: 'Failed to update MCP servers' }))
+            );
+          },
         },
       });
     }
@@ -601,7 +629,13 @@ Please check your local CLI tool authentication status`,
     handleThoughtLevelSetOption,
     isMobile,
     loadedMcpStatuses,
+    loadedMcpServerIds,
+    mcpIndex,
+    availableMcpIndex,
+    updateMcpServers,
     loadedSkills,
+    skillIndex,
+    updateSkills,
     model_info,
     runtimeMode,
     runtimeThoughtLevel,

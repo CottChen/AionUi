@@ -255,6 +255,9 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
         submenu: {
           title: t('common.model', { defaultValue: 'Model' }),
           options: modelOptions,
+          searchable: true,
+          searchPlaceholder: t('agent.model.searchPlaceholder', { defaultValue: 'Search models' }),
+          searchTestId: 'mobile-model-search',
           onSelect: onModelSelect,
         },
       });

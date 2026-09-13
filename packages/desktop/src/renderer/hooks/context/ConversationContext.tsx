@@ -40,17 +40,23 @@ export interface ConversationContextValue {
    */
   hideSendBox?: boolean;
 
-  /**
-   * Loaded skill names for this conversation (snapshot from conversation.extra.skills).
-   * Surfaced inside the SendBox `+` menu so users can review/jump to active skills.
-   */
+  /** Current skill snapshot for this conversation. */
   loadedSkills?: string[];
+
+  /** Update the skill snapshot and make it available to the next turn. */
+  updateSkills?: (next: string[] | ((current: string[]) => string[])) => Promise<string[]>;
 
   /**
    * Loaded MCP server names for this conversation (snapshot from
    * conversation.extra.mcp_servers).
    */
   loadedMcpServers?: string[];
+
+  /** Current persistent MCP server ID snapshot for this conversation. */
+  loadedMcpServerIds?: string[];
+
+  /** Update the persistent MCP server snapshot for the next turn. */
+  updateMcpServers?: (next: string[] | ((current: string[]) => string[])) => Promise<string[]>;
 
   /**
    * Structured MCP status snapshot for this conversation (from

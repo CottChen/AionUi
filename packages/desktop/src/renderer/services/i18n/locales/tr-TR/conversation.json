@@ -539,7 +539,10 @@
   },
   "skills": {
     "loaded": "Yüklenen Beceriler",
-    "slashHint": "Beceri"
+    "slashHint": "Beceri",
+    "add": "Beceri ekle",
+    "updated": "Beceriler güncellendi",
+    "updateFailed": "Beceriler güncellenemedi"
   },
   "mcp": {
     "loaded": "Yüklü MCP",
@@ -550,7 +553,10 @@
       "failed": "Başarısız",
       "unsupported": "Desteklenmiyor"
     },
-    "selected": "Seçili MCP"
+    "selected": "Seçili MCP",
+    "add": "MCP ekle",
+    "updated": "MCP sunucuları güncellendi",
+    "updateFailed": "MCP sunucuları güncellenemedi"
   },
   "runtimePreparing": {
     "sendboxHint": "Çalışma ortamı hazırlanıyor. İlk başlatma biraz daha uzun sürebilir."

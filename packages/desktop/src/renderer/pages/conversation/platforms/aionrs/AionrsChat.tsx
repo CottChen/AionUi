@@ -5,6 +5,7 @@
  */
 
 import type { IConversationMcpStatus } from '@/common/config/storage';
+import { ipcBridge } from '@/common';
 import type { ConversationContextValue } from '@/renderer/hooks/context/ConversationContext';
 import { ConversationProvider } from '@/renderer/hooks/context/ConversationContext';
 import { CHAT_SURFACE_CONTAINER_CLASS } from '@/renderer/pages/conversation/utils/chatSurfaceWidth';
@@ -19,7 +20,7 @@ import {
 } from '@renderer/pages/conversation/Messages/hooks';
 import { usePendingConfirmationsRecovery } from '@renderer/pages/conversation/Messages/usePendingConfirmationsRecovery';
 import HOC from '@renderer/utils/ui/HOC';
-import React, { useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import LocalImageView from '@renderer/components/media/LocalImageView';
 import type { TeamSendBoxRuntime } from '@/renderer/pages/team/components/teamSendRuntime';
 import AionrsSendBox from './AionrsSendBox';
@@ -34,6 +35,7 @@ const AionrsChat: React.FC<{
   emptySlot?: React.ReactNode;
   loadedSkills?: string[];
   loadedMcpServers?: string[];
+  loadedMcpServerIds?: string[];
   loadedMcpStatuses?: IConversationMcpStatus[];
   agent_name?: string;
   teamSendMessage?: (payload: { input: string; files: string[] }) => Promise<void>;
@@ -48,6 +50,7 @@ const AionrsChat: React.FC<{
   emptySlot,
   loadedSkills,
   loadedMcpServers,
+  loadedMcpServerIds,
   loadedMcpStatuses,
   agent_name,
   teamSendMessage,
@@ -56,6 +59,79 @@ const AionrsChat: React.FC<{
 }) => {
   useMessageLstCache(conversation_id);
   usePendingConfirmationsRecovery(conversation_id);
+  const [activeSkills, setActiveSkills] = useState<string[]>(() => loadedSkills ?? []);
+  const activeSkillsRef = useRef(activeSkills);
+  const skillUpdateQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const initialMcpIds = loadedMcpServerIds ?? loadedMcpStatuses?.map((item) => item.id) ?? [];
+  const [activeMcpIds, setActiveMcpIds] = useState<string[]>(() => initialMcpIds);
+  const activeMcpIdsRef = useRef(activeMcpIds);
+  const mcpUpdateQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const updateSkills = useCallback(
+    (next: string[] | ((current: string[]) => string[])) => {
+      const operation = skillUpdateQueueRef.current.then(async () => {
+        const previous = activeSkillsRef.current;
+        const requested = typeof next === 'function' ? next(previous) : next;
+        const normalized = Array.from(new Set(requested.map((name) => name.trim()).filter(Boolean))).toSorted();
+        if (normalized.length === previous.length && normalized.every((name, index) => name === previous[index])) {
+          return normalized;
+        }
+        activeSkillsRef.current = normalized;
+        setActiveSkills(normalized);
+        try {
+          const ok = await ipcBridge.conversation.update.invoke({
+            id: conversation_id,
+            updates: { extra: { skills: normalized } },
+            merge_extra: true,
+          });
+          if (!ok) throw new Error('Conversation skill update was rejected');
+          return normalized;
+        } catch (error) {
+          activeSkillsRef.current = previous;
+          setActiveSkills(previous);
+          throw error;
+        }
+      });
+      skillUpdateQueueRef.current = operation.then(
+        (): void => undefined,
+        (): void => undefined
+      );
+      return operation;
+    },
+    [conversation_id]
+  );
+  const updateMcpServers = useCallback(
+    (next: string[] | ((current: string[]) => string[])) => {
+      const operation = mcpUpdateQueueRef.current.then(async () => {
+        const previous = activeMcpIdsRef.current;
+        const requested = typeof next === 'function' ? next(previous) : next;
+        const normalized = Array.from(new Set(requested.map((id) => id.trim()).filter(Boolean))).toSorted();
+        if (normalized.length === previous.length && normalized.every((id, index) => id === previous[index])) {
+          return normalized;
+        }
+        activeMcpIdsRef.current = normalized;
+        setActiveMcpIds(normalized);
+        try {
+          const ok = await ipcBridge.conversation.update.invoke({
+            id: conversation_id,
+            updates: { extra: { mcp_server_ids: normalized } },
+            merge_extra: true,
+          });
+          if (!ok) throw new Error('Conversation MCP update was rejected');
+          return normalized;
+        } catch (error) {
+          activeMcpIdsRef.current = previous;
+          setActiveMcpIds(previous);
+          throw error;
+        }
+      });
+      mcpUpdateQueueRef.current = operation.then(
+        (): void => undefined,
+        (): void => undefined
+      );
+      return operation;
+    },
+    [conversation_id]
+  );
   const updateLocalImage = LocalImageView.useUpdateLocalImage();
   useEffect(() => {
     updateLocalImage({ root: workspace });
@@ -66,12 +142,26 @@ const AionrsChat: React.FC<{
       workspace,
       type: 'aionrs',
       cron_job_id,
-      loadedSkills,
+      loadedSkills: activeSkills,
+      updateSkills,
       loadedMcpServers,
+      loadedMcpServerIds: activeMcpIds,
+      updateMcpServers,
       loadedMcpStatuses,
       assistantId,
     };
-  }, [conversation_id, workspace, cron_job_id, loadedSkills, loadedMcpServers, loadedMcpStatuses, assistantId]);
+  }, [
+    conversation_id,
+    workspace,
+    cron_job_id,
+    activeSkills,
+    updateSkills,
+    loadedMcpServers,
+    activeMcpIds,
+    updateMcpServers,
+    loadedMcpStatuses,
+    assistantId,
+  ]);
 
   return (
     <ConversationProvider value={conversationValue}>

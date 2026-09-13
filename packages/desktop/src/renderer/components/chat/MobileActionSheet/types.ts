@@ -11,6 +11,7 @@ export interface MobileActionSheetOption {
   label: ReactNode;
   description?: ReactNode;
   active?: boolean;
+  disabled?: boolean;
 }
 
 export interface MobileActionSheetSubMenu {
@@ -18,12 +19,16 @@ export interface MobileActionSheetSubMenu {
   options: MobileActionSheetOption[];
   onSelect: (key: string) => void;
   emptyText?: ReactNode;
+  /** Show a local filter input for this submenu. */
+  searchable?: boolean;
+  searchPlaceholder?: string;
+  searchTestId?: string;
   /** When false, options behave as plain action rows (no radio). Default: true. */
   selectable?: boolean;
   /**
    * When true, options are multi-select checkboxes (driven by `option.active`).
-   * Tapping toggles a selection via `onSelect` but keeps the submenu open so the
-   * user can toggle several in a row (used for Skills / MCP on the home page).
+   * Tapping adds a selection via `onSelect` but keeps the submenu open so the
+   * user can add several in a row (used for Skills / MCP on the home page).
    */
   multiSelect?: boolean;
 }
