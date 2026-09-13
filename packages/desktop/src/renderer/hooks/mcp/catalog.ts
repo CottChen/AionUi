@@ -14,6 +14,12 @@ type BackendMcpPayload = {
 
 const isBuiltinServer = (server: IMcpServer) => server.builtin === true;
 
+const isCatalogServer = (value: unknown): value is IMcpServer => {
+  if (!value || typeof value !== 'object') return false;
+  const server = value as Partial<IMcpServer>;
+  return typeof server.id === 'string' && server.id.length > 0 && typeof server.name === 'string';
+};
+
 const normalizeServerName = (name: string) => name.trim().toLowerCase();
 
 const getCatalogServerKey = (server: Pick<IMcpServer, 'id' | 'name' | 'builtin'>) => {
@@ -72,10 +78,14 @@ export const ensureBackendMcpCatalog = async (): Promise<{
   builtinServers: IMcpServer[];
   allServers: IMcpServer[];
 }> => {
-  const localServers = ((await getClientBusinessSetting('mcp.config').catch((): IMcpServer[] => [])) ||
-    []) as IMcpServer[];
+  // Older installations can contain a null/object value here after a partial
+  // settings migration. Treat malformed client data as empty instead of
+  // throwing before the backend MCP catalog is queried.
+  const rawLocalServers = await getClientBusinessSetting('mcp.config').catch((): undefined => undefined);
+  const localServers: IMcpServer[] = Array.isArray(rawLocalServers) ? rawLocalServers.filter(isCatalogServer) : [];
   const builtinServers = dedupeServers(localServers.filter(isBuiltinServer));
-  const userServers = dedupeServers(await mcpService.listServers.invoke());
+  const rawUserServers = await mcpService.listServers.invoke();
+  const userServers = dedupeServers(Array.isArray(rawUserServers) ? rawUserServers.filter(isCatalogServer) : []);
 
   const allServers = dedupeServers([...userServers, ...builtinServers]);
 

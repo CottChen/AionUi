@@ -83,4 +83,21 @@ describe('ensureBackendMcpCatalog', () => {
     expect(result.builtinServers).toEqual([]);
     expect(result.allServers).toEqual([]);
   });
+
+  it('still loads backend MCPs when the legacy client setting is malformed', async () => {
+    getClientBusinessSettingMock.mockResolvedValue({ invalid: true });
+
+    const result = await ensureBackendMcpCatalog();
+
+    expect(result.userServers.map((server) => server.id)).toEqual(['user-1']);
+    expect(result.allServers.map((server) => server.id)).toEqual(['user-1']);
+  });
+
+  it('ignores malformed backend rows without hiding valid MCP servers', async () => {
+    mcpServiceMock.listServers.invoke.mockResolvedValue([{}, null, { id: 'user-2', name: 'valid server' }]);
+
+    const result = await ensureBackendMcpCatalog();
+
+    expect(result.userServers.map((server) => server.id)).toEqual(['user-2']);
+  });
 });
