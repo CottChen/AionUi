@@ -115,7 +115,7 @@ describe('ConversationSearchPopover', () => {
     localStorage.clear();
   });
 
-  it('starts backend pagination at page one', async () => {
+  it('starts backend pagination from the newest result cursor', async () => {
     searchInvoke.mockResolvedValue({ items: [], total: 0, has_more: false });
     render(
       <ConversationSearchPopover
@@ -129,7 +129,7 @@ describe('ConversationSearchPopover', () => {
 
     await openAndSearch('search');
 
-    expect(searchInvoke).toHaveBeenCalledWith({ keyword: 'search', page: 1, page_size: 20 });
+    expect(searchInvoke).toHaveBeenCalledWith({ keyword: 'search', page_size: 20 });
   });
 
   it('keeps the newest keyword results when an older request finishes later', async () => {
@@ -161,6 +161,36 @@ describe('ConversationSearchPopover', () => {
 
     await waitFor(() => expect(screen.queryByText('old result')).not.toBeInTheDocument());
     expect(screen.getByText('new result')).toBeInTheDocument();
+  });
+
+  it('loads older results with the cursor returned by the previous page', async () => {
+    searchInvoke
+      .mockResolvedValueOnce({
+        items: [makeItem('newest', 'newest result')],
+        total: 0,
+        has_more: true,
+        next_cursor: 'v1s.next',
+      })
+      .mockResolvedValueOnce({ items: [makeItem('older', 'older result')], total: 0, has_more: false });
+    render(
+      <ConversationSearchPopover
+        renderTrigger={({ onClick }) => (
+          <button type='button' aria-label='open-search' onClick={onClick}>
+            open
+          </button>
+        )}
+      />
+    );
+
+    await openAndSearch('search');
+    await waitFor(() => expect(screen.getByText('newest result')).toBeInTheDocument());
+
+    const scrollContainer = document.querySelector('.overflow-y-auto');
+    expect(scrollContainer).toBeTruthy();
+    fireEvent.scroll(scrollContainer!);
+
+    await waitFor(() => expect(screen.getByText('older result')).toBeInTheDocument());
+    expect(searchInvoke).toHaveBeenLastCalledWith({ keyword: 'search', cursor: 'v1s.next', page_size: 20 });
   });
 
   it('copies the matched user input without opening the conversation', async () => {

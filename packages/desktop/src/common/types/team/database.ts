@@ -12,7 +12,6 @@ export interface IMessageSearchItem {
 export interface IMessageSearchResponse {
   items: IMessageSearchItem[];
   total: number;
-  page: number;
-  page_size: number;
   has_more: boolean;
+  next_cursor?: string | null;
 }

@@ -111,7 +111,7 @@ import {
   fromApiConversationTurnPreviews,
   fromApiSearchResult,
   type ApiConversationTurnPreview,
-  type ApiMessageSearchItem,
+  type ApiMessageSearchResponse,
 } from './searchMapper';
 import type { IAddTeamAssistantParams, ICreateTeamParams } from './teamMapper';
 import {
@@ -1158,9 +1158,9 @@ export const database = {
     fromApiPaginatedConversations
   ),
   searchConversationMessages: withResponseMap(
-    httpGet<PaginatedResult<ApiMessageSearchItem>, { keyword: string; page?: number; page_size?: number }>(
+    httpGet<ApiMessageSearchResponse, { keyword: string; cursor?: string; page?: number; page_size?: number }>(
       (p) =>
-        `/api/messages/search?keyword=${encodeURIComponent(p.keyword)}&page=${p.page ?? 1}&page_size=${p.page_size ?? 50}`
+        `/api/messages/search?keyword=${encodeURIComponent(p.keyword)}${p.cursor ? `&cursor=${encodeURIComponent(p.cursor)}` : p.page ? `&page=${p.page}` : ''}&page_size=${p.page_size ?? 50}`
     ),
     fromApiSearchResult
   ),

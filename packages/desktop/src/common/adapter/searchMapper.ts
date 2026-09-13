@@ -6,8 +6,7 @@
 
 import type { TMessage } from '../chat/chatLib';
 import type { TChatConversation } from '../config/storage';
-import type { IMessageSearchItem } from '../types/team/database';
-import type { PaginatedResult } from './ipcBridge';
+import type { IMessageSearchItem, IMessageSearchResponse } from '../types/team/database';
 import { fromApiConversation } from './apiModelMapper';
 
 export interface ApiMessageSearchItem {
@@ -29,6 +28,13 @@ export interface ApiMessageSearchItem {
     modified_at: number;
     extra: Record<string, unknown>;
   };
+}
+
+export interface ApiMessageSearchResponse {
+  items: ApiMessageSearchItem[];
+  total: number;
+  has_more: boolean;
+  next_cursor?: string | null;
 }
 
 export type ApiConversationTurnPreview = {
@@ -57,9 +63,7 @@ export function fromApiConversationTurnPreviews(items: ApiConversationTurnPrevie
   }));
 }
 
-export function fromApiSearchResult(
-  result: PaginatedResult<ApiMessageSearchItem>
-): PaginatedResult<IMessageSearchItem> {
+export function fromApiSearchResult(result: ApiMessageSearchResponse): IMessageSearchResponse {
   return {
     ...result,
     items: result.items.map(fromApiSearchItem),

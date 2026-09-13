@@ -23,7 +23,6 @@ import { useNavigate } from 'react-router-dom';
 import './ConversationSearchPopover.css';
 
 const PAGE_SIZE = 20;
-const INITIAL_PAGE = 1;
 const MAX_RECENT_SEARCHES = 8;
 const RECENT_SEARCH_STORAGE_KEY = 'conversation.historySearch.recentKeywords';
 const SNIPPET_MAX_LENGTH = 110;
@@ -144,13 +143,14 @@ const ConversationSearchPopover: React.FC<ConversationSearchPopoverProps> = ({
   const [keyword, setKeyword] = useState('');
   const [debouncedKeyword, setDebouncedKeyword] = useState('');
   const [items, setItems] = useState<IMessageSearchItem[]>([]);
-  const [page, setPage] = useState(INITIAL_PAGE);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [recentKeywords, setRecentKeywords] = useState<string[]>([]);
   const searchRequestSeqRef = useRef(0);
-  const loadingPageRef = useRef<{ page: number; requestSeq: number } | null>(null);
+  const loadingCursorRef = useRef<{ cursor: string | null; requestSeq: number } | null>(null);
+  const resultsScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     try {
@@ -175,20 +175,20 @@ const ConversationSearchPopover: React.FC<ConversationSearchPopoverProps> = ({
   }, [keyword]);
 
   const runSearch = useCallback(
-    async (pageToLoad: number, append: boolean) => {
+    async (cursorToLoad: string | null, append: boolean) => {
       if (!debouncedKeyword) {
         searchRequestSeqRef.current += 1;
-        loadingPageRef.current = null;
+        loadingCursorRef.current = null;
         setItems([]);
-        setPage(INITIAL_PAGE);
+        setNextCursor(null);
         setHasMore(false);
         return;
       }
 
-      if (append && loadingPageRef.current?.page === pageToLoad) return;
+      if (append && loadingCursorRef.current?.cursor === cursorToLoad) return;
       const requestSeq = append ? searchRequestSeqRef.current : ++searchRequestSeqRef.current;
       if (append) {
-        loadingPageRef.current = { page: pageToLoad, requestSeq };
+        loadingCursorRef.current = { cursor: cursorToLoad, requestSeq };
         setLoadingMore(true);
       } else {
         setLoading(true);
@@ -197,25 +197,29 @@ const ConversationSearchPopover: React.FC<ConversationSearchPopoverProps> = ({
       try {
         const result = await ipcBridge.database.searchConversationMessages.invoke({
           keyword: debouncedKeyword,
-          page: pageToLoad,
+          ...(cursorToLoad ? { cursor: cursorToLoad } : {}),
           page_size: PAGE_SIZE,
         });
 
         if (requestSeq !== searchRequestSeqRef.current) return;
-        setItems((prev) => (append ? [...prev, ...result.items] : result.items));
-        setPage(pageToLoad);
+        setItems((prev) => {
+          if (!append) return result.items;
+          const seen = new Set(prev.map((item) => item.message_id));
+          return [...prev, ...result.items.filter((item) => !seen.has(item.message_id))];
+        });
+        setNextCursor(result.next_cursor ?? null);
         setHasMore(result.has_more);
       } catch (error) {
         if (requestSeq !== searchRequestSeqRef.current) return;
         console.error('[ConversationSearchPopover] Search failed:', error);
         if (!append) {
           setItems([]);
-          setPage(INITIAL_PAGE);
+          setNextCursor(null);
           setHasMore(false);
         }
       } finally {
-        if (loadingPageRef.current?.page === pageToLoad && loadingPageRef.current.requestSeq === requestSeq) {
-          loadingPageRef.current = null;
+        if (loadingCursorRef.current?.cursor === cursorToLoad && loadingCursorRef.current.requestSeq === requestSeq) {
+          loadingCursorRef.current = null;
         }
         if (requestSeq === searchRequestSeqRef.current) {
           setLoading(false);
@@ -227,7 +231,7 @@ const ConversationSearchPopover: React.FC<ConversationSearchPopoverProps> = ({
   );
 
   useEffect(() => {
-    void runSearch(INITIAL_PAGE, false);
+    void runSearch(null, false);
   }, [runSearch]);
 
   useEffect(() => {
@@ -255,24 +259,35 @@ const ConversationSearchPopover: React.FC<ConversationSearchPopoverProps> = ({
 
   const resetSearchState = useCallback(() => {
     searchRequestSeqRef.current += 1;
-    loadingPageRef.current = null;
+    loadingCursorRef.current = null;
     setVisible(false);
     setKeyword('');
     setDebouncedKeyword('');
     setItems([]);
-    setPage(INITIAL_PAGE);
+    setNextCursor(null);
     setHasMore(false);
     setLoading(false);
     setLoadingMore(false);
   }, []);
 
   const handleLoadMore = useCallback(() => {
-    if (!visible || !debouncedKeyword || loading || loadingMore || !hasMore) {
+    if (!visible || !debouncedKeyword || loading || loadingMore || !hasMore || !nextCursor) {
       return;
     }
 
-    void runSearch(page + 1, true);
-  }, [debouncedKeyword, hasMore, loading, loadingMore, page, runSearch, visible]);
+    void runSearch(nextCursor, true);
+  }, [debouncedKeyword, hasMore, loading, loadingMore, nextCursor, runSearch, visible]);
+
+  useEffect(() => {
+    const container = resultsScrollRef.current;
+    if (!container || !visible || !debouncedKeyword || loading || loadingMore || !hasMore || !nextCursor) return;
+
+    // If the first page does not fill the viewport, continue until the list
+    // becomes scrollable so the user is not forced to find an invisible edge.
+    if (container.scrollHeight <= container.clientHeight + 1) {
+      handleLoadMore();
+    }
+  }, [debouncedKeyword, handleLoadMore, hasMore, items.length, loading, loadingMore, nextCursor, visible]);
 
   const handleResultClick = useCallback(
     async (item: IMessageSearchItem) => {
@@ -317,11 +332,11 @@ const ConversationSearchPopover: React.FC<ConversationSearchPopoverProps> = ({
 
   const handleClearKeyword = useCallback(() => {
     searchRequestSeqRef.current += 1;
-    loadingPageRef.current = null;
+    loadingCursorRef.current = null;
     setKeyword('');
     setDebouncedKeyword('');
     setItems([]);
-    setPage(INITIAL_PAGE);
+    setNextCursor(null);
     setHasMore(false);
     setLoading(false);
     setLoadingMore(false);
@@ -397,6 +412,7 @@ const ConversationSearchPopover: React.FC<ConversationSearchPopoverProps> = ({
 
     return (
       <div
+        ref={resultsScrollRef}
         className='h-full min-h-0 overflow-y-auto overflow-x-hidden pr-4px'
         onScroll={(event) => {
           const target = event.currentTarget;
