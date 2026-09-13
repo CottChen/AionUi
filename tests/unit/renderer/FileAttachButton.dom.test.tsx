@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { fireEvent, render } from '@testing-library/react';
+import { fireEvent, render, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import FileAttachButton from '@/renderer/components/media/FileAttachButton';
 
@@ -61,6 +61,7 @@ vi.mock('@icon-park/react', () => {
     Paperclip: Icon,
     Plus: Icon,
     Right: Icon,
+    Search: Icon,
     Shield: Icon,
   };
 });
@@ -137,5 +138,24 @@ describe('FileAttachButton WebUI capability picker', () => {
 
     expect(mocks.addSkill).toHaveBeenCalledWith('new-skill');
     expect(mocks.addMcpServer).toHaveBeenCalledWith('new-mcp');
+  });
+
+  it('filters both skill and MCP catalogs in the desktop WebUI popup', () => {
+    const view = render(<FileAttachButton openFileSelector={vi.fn()} />);
+
+    const skillSearch = view.getByTestId('conversation-skill-search');
+    fireEvent.change(skillSearch, { target: { value: 'new-' } });
+    const skillPanel = skillSearch.closest('[style*="max-height"]');
+    expect(skillPanel).toBeTruthy();
+    expect(within(skillPanel as HTMLElement).getByText('new-skill')).toBeInTheDocument();
+    expect(within(skillPanel as HTMLElement).queryByText('existing-skill')).not.toBeInTheDocument();
+
+    const mcpSearch = view.getByTestId('conversation-mcp-search');
+    fireEvent.change(mcpSearch, { target: { value: 'new' } });
+    const mcpPanel = mcpSearch.closest('[style*="max-height"]');
+    expect(mcpPanel).toBeTruthy();
+    expect(within(mcpPanel as HTMLElement).getByText('New MCP')).toBeInTheDocument();
+    expect(within(mcpPanel as HTMLElement).queryByText('Existing MCP')).not.toBeInTheDocument();
+    expect(skillPanel?.getAttribute('style')).toContain('max-width');
   });
 });

@@ -4,8 +4,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import type { IMcpServer } from '@/common/config/storage';
+import { BUILTIN_IMAGE_GEN_ID, BUILTIN_IMAGE_GEN_NAME, type IMcpServer } from '@/common/config/storage';
 import { ipcBridge } from '@/common';
+import { ensureBackendMcpCatalog } from '@/renderer/hooks/mcp/catalog';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 export type ConversationCapabilitySkill = {
@@ -42,26 +43,11 @@ const uniqueNames = (values: string[] | undefined): string[] => {
   return result;
 };
 
-const extensionMcpServer = (raw: Record<string, unknown>): IMcpServer | undefined => {
-  const id = typeof raw.id === 'string' ? raw.id : '';
-  const name = typeof raw.name === 'string' ? raw.name : '';
-  const transport = raw.transport;
-  if (!id || !name || !transport || typeof transport !== 'object') return undefined;
-
-  return {
-    id,
-    name,
-    description: typeof raw.description === 'string' ? raw.description : undefined,
-    enabled: raw.enabled !== false,
-    transport: transport as IMcpServer['transport'],
-    tools: Array.isArray(raw.tools) ? (raw.tools as IMcpServer['tools']) : undefined,
-    last_test_status: undefined,
-    last_connected: typeof raw.last_connected === 'number' ? raw.last_connected : undefined,
-    created_at: typeof raw.created_at === 'number' ? raw.created_at : Date.now(),
-    updated_at: typeof raw.updated_at === 'number' ? raw.updated_at : Date.now(),
-    original_json: typeof raw.original_json === 'string' ? raw.original_json : '{}',
-    builtin: false,
-  };
+const isHiddenBuiltinMcp = (server: IMcpServer): boolean => {
+  // Built-in MCPs are managed by AionUi rather than selected per conversation.
+  // Keep the explicit image-gen identifiers in the predicate so older records
+  // that lost the builtin flag are still hidden as well.
+  return server.builtin === true || server.id === BUILTIN_IMAGE_GEN_ID || server.name === BUILTIN_IMAGE_GEN_NAME;
 };
 
 /**
@@ -104,19 +90,16 @@ export const useConversationCapabilities = ({
     setIsLoading(true);
     let catalogPromise: Promise<
       [
-        Awaited<ReturnType<typeof ipcBridge.fs.listAvailableSkills.invoke>>,
-        Awaited<ReturnType<typeof ipcBridge.mcpService.listServers.invoke>>,
-        Record<string, unknown>[],
+        PromiseSettledResult<Awaited<ReturnType<typeof ipcBridge.fs.listAvailableSkills.invoke>>>,
+        PromiseSettledResult<Awaited<ReturnType<typeof ensureBackendMcpCatalog>>>,
       ]
     >;
     try {
-      catalogPromise = Promise.all([
+      catalogPromise = Promise.allSettled([
         ipcBridge.fs.listAvailableSkills.invoke(),
-        ipcBridge.mcpService.listServers.invoke(),
-        // Extension MCP servers are shown in Tools settings as well. Keep
-        // them in the conversation picker so WebUI and Electron expose the
-        // same catalog; older backends may not implement this endpoint.
-        ipcBridge.extensions.getMcpServers.invoke().catch((): Record<string, unknown>[] => []),
+        // Keep parity with Tools settings: WebUI MCPs can come from the
+        // backend catalog as well as the client-side mcp.config overlay.
+        ensureBackendMcpCatalog(),
       ]);
     } catch {
       setAvailableSkills([]);
@@ -125,8 +108,10 @@ export const useConversationCapabilities = ({
       return;
     }
     catalogPromise
-      .then(([skills, servers, extensionServers]) => {
+      .then(([skillsResult, mcpResult]) => {
         if (cancelled) return;
+        const skills = skillsResult.status === 'fulfilled' ? skillsResult.value : [];
+        const servers = mcpResult.status === 'fulfilled' ? mcpResult.value.allServers : [];
         const legacyNames = loadedMcpNamesKey ? loadedMcpNamesKey.split('\u0000') : [];
         if (legacyNames.length > 0) {
           const resolvedIds = uniqueNames([
@@ -146,13 +131,10 @@ export const useConversationCapabilities = ({
           }))
         );
         const seen = new Set<string>();
-        const mergedServers = [
-          ...servers,
-          ...extensionServers.map(extensionMcpServer).filter((server) => server !== undefined),
-        ];
+        const mergedServers = servers;
         setAvailableMcpServers(
           mergedServers.filter((server) => {
-            if (server.builtin === true) return false;
+            if (isHiddenBuiltinMcp(server)) return false;
             const key = server.id || server.name;
             if (seen.has(key)) return false;
             seen.add(key);

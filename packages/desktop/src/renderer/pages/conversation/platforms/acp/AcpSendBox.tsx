@@ -665,14 +665,14 @@ Please check your local CLI tool authentication status`,
       entries.push({
         key: 'add-mcp',
         icon: <Shield theme='outline' size='16' />,
-        label: t('mcp.label'),
+        label: t('mcp.addServer', { defaultValue: 'Add MCP server' }),
         variant: 'muted',
         meta: t('common.selectedCount', {
           count: selectedMcpServerIds.length,
           defaultValue: `${selectedMcpServerIds.length} selected`,
         }),
         submenu: {
-          title: t('mcp.label'),
+          title: t('mcp.addServer', { defaultValue: 'Add MCP server' }),
           multiSelect: true,
           searchable: true,
           searchPlaceholder: t('mcp.searchServers', { defaultValue: 'Search servers...' }),

@@ -24,6 +24,13 @@ vi.mock('@/common', () => ({
   },
 }));
 
+vi.mock('@/renderer/hooks/mcp/catalog', () => ({
+  ensureBackendMcpCatalog: async () => {
+    const servers = await listMcpMock();
+    return { userServers: servers, builtinServers: [], allServers: servers };
+  },
+}));
+
 describe('useConversationCapabilities', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -58,11 +65,11 @@ describe('useConversationCapabilities', () => {
 
     await waitFor(() => expect(result.current.availableSkills).toHaveLength(2));
 
-    expect(result.current.availableMcpServers.map((server) => server.id)).toEqual(['docs', 'extension-docs']);
+    expect(result.current.availableMcpServers.map((server) => server.id)).toEqual(['docs']);
     expect(result.current.selectedSkills).toEqual(['review']);
   });
 
-  it('includes extension MCP servers in the conversation catalog', async () => {
+  it('keeps the conversation catalog limited to backend-persisted MCP servers', async () => {
     const { result } = renderHook(() =>
       useConversationCapabilities({
         conversationId: 'conv-1',
@@ -70,8 +77,8 @@ describe('useConversationCapabilities', () => {
       })
     );
 
-    await waitFor(() => expect(result.current.availableMcpServers).toHaveLength(2));
-    expect(result.current.availableMcpServers.map((server) => server.id)).toEqual(['docs', 'extension-docs']);
+    await waitFor(() => expect(result.current.availableMcpServers).toHaveLength(1));
+    expect(result.current.availableMcpServers.map((server) => server.id)).toEqual(['docs']);
   });
 
   it('resolves legacy MCP names to current server ids before adding another server', async () => {

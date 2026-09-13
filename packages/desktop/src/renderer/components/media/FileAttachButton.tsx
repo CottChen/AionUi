@@ -14,8 +14,9 @@ import { iconColors } from '@/renderer/styles/colors';
 import { isElectronDesktop } from '@/renderer/utils/platform';
 import { FileService } from '@/renderer/services/FileService';
 import type { FileMetadata } from '@/renderer/services/FileService';
+import AionInlineSearchInput from '@/renderer/components/base/AionInlineSearchInput';
 import { emitter } from '@/renderer/utils/emitter';
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
@@ -93,6 +94,8 @@ const FileAttachButton: React.FC<FileAttachButtonProps> = ({
   const [mcpOpen, setMcpOpen] = useState(false);
   const [addSkillsOpen, setAddSkillsOpen] = useState(false);
   const [addMcpOpen, setAddMcpOpen] = useState(false);
+  const [skillsQuery, setSkillsQuery] = useState('');
+  const [mcpQuery, setMcpQuery] = useState('');
 
   const skillNames = loadedSkills ?? conversationContext?.loadedSkills ?? [];
   const mcpStatuses = buildLoadedMcpStatuses(
@@ -144,8 +147,29 @@ const FileAttachButton: React.FC<FileAttachButtonProps> = ({
   const isDesktop = isElectronDesktop();
   const hasSkills = skillNames.length > 0;
   const hasMcpServers = mcpStatuses.length > 0;
-  const hasAvailableSkills = availableSkills.some((skill) => !selectedSkills.includes(skill.name));
-  const hasAvailableMcpServers = availableMcpServers.some((server) => !selectedMcpServerIds.includes(server.id));
+  // Keep the add rows visible even when every catalog item is already in the
+  // conversation. Selected entries are disabled in the submenu; hiding the
+  // row made it look as if MCP/Skills were unsupported on that session.
+  const hasAvailableSkills = availableSkills.length > 0;
+  const hasAvailableMcpServers = availableMcpServers.length > 0;
+  const normalizedSkillsQuery = skillsQuery.trim().toLowerCase();
+  const normalizedMcpQuery = mcpQuery.trim().toLowerCase();
+  const filteredAvailableSkills = useMemo(
+    () =>
+      availableSkills.filter((skill) => {
+        if (!normalizedSkillsQuery) return true;
+        return `${skill.name} ${skill.description}`.toLowerCase().includes(normalizedSkillsQuery);
+      }),
+    [availableSkills, normalizedSkillsQuery]
+  );
+  const filteredAvailableMcpServers = useMemo(
+    () =>
+      availableMcpServers.filter((server) => {
+        if (!normalizedMcpQuery) return true;
+        return `${server.name} ${server.description ?? ''}`.toLowerCase().includes(normalizedMcpQuery);
+      }),
+    [availableMcpServers, normalizedMcpQuery]
+  );
   const plusIcon = <Plus theme='outline' size='14' strokeWidth={2} fill={iconColors.primary} />;
 
   if (isDesktop && !hasSkills && !hasMcpServers && !hasAvailableSkills && !hasAvailableMcpServers) {
@@ -243,48 +267,94 @@ const FileAttachButton: React.FC<FileAttachButtonProps> = ({
   );
 
   const addSkillsPanel = (
-    <div style={{ ...scrollablePanelStyle, minWidth: 220 }} onClick={(e) => e.stopPropagation()}>
-      {availableSkills.map((skill) => {
-        const selected = selectedSkills.includes(skill.name);
-        return (
-          <MenuItem
-            key={skill.name}
-            icon={<Lightning theme='outline' size={15} strokeWidth={2.5} />}
-            label={skill.name}
-            description={skill.description}
-            disabled={selected}
-            onClick={() => {
-              void addSkill(skill.name)
-                .then(() => Message.success(t('settings.skillAdded', { name: skill.name })))
-                .catch(() => Message.error(t('agent.config.failed')));
-            }}
-            className='mx-6px'
-          />
-        );
-      })}
+    <div
+      style={{
+        ...scrollablePanelStyle,
+        width: 'min(420px, calc(100vw - 32px))',
+        minWidth: 280,
+        maxWidth: 'calc(100vw - 32px)',
+        boxSizing: 'border-box',
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className='px-8px pb-6px'>
+        <AionInlineSearchInput
+          value={skillsQuery}
+          onChange={setSkillsQuery}
+          placeholder={t('settings.skillsHub.searchPlaceholder', { defaultValue: 'Search skills...' })}
+          data-testid='conversation-skill-search'
+        />
+      </div>
+      {filteredAvailableSkills.length === 0 ? (
+        <div className='px-12px py-12px text-12px text-t-secondary'>
+          {t('settings.skillsHub.noSearchResults', { defaultValue: 'No matching skills.' })}
+        </div>
+      ) : (
+        filteredAvailableSkills.map((skill) => {
+          const selected = selectedSkills.includes(skill.name);
+          return (
+            <MenuItem
+              key={skill.name}
+              icon={<Lightning theme='outline' size={15} strokeWidth={2.5} />}
+              label={skill.name}
+              description={skill.description}
+              disabled={selected}
+              onClick={() => {
+                void addSkill(skill.name)
+                  .then(() => Message.success(t('settings.skillAdded', { name: skill.name })))
+                  .catch(() => Message.error(t('agent.config.failed')));
+              }}
+              className='mx-6px'
+            />
+          );
+        })
+      )}
     </div>
   );
 
   const addMcpPanel = (
-    <div style={{ ...scrollablePanelStyle, minWidth: 220 }} onClick={(e) => e.stopPropagation()}>
-      {availableMcpServers.map((server) => {
-        const selected = selectedMcpServerIds.includes(server.id);
-        return (
-          <MenuItem
-            key={server.id}
-            icon={<Shield theme='outline' size={15} strokeWidth={2.5} />}
-            label={server.name}
-            description={server.description ?? undefined}
-            disabled={selected}
-            onClick={() => {
-              void addMcpServer(server.id)
-                .then(() => Message.success(t('common.added', { defaultValue: 'Added' })))
-                .catch(() => Message.error(t('agent.config.failed')));
-            }}
-            className='mx-6px'
-          />
-        );
-      })}
+    <div
+      style={{
+        ...scrollablePanelStyle,
+        width: 'min(420px, calc(100vw - 32px))',
+        minWidth: 280,
+        maxWidth: 'calc(100vw - 32px)',
+        boxSizing: 'border-box',
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className='px-8px pb-6px'>
+        <AionInlineSearchInput
+          value={mcpQuery}
+          onChange={setMcpQuery}
+          placeholder={t('mcp.searchServers', { defaultValue: 'Search servers...' })}
+          data-testid='conversation-mcp-search'
+        />
+      </div>
+      {filteredAvailableMcpServers.length === 0 ? (
+        <div className='px-12px py-12px text-12px text-t-secondary'>
+          {t('mcp.noServersFound', { defaultValue: 'No servers found matching your criteria' })}
+        </div>
+      ) : (
+        filteredAvailableMcpServers.map((server) => {
+          const selected = selectedMcpServerIds.includes(server.id);
+          return (
+            <MenuItem
+              key={server.id}
+              icon={<Shield theme='outline' size={15} strokeWidth={2.5} />}
+              label={server.name}
+              description={server.description ?? undefined}
+              disabled={selected}
+              onClick={() => {
+                void addMcpServer(server.id)
+                  .then(() => Message.success(t('common.added', { defaultValue: 'Added' })))
+                  .catch(() => Message.error(t('agent.config.failed')));
+              }}
+              className='mx-6px'
+            />
+          );
+        })
+      )}
     </div>
   );
 
