@@ -39,7 +39,7 @@ on:
         description: 'AionCore repository owner/name for aioncore_run_id artifacts'
         required: false
         type: string
-        default: 'iOfficeAI/AionCore'
+        default: 'CottChen/AionCore'
       promote_run_id:
         description: 'Optional completed Manual Build run id to promote instead of building'
         required: false
