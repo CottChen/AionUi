@@ -429,7 +429,16 @@ export function buildRenameRequest(dialog: RenameRequest, rawName: string): FsOp
  */
 export function buildCreateFileRequest(peId: string, parentDir: string, rawName: string): FsOpRequest | null {
   const name = rawName.trim();
-  if (!name || name === '.' || name === '..' || /[/\\\u0000]/.test(name)) return null;
+  if (
+    !name ||
+    name === '.' ||
+    name === '..' ||
+    name.includes('/') ||
+    name.includes('\\') ||
+    name.includes(String.fromCharCode(0))
+  ) {
+    return null;
+  }
   return {
     method: 'fs/createFile',
     params: { file: { pe_id: peId, relative_path: joinRel(parentDir, name) } },
