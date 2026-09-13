@@ -297,6 +297,18 @@ export function useAcpConfigOptions({
         }
         replaceSnapshot(response.config_options);
         return response.config_options;
+      } catch (error) {
+        // A failed runtime switch must not leave the optimistic/stale snapshot
+        // selected in the shared cache. Direct Codex can reject a model after
+        // accepting the JSON-RPC write, so re-read the backend's observed value
+        // before surfacing the error to the picker.
+        try {
+          const recovered = await fetchConfigOptionsOnce(key, loadConfigOptions, true);
+          if (recovered) replaceSnapshot(recovered);
+        } catch {
+          // Preserve the original switch error; a recovery read is best-effort.
+        }
+        throw error;
       } finally {
         setConversationSetStatus(conversation_id, { state: 'idle' });
       }
