@@ -123,10 +123,19 @@ describe('FileAttachButton WebUI capability picker', () => {
     expect(existingSkill).toBeTruthy();
     expect(existingMcp).toBeTruthy();
 
+    expect(view.getByText('new-skill')).toBeInTheDocument();
+    expect(view.getByText('New MCP')).toBeInTheDocument();
+
     fireEvent.click(existingSkill!);
     fireEvent.click(existingMcp!);
 
     expect(mocks.addSkill).not.toHaveBeenCalled();
     expect(mocks.addMcpServer).not.toHaveBeenCalled();
+
+    fireEvent.click(view.getByText('new-skill'));
+    fireEvent.click(view.getByText('New MCP'));
+
+    expect(mocks.addSkill).toHaveBeenCalledWith('new-skill');
+    expect(mocks.addMcpServer).toHaveBeenCalledWith('new-mcp');
   });
 });

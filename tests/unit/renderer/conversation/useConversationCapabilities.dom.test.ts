@@ -8,9 +8,10 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useConversationCapabilities } from '@/renderer/hooks/chat/useConversationCapabilities';
 
-const { listSkillsMock, listMcpMock, updateCapabilitiesMock } = vi.hoisted(() => ({
+const { listSkillsMock, listMcpMock, listExtensionMcpMock, updateCapabilitiesMock } = vi.hoisted(() => ({
   listSkillsMock: vi.fn(),
   listMcpMock: vi.fn(),
+  listExtensionMcpMock: vi.fn(),
   updateCapabilitiesMock: vi.fn(),
 }));
 
@@ -18,6 +19,7 @@ vi.mock('@/common', () => ({
   ipcBridge: {
     fs: { listAvailableSkills: { invoke: listSkillsMock } },
     mcpService: { listServers: { invoke: listMcpMock } },
+    extensions: { getMcpServers: { invoke: listExtensionMcpMock } },
     conversation: { updateCapabilities: { invoke: updateCapabilitiesMock } },
   },
 }));
@@ -32,6 +34,14 @@ describe('useConversationCapabilities', () => {
     listMcpMock.mockResolvedValue([
       { id: 'docs', name: 'Docs', builtin: false },
       { id: 'builtin', name: 'Builtin', builtin: true },
+    ]);
+    listExtensionMcpMock.mockResolvedValue([
+      {
+        id: 'extension-docs',
+        name: 'Extension Docs',
+        description: 'Provided by an extension',
+        transport: { type: 'http', url: 'https://example.test/mcp' },
+      },
     ]);
     updateCapabilitiesMock.mockResolvedValue({ id: 'conv-1' });
   });
@@ -48,8 +58,20 @@ describe('useConversationCapabilities', () => {
 
     await waitFor(() => expect(result.current.availableSkills).toHaveLength(2));
 
-    expect(result.current.availableMcpServers.map((server) => server.id)).toEqual(['docs']);
+    expect(result.current.availableMcpServers.map((server) => server.id)).toEqual(['docs', 'extension-docs']);
     expect(result.current.selectedSkills).toEqual(['review']);
+  });
+
+  it('includes extension MCP servers in the conversation catalog', async () => {
+    const { result } = renderHook(() =>
+      useConversationCapabilities({
+        conversationId: 'conv-1',
+        enabled: true,
+      })
+    );
+
+    await waitFor(() => expect(result.current.availableMcpServers).toHaveLength(2));
+    expect(result.current.availableMcpServers.map((server) => server.id)).toEqual(['docs', 'extension-docs']);
   });
 
   it('resolves legacy MCP names to current server ids before adding another server', async () => {

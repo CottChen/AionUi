@@ -169,9 +169,14 @@ const FileAttachButton: React.FC<FileAttachButtonProps> = ({
     minWidth: 220,
     zIndex: 1050,
   };
+  const scrollablePanelStyle: React.CSSProperties = {
+    ...cardStyle,
+    maxHeight: 'min(60vh, 480px)',
+    overflowY: 'auto',
+  };
 
   const skillsPanel = (
-    <div style={{ ...cardStyle, minWidth: 180 }} onClick={(e) => e.stopPropagation()}>
+    <div style={{ ...scrollablePanelStyle, minWidth: 180 }} onClick={(e) => e.stopPropagation()}>
       {skillNames.map((name) => (
         <MenuItem
           key={name}
@@ -187,7 +192,7 @@ const FileAttachButton: React.FC<FileAttachButtonProps> = ({
   const mcpPanel = (
     <div
       style={{
-        ...cardStyle,
+        ...scrollablePanelStyle,
         minWidth: 220,
         width: 'min(320px, calc(100vw - 96px))',
         maxWidth: 320,
@@ -238,7 +243,7 @@ const FileAttachButton: React.FC<FileAttachButtonProps> = ({
   );
 
   const addSkillsPanel = (
-    <div style={{ ...cardStyle, minWidth: 220 }} onClick={(e) => e.stopPropagation()}>
+    <div style={{ ...scrollablePanelStyle, minWidth: 220 }} onClick={(e) => e.stopPropagation()}>
       {availableSkills.map((skill) => {
         const selected = selectedSkills.includes(skill.name);
         return (
@@ -261,7 +266,7 @@ const FileAttachButton: React.FC<FileAttachButtonProps> = ({
   );
 
   const addMcpPanel = (
-    <div style={{ ...cardStyle, minWidth: 220 }} onClick={(e) => e.stopPropagation()}>
+    <div style={{ ...scrollablePanelStyle, minWidth: 220 }} onClick={(e) => e.stopPropagation()}>
       {availableMcpServers.map((server) => {
         const selected = selectedMcpServerIds.includes(server.id);
         return (
