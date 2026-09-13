@@ -5,7 +5,8 @@
  */
 
 import { Left, Right } from '@icon-park/react';
-import React, { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import AionInlineSearchInput from '@/renderer/components/base/AionInlineSearchInput';
+import React, { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import styles from './MobileActionSheet.module.css';
@@ -16,6 +17,7 @@ const TRANSITION_MS = 260;
 const MobileActionSheet: React.FC<MobileActionSheetProps> = ({ open, onClose, title, entries }) => {
   const { t } = useTranslation();
   const [activeSubKey, setActiveSubKey] = useState<string | null>(null);
+  const [subQuery, setSubQuery] = useState('');
   // Sub pane stays mounted briefly after deactivation so its slide-out animation
   // can play. `subPhase` drives the animation: 'enter' positions the sub pane
   // off-screen (right) before the next frame flips to 'shown', so the CSS
@@ -62,6 +64,10 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({ open, onClose, ti
   }, [open, mounted]);
 
   useEffect(() => {
+    setSubQuery('');
+  }, [activeSubKey]);
+
+  useEffect(() => {
     if (activeSubKey) {
       setRenderedSubKey(activeSubKey);
       setSubPhase('enter');
@@ -93,6 +99,19 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({ open, onClose, ti
   const activeSub: MobileActionSheetSubMenu | undefined = activeEntry?.submenu;
   const renderedSubEntry = renderedSubKey ? entries.find((e) => e.key === renderedSubKey) : null;
   const renderedSub: MobileActionSheetSubMenu | undefined = renderedSubEntry?.submenu;
+  const filteredSubOptions = useMemo(() => {
+    if (!renderedSub) return [];
+    const keyword = subQuery.trim().toLowerCase();
+    if (!keyword) return renderedSub.options;
+    return renderedSub.options.filter((option) => {
+      const label = typeof option.label === 'string' || typeof option.label === 'number' ? String(option.label) : '';
+      const description =
+        typeof option.description === 'string' || typeof option.description === 'number'
+          ? String(option.description)
+          : '';
+      return `${label} ${description}`.toLowerCase().includes(keyword);
+    });
+  }, [renderedSub, subQuery]);
 
   if (!mounted) {
     return null;
@@ -188,11 +207,21 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({ open, onClose, ti
                 </button>
                 <div className={styles.subtitle}>{renderedSub.title}</div>
               </div>
+              {renderedSub.searchable ? (
+                <div className={styles.search}>
+                  <AionInlineSearchInput
+                    value={subQuery}
+                    onChange={setSubQuery}
+                    placeholder={renderedSub.searchPlaceholder}
+                    data-testid={renderedSub.searchTestId}
+                  />
+                </div>
+              ) : null}
               <div className={styles.list}>
-                {renderedSub.options.length === 0 ? (
+                {renderedSub.options.length === 0 || filteredSubOptions.length === 0 ? (
                   <div className={styles.empty}>{renderedSub.emptyText}</div>
                 ) : (
-                  renderedSub.options.map((option) => {
+                  filteredSubOptions.map((option) => {
                     const showRadio = renderedSub.multiSelect !== true && renderedSub.selectable !== false;
                     const showCheckbox = renderedSub.multiSelect === true;
                     return (

@@ -5,10 +5,10 @@
  */
 
 import type { IConversationMcpStatus, IConversationMcpStatusKind } from '@/common/config/storage';
-import { ipcBridge } from '@/common';
 import { Button, Message, Trigger } from '@arco-design/web-react';
 import { FolderOpen, Lightning, Paperclip, Plus, Right, Shield } from '@icon-park/react';
 import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
+import { useConversationCapabilities } from '@/renderer/hooks/chat/useConversationCapabilities';
 import { iconColors } from '@/renderer/styles/colors';
 import { isElectronDesktop } from '@/renderer/utils/platform';
 import { FileService } from '@/renderer/services/FileService';
@@ -17,7 +17,6 @@ import { emitter } from '@/renderer/utils/emitter';
 import React, { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import useSWR from 'swr';
 
 interface FileAttachButtonProps {
   openFileSelector: () => void;
@@ -86,17 +85,25 @@ const FileAttachButton: React.FC<FileAttachButtonProps> = ({
   const [open, setOpen] = useState(false);
   const [skillsOpen, setSkillsOpen] = useState(false);
   const [mcpOpen, setMcpOpen] = useState(false);
+  const [addSkillsOpen, setAddSkillsOpen] = useState(false);
+  const [addMcpOpen, setAddMcpOpen] = useState(false);
 
   const skillNames = loadedSkills ?? conversationContext?.loadedSkills ?? [];
   const mcpStatuses = buildLoadedMcpStatuses(
     loadedMcpStatuses ?? conversationContext?.loadedMcpStatuses,
     conversationContext?.loadedMcpServers
   );
-  const { data: skillIndex } = useSWR(skillNames.length > 0 ? 'skills-index' : null, () =>
-    ipcBridge.fs.listAvailableSkills.invoke()
-  );
-  const descriptionByName = new Map((skillIndex ?? []).map((s) => [s.name, s.description]));
-
+  const { availableSkills, availableMcpServers, selectedSkills, selectedMcpServerIds, addSkill, addMcpServer } =
+    useConversationCapabilities({
+      conversationId: conversationContext?.conversation_id ?? '',
+      // Mobile renders this component as a hidden tool slot and exposes the
+      // capability picker through MobileActionSheet instead. Avoid fetching
+      // the same catalogs twice on mobile.
+      enabled: isElectronDesktop() && Boolean(conversationContext?.conversation_id),
+      loadedSkills: skillNames,
+      loadedMcpServerIds: mcpStatuses.map((item) => item.id),
+      loadedMcpServerNames: mcpStatuses.map((item) => item.name),
+    });
   const handleSkillClick = useCallback((name: string) => {
     setOpen(false);
     emitter.emit('sendbox.fill', `/${name} `);
@@ -130,9 +137,11 @@ const FileAttachButton: React.FC<FileAttachButtonProps> = ({
   const isDesktop = isElectronDesktop();
   const hasSkills = skillNames.length > 0;
   const hasMcpServers = mcpStatuses.length > 0;
+  const hasAvailableSkills = availableSkills.some((skill) => !selectedSkills.includes(skill.name));
+  const hasAvailableMcpServers = availableMcpServers.some((server) => !selectedMcpServerIds.includes(server.id));
   const plusIcon = <Plus theme='outline' size='14' strokeWidth={2} fill={iconColors.primary} />;
 
-  if (isDesktop && !hasSkills && !hasMcpServers) {
+  if (isDesktop && !hasSkills && !hasMcpServers && !hasAvailableSkills && !hasAvailableMcpServers) {
     return (
       <Button
         type='secondary'
@@ -221,6 +230,48 @@ const FileAttachButton: React.FC<FileAttachButtonProps> = ({
     </div>
   );
 
+  const addSkillsPanel = (
+    <div style={{ ...cardStyle, minWidth: 220 }} onClick={(e) => e.stopPropagation()}>
+      {availableSkills
+        .filter((skill) => !selectedSkills.includes(skill.name))
+        .map((skill) => (
+          <MenuItem
+            key={skill.name}
+            icon={<Lightning theme='outline' size={15} strokeWidth={2.5} />}
+            label={skill.name}
+            description={skill.description}
+            onClick={() => {
+              void addSkill(skill.name)
+                .then(() => Message.success(t('settings.skillAdded', { name: skill.name })))
+                .catch(() => Message.error(t('agent.config.failed')));
+            }}
+            className='mx-6px'
+          />
+        ))}
+    </div>
+  );
+
+  const addMcpPanel = (
+    <div style={{ ...cardStyle, minWidth: 220 }} onClick={(e) => e.stopPropagation()}>
+      {availableMcpServers
+        .filter((server) => !selectedMcpServerIds.includes(server.id))
+        .map((server) => (
+          <MenuItem
+            key={server.id}
+            icon={<Shield theme='outline' size={15} strokeWidth={2.5} />}
+            label={server.name}
+            description={server.description ?? undefined}
+            onClick={() => {
+              void addMcpServer(server.id)
+                .then(() => Message.success(t('common.added', { defaultValue: 'Added' })))
+                .catch(() => Message.error(t('agent.config.failed')));
+            }}
+            className='mx-6px'
+          />
+        ))}
+    </div>
+  );
+
   const menu = (
     <div style={cardStyle} onClick={(e) => e.stopPropagation()}>
       {/* Loaded items stay above file actions so the session snapshot is visible */}
@@ -262,6 +313,54 @@ const FileAttachButton: React.FC<FileAttachButtonProps> = ({
                   <MenuItem
                     icon={<Lightning theme='outline' size={15} strokeWidth={2.5} />}
                     label={`${t('common.selectedSkills', { defaultValue: 'Selected skills' })} · ${skillNames.length}`}
+                    suffix={<Right theme='outline' size={12} strokeWidth={3} style={{ color: '#c9cdd4' }} />}
+                  />
+                </div>
+              </Trigger>
+            </div>
+          )}
+          <div style={{ margin: '4px 12px', height: 1, backgroundColor: 'var(--color-border-1, #e5e6eb)' }} />
+        </>
+      )}
+
+      {(hasAvailableMcpServers || hasAvailableSkills) && (
+        <>
+          {hasAvailableMcpServers && (
+            <div className='px-6px'>
+              <Trigger
+                popup={() => addMcpPanel}
+                trigger='hover'
+                position='right'
+                popupVisible={addMcpOpen}
+                onVisibleChange={setAddMcpOpen}
+                mouseEnterDelay={100}
+                mouseLeaveDelay={150}
+              >
+                <div>
+                  <MenuItem
+                    icon={<Shield theme='outline' size={15} strokeWidth={2.5} />}
+                    label={t('mcp.addServer', { defaultValue: 'Add MCP server' })}
+                    suffix={<Right theme='outline' size={12} strokeWidth={3} style={{ color: '#c9cdd4' }} />}
+                  />
+                </div>
+              </Trigger>
+            </div>
+          )}
+          {hasAvailableSkills && (
+            <div className='px-6px'>
+              <Trigger
+                popup={() => addSkillsPanel}
+                trigger='hover'
+                position='right'
+                popupVisible={addSkillsOpen}
+                onVisibleChange={setAddSkillsOpen}
+                mouseEnterDelay={100}
+                mouseLeaveDelay={150}
+              >
+                <div>
+                  <MenuItem
+                    icon={<Lightning theme='outline' size={15} strokeWidth={2.5} />}
+                    label={t('settings.addSkills', { defaultValue: 'Add Skills' })}
                     suffix={<Right theme='outline' size={12} strokeWidth={3} style={{ color: '#c9cdd4' }} />}
                   />
                 </div>

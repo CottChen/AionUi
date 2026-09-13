@@ -18,6 +18,10 @@ export interface MobileActionSheetSubMenu {
   options: MobileActionSheetOption[];
   onSelect: (key: string) => void;
   emptyText?: ReactNode;
+  /** Show a pinned client-side search field above the option list. */
+  searchable?: boolean;
+  searchPlaceholder?: string;
+  searchTestId?: string;
   /** When false, options behave as plain action rows (no radio). Default: true. */
   selectable?: boolean;
   /**

@@ -20,6 +20,7 @@ import FilePreview from '@/renderer/components/media/FilePreview';
 import HorizontalFileList from '@/renderer/components/media/HorizontalFileList';
 import { classifyConfigSetError, useAcpConfigOptions } from '@/renderer/hooks/agent/useAcpConfigOptions';
 import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
+import { useConversationCapabilities } from '@/renderer/hooks/chat/useConversationCapabilities';
 import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { useAutoTitle } from '@/renderer/hooks/chat/useAutoTitle';
 import { getSendBoxDraftHook, type FileOrFolderItem } from '@/renderer/hooks/chat/useSendBoxDraft';
@@ -136,6 +137,14 @@ const AionrsSendBox: React.FC<{
       name,
       status: 'loaded',
     }));
+  const { availableSkills, availableMcpServers, selectedSkills, selectedMcpServerIds, addSkill, addMcpServer } =
+    useConversationCapabilities({
+      conversationId: conversation_id,
+      enabled: isMobile,
+      loadedSkills,
+      loadedMcpServerIds: loadedMcpStatuses.map((item) => item.id),
+      loadedMcpServerNames: loadedMcpStatuses.map((item) => item.name),
+    });
   const { t } = useTranslation();
   const { checkAndUpdateTitle } = useAutoTitle();
   const { current_model } = modelSelection;
@@ -505,6 +514,9 @@ const AionrsSendBox: React.FC<{
         submenu: {
           title: t('common.model', { defaultValue: 'Model' }),
           options: modelOptions,
+          searchable: true,
+          searchPlaceholder: t('agent.model.searchPlaceholder', { defaultValue: 'Search models' }),
+          searchTestId: 'mobile-runtime-selector-model-search',
           onSelect: handleSheetModelSelect,
           emptyText: t('conversation.welcome.selectModel'),
         },
@@ -571,6 +583,36 @@ const AionrsSendBox: React.FC<{
       });
     }
 
+    if (availableSkills.length > 0) {
+      entries.push({
+        key: 'add-skills',
+        icon: <MagicHat theme='outline' size='16' />,
+        label: t('settings.addSkills', { defaultValue: 'Add Skills' }),
+        variant: 'muted',
+        meta: t('common.selectedCount', {
+          count: selectedSkills.length,
+          defaultValue: `${selectedSkills.length} selected`,
+        }),
+        submenu: {
+          title: t('settings.addSkills', { defaultValue: 'Add Skills' }),
+          multiSelect: true,
+          searchable: true,
+          searchPlaceholder: t('settings.skillsHub.searchPlaceholder', { defaultValue: 'Search skills...' }),
+          searchTestId: 'mobile-conversation-skill-search',
+          emptyText: t('settings.skillsHub.noSearchResults', { defaultValue: 'No matching skills.' }),
+          options: availableSkills.map((skill) => ({
+            key: skill.name,
+            label: skill.name,
+            description: skill.description || undefined,
+            active: selectedSkills.includes(skill.name),
+          })),
+          onSelect: (name) => {
+            void addSkill(name).catch(() => Message.error(t('agent.config.failed')));
+          },
+        },
+      });
+    }
+
     if (loadedMcpStatuses.length > 0) {
       const mcpOptions: MobileActionSheetOption[] = loadedMcpStatuses.map((item) => ({
         key: item.id,
@@ -596,9 +638,43 @@ const AionrsSendBox: React.FC<{
       });
     }
 
+    if (availableMcpServers.length > 0) {
+      entries.push({
+        key: 'add-mcp',
+        icon: <Shield theme='outline' size='16' />,
+        label: t('mcp.label'),
+        variant: 'muted',
+        meta: t('common.selectedCount', {
+          count: selectedMcpServerIds.length,
+          defaultValue: `${selectedMcpServerIds.length} selected`,
+        }),
+        submenu: {
+          title: t('mcp.label'),
+          multiSelect: true,
+          searchable: true,
+          searchPlaceholder: t('mcp.searchServers', { defaultValue: 'Search servers...' }),
+          searchTestId: 'mobile-conversation-mcp-search',
+          emptyText: t('mcp.noServersFound', { defaultValue: 'No servers found matching your criteria' }),
+          options: availableMcpServers.map((server) => ({
+            key: server.id,
+            label: server.name,
+            description: server.description || undefined,
+            active: selectedMcpServerIds.includes(server.id),
+          })),
+          onSelect: (id) => {
+            void addMcpServer(id).catch(() => Message.error(t('agent.config.failed')));
+          },
+        },
+      });
+    }
+
     return entries;
   }, [
     attachEntries,
+    addMcpServer,
+    addSkill,
+    availableMcpServers,
+    availableSkills,
     currentMode,
     dynamicModes,
     handleSheetModeChange,
@@ -610,6 +686,8 @@ const AionrsSendBox: React.FC<{
     runtimeConfig,
     runtimeMode,
     runtimeThoughtLevel,
+    selectedMcpServerIds,
+    selectedSkills,
     setContent,
     t,
   ]);

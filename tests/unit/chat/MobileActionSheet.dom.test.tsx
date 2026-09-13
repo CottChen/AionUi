@@ -19,6 +19,7 @@ vi.mock('react-i18next', () => ({
 vi.mock('@icon-park/react', () => ({
   Left: () => <span aria-hidden='true'>‹</span>,
   Right: () => <span aria-hidden='true'>›</span>,
+  Search: () => <span aria-hidden='true'>⌕</span>,
 }));
 
 describe('MobileActionSheet', () => {
@@ -84,6 +85,40 @@ describe('MobileActionSheet', () => {
     expect(onSelect).toHaveBeenNthCalledWith(1, 's2');
     expect(onSelect).toHaveBeenNthCalledWith(2, 's3');
     expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('filters searchable submenu options without closing the sheet', () => {
+    const onSelect = vi.fn();
+    render(
+      <MobileActionSheet
+        open
+        onClose={vi.fn()}
+        entries={[
+          {
+            key: 'model',
+            label: 'Model',
+            submenu: {
+              title: 'Model',
+              searchable: true,
+              searchPlaceholder: 'Search models',
+              searchTestId: 'model-search',
+              options: [
+                { key: 'codex', label: 'GPT-5.5 Codex' },
+                { key: 'claude', label: 'Claude Opus' },
+              ],
+              onSelect,
+            },
+          },
+        ]}
+      />
+    );
+
+    fireEvent.click(screen.getByTestId('mobile-action-sheet-model'));
+    fireEvent.change(screen.getByTestId('model-search'), { target: { value: 'claude' } });
+
+    expect(screen.getByText('Claude Opus')).toBeInTheDocument();
+    expect(screen.queryByText('GPT-5.5 Codex')).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
   it('runs an action entry and closes the sheet', () => {

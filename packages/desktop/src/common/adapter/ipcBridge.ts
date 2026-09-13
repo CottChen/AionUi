@@ -254,6 +254,16 @@ export const conversation = {
       };
     }
   ),
+  updateCapabilities: withResponseMap(
+    httpPatch<TChatConversation, { id: string; skills_to_add?: string[]; mcp_server_ids_to_add?: string[] }>(
+      (p) => `/api/conversations/${p.id}/capabilities`,
+      (p) => ({
+        skills_to_add: p.skills_to_add,
+        mcp_server_ids_to_add: p.mcp_server_ids_to_add,
+      })
+    ),
+    fromApiConversation
+  ),
   transferOwner: httpPost<void, { id: string; targetUserId: string }>(
     (p) => `/api/conversations/${p.id}/owner`,
     (p) => ({ target_user_id: p.targetUserId })
