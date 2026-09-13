@@ -11,6 +11,8 @@ export interface MobileActionSheetOption {
   label: ReactNode;
   description?: ReactNode;
   active?: boolean;
+  /** Prevents selecting an option that is already persisted in an add-only list. */
+  disabled?: boolean;
 }
 
 export interface MobileActionSheetSubMenu {

@@ -9,6 +9,7 @@ import { Button, Message, Trigger } from '@arco-design/web-react';
 import { FolderOpen, Lightning, Paperclip, Plus, Right, Shield } from '@icon-park/react';
 import { useConversationContextSafe } from '@/renderer/hooks/context/ConversationContext';
 import { useConversationCapabilities } from '@/renderer/hooks/chat/useConversationCapabilities';
+import { useLayoutContext } from '@/renderer/hooks/context/LayoutContext';
 import { iconColors } from '@/renderer/styles/colors';
 import { isElectronDesktop } from '@/renderer/utils/platform';
 import { FileService } from '@/renderer/services/FileService';
@@ -33,11 +34,15 @@ const MenuItem: React.FC<{
   onClick?: () => void;
   className?: string;
   title?: string;
-}> = ({ icon, label, description, suffix, onClick, className = '', title }) => (
+  disabled?: boolean;
+}> = ({ icon, label, description, suffix, onClick, className = '', title, disabled }) => (
   <div
-    className={`flex items-center gap-10px px-12px py-9px rounded-8px cursor-pointer hover:bg-fill-2 transition-colors text-14px text-t-primary select-none ${className}`}
-    onClick={onClick}
+    className={`flex items-center gap-10px px-12px py-9px rounded-8px transition-colors text-14px text-t-primary select-none ${
+      disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-fill-2'
+    } ${className}`}
+    onClick={disabled ? undefined : onClick}
     title={title}
+    aria-disabled={disabled || undefined}
   >
     <span className='flex-shrink-0 inline-flex items-center justify-center color-#86909c w-18px leading-none'>
       {icon}
@@ -78,6 +83,7 @@ const FileAttachButton: React.FC<FileAttachButtonProps> = ({
   loadedMcpStatuses,
 }) => {
   const conversationContext = useConversationContextSafe();
+  const layout = useLayoutContext();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -96,10 +102,11 @@ const FileAttachButton: React.FC<FileAttachButtonProps> = ({
   const { availableSkills, availableMcpServers, selectedSkills, selectedMcpServerIds, addSkill, addMcpServer } =
     useConversationCapabilities({
       conversationId: conversationContext?.conversation_id ?? '',
-      // Mobile renders this component as a hidden tool slot and exposes the
-      // capability picker through MobileActionSheet instead. Avoid fetching
-      // the same catalogs twice on mobile.
-      enabled: isElectronDesktop() && Boolean(conversationContext?.conversation_id),
+      // The WebUI browser and Electron desktop share the same capability
+      // picker. Only the mobile send box owns its visible picker; this
+      // component remains a hidden slot there, but still needs the catalog
+      // available when the WebUI desktop layout renders it.
+      enabled: Boolean(conversationContext?.conversation_id) && !layout?.isMobile,
       loadedSkills: skillNames,
       loadedMcpServerIds: mcpStatuses.map((item) => item.id),
       loadedMcpServerNames: mcpStatuses.map((item) => item.name),
@@ -232,14 +239,15 @@ const FileAttachButton: React.FC<FileAttachButtonProps> = ({
 
   const addSkillsPanel = (
     <div style={{ ...cardStyle, minWidth: 220 }} onClick={(e) => e.stopPropagation()}>
-      {availableSkills
-        .filter((skill) => !selectedSkills.includes(skill.name))
-        .map((skill) => (
+      {availableSkills.map((skill) => {
+        const selected = selectedSkills.includes(skill.name);
+        return (
           <MenuItem
             key={skill.name}
             icon={<Lightning theme='outline' size={15} strokeWidth={2.5} />}
             label={skill.name}
             description={skill.description}
+            disabled={selected}
             onClick={() => {
               void addSkill(skill.name)
                 .then(() => Message.success(t('settings.skillAdded', { name: skill.name })))
@@ -247,20 +255,22 @@ const FileAttachButton: React.FC<FileAttachButtonProps> = ({
             }}
             className='mx-6px'
           />
-        ))}
+        );
+      })}
     </div>
   );
 
   const addMcpPanel = (
     <div style={{ ...cardStyle, minWidth: 220 }} onClick={(e) => e.stopPropagation()}>
-      {availableMcpServers
-        .filter((server) => !selectedMcpServerIds.includes(server.id))
-        .map((server) => (
+      {availableMcpServers.map((server) => {
+        const selected = selectedMcpServerIds.includes(server.id);
+        return (
           <MenuItem
             key={server.id}
             icon={<Shield theme='outline' size={15} strokeWidth={2.5} />}
             label={server.name}
             description={server.description ?? undefined}
+            disabled={selected}
             onClick={() => {
               void addMcpServer(server.id)
                 .then(() => Message.success(t('common.added', { defaultValue: 'Added' })))
@@ -268,7 +278,8 @@ const FileAttachButton: React.FC<FileAttachButtonProps> = ({
             }}
             className='mx-6px'
           />
-        ))}
+        );
+      })}
     </div>
   );
 

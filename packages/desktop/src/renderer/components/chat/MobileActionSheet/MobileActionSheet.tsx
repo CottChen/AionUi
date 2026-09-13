@@ -129,6 +129,7 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({ open, onClose, ti
 
   const handleSubSelect = (key: string) => {
     if (!activeSub) return;
+    if (activeSub.options.find((option) => option.key === key)?.disabled) return;
     activeSub.onSelect(key);
     // Multi-select (skills / MCP on the home page): toggle and stay so the user
     // can pick several in a row.
@@ -227,9 +228,10 @@ const MobileActionSheet: React.FC<MobileActionSheetProps> = ({ open, onClose, ti
                     return (
                       <div
                         key={option.key}
-                        className={styles.item}
+                        className={`${styles.item} ${option.disabled ? styles.disabled : ''}`}
                         onClick={() => handleSubSelect(option.key)}
                         data-testid={`mobile-action-sheet-option-${option.key}`}
+                        aria-disabled={option.disabled || undefined}
                       >
                         <div className={styles.body}>
                           <div className={styles.label}>{option.label}</div>

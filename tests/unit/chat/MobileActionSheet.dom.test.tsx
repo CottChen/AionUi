@@ -121,6 +121,37 @@ describe('MobileActionSheet', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
+  it('does not select disabled options in an add-only submenu', () => {
+    const onSelect = vi.fn();
+    render(
+      <MobileActionSheet
+        open
+        onClose={vi.fn()}
+        entries={[
+          {
+            key: 'skills',
+            label: 'Skills',
+            submenu: {
+              title: 'Skills',
+              multiSelect: true,
+              options: [
+                { key: 'existing', label: 'Existing skill', active: true, disabled: true },
+                { key: 'new', label: 'New skill' },
+              ],
+              onSelect,
+            },
+          },
+        ]}
+      />
+    );
+
+    fireEvent.click(screen.getByTestId('mobile-action-sheet-skills'));
+    fireEvent.click(screen.getByTestId('mobile-action-sheet-option-existing'));
+
+    expect(screen.getByTestId('mobile-action-sheet-option-existing')).toHaveAttribute('aria-disabled', 'true');
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
   it('runs an action entry and closes the sheet', () => {
     const onClick = vi.fn();
     const onClose = vi.fn();

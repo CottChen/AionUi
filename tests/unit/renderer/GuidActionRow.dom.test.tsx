@@ -11,7 +11,17 @@ import GuidActionRow from '@/renderer/pages/guid/components/GuidActionRow';
 import type { IMcpServer } from '@/common/config/storage';
 import { ipcBridge } from '@/common';
 
-const environment = vi.hoisted(() => ({ isMobile: false, isDesktop: true }));
+const environment = vi.hoisted(() => ({
+  isMobile: false,
+  isDesktop: true,
+  mobileActionSheetEntries: [] as Array<{
+    key: string;
+    submenu?: {
+      searchable?: boolean;
+      options?: Array<{ key: string; disabled?: boolean }>;
+    };
+  }>,
+}));
 
 vi.mock('@/common', () => ({
   ipcBridge: {
@@ -36,15 +46,27 @@ vi.mock('@/renderer/components/agent/AgentModeSelector', () => ({
 }));
 
 vi.mock('@/renderer/components/chat/MobileActionSheet', () => ({
-  default: ({ entries }: { entries: Array<{ key: string; label: string; onClick?: () => void }> }) => (
-    <div data-testid='mobile-action-sheet'>
-      {entries.map((entry) => (
-        <button key={entry.key} type='button' data-testid={entry.key} onClick={entry.onClick}>
-          {entry.label}
-        </button>
-      ))}
-    </div>
-  ),
+  default: ({
+    entries,
+  }: {
+    entries: Array<{
+      key: string;
+      label: string;
+      onClick?: () => void;
+      submenu?: { searchable?: boolean; options?: Array<{ key: string; disabled?: boolean }> };
+    }>;
+  }) => {
+    environment.mobileActionSheetEntries = entries;
+    return (
+      <div data-testid='mobile-action-sheet'>
+        {entries.map((entry) => (
+          <button key={entry.key} type='button' data-testid={entry.key} onClick={entry.onClick}>
+            {entry.label}
+          </button>
+        ))}
+      </div>
+    );
+  },
 }));
 
 vi.mock('@/renderer/services/FileService', () => ({
@@ -197,6 +219,7 @@ describe('GuidActionRow responsive config controls', () => {
     vi.clearAllMocks();
     environment.isMobile = false;
     environment.isDesktop = true;
+    environment.mobileActionSheetEntries = [];
   });
 
   it('moves config controls out of the inline mobile row', () => {
@@ -307,5 +330,44 @@ describe('GuidActionRow skill/MCP submenu search', () => {
     fireEvent.click(screen.getByText('skill-3').closest('[role="menuitem"]')!);
 
     expect(onToggleSkill).toHaveBeenCalledWith('skill-3', false);
+  });
+
+  it('searches mobile model, skill, and MCP pickers while keeping home selections toggleable', () => {
+    environment.isMobile = true;
+    renderActionRow({
+      currentAcpCachedModelInfo: {
+        current_model_id: 'model-1',
+        current_model_label: 'Model 1',
+        available_models: [
+          { id: 'model-1', label: 'Model 1' },
+          { id: 'model-2', label: 'Model 2' },
+        ],
+      },
+      selectedAcpModel: 'model-1',
+      allSkills: [
+        { name: 'already-added', description: '', isAuto: false },
+        { name: 'available', description: '', isAuto: false },
+      ],
+      enabledSkills: ['already-added'],
+      mcpServers: [
+        { id: 'mcp-existing', name: 'Existing MCP' },
+        { id: 'mcp-new', name: 'New MCP' },
+      ] as IMcpServer[],
+      selectedMcpServerIds: ['mcp-existing'],
+    });
+
+    const entries = environment.mobileActionSheetEntries;
+    expect(entries.find((entry) => entry.key === 'model')?.submenu?.searchable).toBe(true);
+    expect(entries.find((entry) => entry.key === 'skills')?.submenu?.searchable).toBe(true);
+    expect(entries.find((entry) => entry.key === 'mcp')?.submenu?.searchable).toBe(true);
+    expect(
+      entries
+        .find((entry) => entry.key === 'skills')
+        ?.submenu?.options?.find((option) => option.key === 'already-added')?.disabled
+    ).toBeUndefined();
+    expect(
+      entries.find((entry) => entry.key === 'mcp')?.submenu?.options?.find((option) => option.key === 'mcp-existing')
+        ?.disabled
+    ).toBeUndefined();
   });
 });

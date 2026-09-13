@@ -269,6 +269,10 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
         submenu: {
           title: t('common.model', { defaultValue: 'Model' }),
           options: modelOptions,
+          searchable: true,
+          searchPlaceholder: t('agent.model.searchPlaceholder', { defaultValue: 'Search models' }),
+          searchTestId: 'mobile-guid-model-search',
+          emptyText: t('agent.model.noResults', { defaultValue: 'No matching models' }),
           onSelect: onModelSelect,
         },
       });
@@ -361,6 +365,10 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
         submenu: {
           title: t('settings.capabilitiesTab.skills'),
           multiSelect: true,
+          searchable: true,
+          searchPlaceholder: t('settings.skillsHub.searchPlaceholder', { defaultValue: 'Search skills...' }),
+          searchTestId: 'mobile-guid-skill-search',
+          emptyText: t('settings.skillsHub.noSearchResults', { defaultValue: 'No matching skills.' }),
           options: allSkills.map((skill) => ({
             key: skill.name,
             label: skill.name,
@@ -389,6 +397,10 @@ const GuidActionRow: React.FC<GuidActionRowProps> = ({
         submenu: {
           title: t('mcp.label'),
           multiSelect: true,
+          searchable: true,
+          searchPlaceholder: t('mcp.searchServers', { defaultValue: 'Search servers...' }),
+          searchTestId: 'mobile-guid-mcp-search',
+          emptyText: t('mcp.noServersFound', { defaultValue: 'No servers found matching your criteria' }),
           options: mcpServers.map((server) => ({
             key: server.id,
             label: server.name,

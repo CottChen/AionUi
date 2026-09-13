@@ -627,6 +627,7 @@ Please check your local CLI tool authentication status`,
             label: skill.name,
             description: skill.description || undefined,
             active: selectedSkills.includes(skill.name),
+            disabled: selectedSkills.includes(skill.name),
           })),
           onSelect: (name) => {
             void addSkill(name).catch(() => Message.error(t('agent.config.failed')));
@@ -682,6 +683,7 @@ Please check your local CLI tool authentication status`,
             label: server.name,
             description: server.description || undefined,
             active: selectedMcpServerIds.includes(server.id),
+            disabled: selectedMcpServerIds.includes(server.id),
           })),
           onSelect: (id) => {
             void addMcpServer(id).catch(() => Message.error(t('agent.config.failed')));
