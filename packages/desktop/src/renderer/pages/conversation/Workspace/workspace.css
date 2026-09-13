@@ -27,6 +27,81 @@
   border: 1px solid var(--bg-3);
 }
 
+/* Compact filter controls below the workspace search field. */
+.chat-workspace .workspace-search-filters {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 6px;
+  max-width: 100%;
+}
+
+.chat-workspace .workspace-search-segment {
+  display: flex;
+  box-sizing: border-box;
+  max-width: 100%;
+  padding: 3px;
+  overflow: hidden;
+  border: 1px solid var(--color-border-2);
+  border-radius: 9px;
+  background-color: var(--color-fill-1);
+}
+
+.chat-workspace .workspace-search-segment .arco-radio-button {
+  flex: 0 0 auto;
+  min-width: 0;
+  margin: 0;
+  border-radius: 6px;
+  color: var(--color-text-2);
+  font-size: 13px;
+  line-height: 26px;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.chat-workspace .workspace-search-segment .arco-radio-button-inner {
+  padding: 0 13px;
+  white-space: nowrap;
+}
+
+.chat-workspace .workspace-search-segment .arco-radio-button::before,
+.chat-workspace .workspace-search-segment .arco-radio-button::after {
+  display: none;
+}
+
+.chat-workspace .workspace-search-segment .arco-radio-button:hover {
+  background-color: var(--color-fill-3);
+  color: var(--color-text-1);
+}
+
+.chat-workspace .workspace-search-segment .arco-radio-button.arco-radio-checked {
+  background-color: var(--color-primary-light-1);
+  color: rgb(var(--primary-6));
+  font-weight: 600;
+}
+
+.chat-workspace .workspace-search-segment .arco-radio-button.arco-radio-disabled {
+  color: var(--color-text-4);
+  cursor: not-allowed;
+}
+
+.chat-workspace .workspace-search-scope .arco-radio-button:last-child {
+  min-width: 0;
+}
+
+.chat-workspace .workspace-search-scope .arco-radio-button:last-child .arco-radio-button-inner {
+  max-width: min(18rem, 45vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-workspace .workspace-search-segment .arco-radio-button:focus-within {
+  outline: 2px solid rgba(var(--primary-6), 0.35);
+  outline-offset: -2px;
+}
+
 /* VSCode-style file tree: chevron switcher + per-type icons, no connector lines */
 .chat-workspace .workspace-tree .workspace-tree-chevron {
   opacity: 0.55;
@@ -57,6 +132,19 @@
 @media (max-width: 767px) {
   .chat-workspace .workspace-toolbar-search {
     padding-bottom: 8px !important;
+  }
+
+  .chat-workspace .workspace-search-filters {
+    width: 100%;
+  }
+
+  .chat-workspace .workspace-search-segment {
+    width: fit-content;
+    max-width: 100%;
+  }
+
+  .chat-workspace .workspace-search-segment .arco-radio-button-inner {
+    padding: 0 12px;
   }
 
   .chat-workspace .workspace-search-input .arco-input-inner-wrapper,

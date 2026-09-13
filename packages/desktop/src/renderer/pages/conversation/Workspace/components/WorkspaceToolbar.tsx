@@ -102,31 +102,33 @@ const WorkspaceToolbar: React.FC<WorkspaceToolbarProps> = ({
               onSearch(value);
             }}
           />
-          <Radio.Group
-            className='workspace-search-segment mt-6px'
-            size='mini'
-            type='button'
-            value={searchMode}
-            onChange={(value) => setSearchMode(value as WorkspaceSearchMode)}
-          >
-            <Radio value='all'>{t('conversation.workspace.searchMode.all')}</Radio>
-            <Radio value='name'>{t('conversation.workspace.searchMode.name')}</Radio>
-            <Radio value='content'>{t('conversation.workspace.searchMode.content')}</Radio>
-          </Radio.Group>
-          <Radio.Group
-            className='workspace-search-segment mt-6px'
-            size='mini'
-            type='button'
-            value={searchScope}
-            onChange={(value) => setSearchScope(value as WorkspaceSearchScope)}
-          >
-            <Radio value='workspace'>{t('conversation.workspace.searchScope.workspace')}</Radio>
-            <Radio value='currentFolder' disabled={!searchFolderLabel}>
-              {searchScope === 'currentFolder' && searchFolderLabel
-                ? t('conversation.workspace.searchScope.selectedFolder', { folder: searchFolderLabel })
-                : t('conversation.workspace.searchScope.currentFolder')}
-            </Radio>
-          </Radio.Group>
+          <div className='workspace-search-filters'>
+            <Radio.Group
+              className='workspace-search-segment workspace-search-mode'
+              size='mini'
+              type='button'
+              value={searchMode}
+              onChange={(value) => setSearchMode(value as WorkspaceSearchMode)}
+            >
+              <Radio value='all'>{t('conversation.workspace.searchMode.all')}</Radio>
+              <Radio value='name'>{t('conversation.workspace.searchMode.name')}</Radio>
+              <Radio value='content'>{t('conversation.workspace.searchMode.content')}</Radio>
+            </Radio.Group>
+            <Radio.Group
+              className='workspace-search-segment workspace-search-scope'
+              size='mini'
+              type='button'
+              value={searchScope}
+              onChange={(value) => setSearchScope(value as WorkspaceSearchScope)}
+            >
+              <Radio value='workspace'>{t('conversation.workspace.searchScope.workspace')}</Radio>
+              <Radio value='currentFolder' disabled={!searchFolderLabel}>
+                {searchScope === 'currentFolder' && searchFolderLabel
+                  ? t('conversation.workspace.searchScope.selectedFolder', { folder: searchFolderLabel })
+                  : t('conversation.workspace.searchScope.currentFolder')}
+              </Radio>
+            </Radio.Group>
+          </div>
           {hasMore && (
             <Button size='mini' loading={searchLoading} onClick={loadMore} className='mt-6px'>
               {t('conversation.workspace.searchContinue')}
