@@ -4,12 +4,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Empty, Input, Spin } from '@arco-design/web-react';
+import { Empty, Input, Message, Spin, Tooltip } from '@arco-design/web-react';
 import { IconSearch } from '@arco-design/web-react/icon';
+import { Copy } from '@icon-park/react';
 import classNames from 'classnames';
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import { copyText } from '@/renderer/utils/ui/clipboard';
 import styles from './ConversationTitleMinimap.module.css';
 import type { ConversationTitleMinimapProps } from './minimapTypes';
 import { HEADER_HEIGHT, PANEL_MIN_WIDTH } from './minimapTypes';
@@ -47,6 +49,19 @@ const ConversationTitleMinimap: React.FC<ConversationTitleMinimapProps> = ({
     handleSearchInputCompositionStart,
     handleSearchInputCompositionEnd,
   } = useMinimapPanel(conversation_id);
+
+  const handleCopyQuestion = useCallback(
+    async (event: React.MouseEvent<HTMLButtonElement>, question: string) => {
+      event.stopPropagation();
+      try {
+        await copyText(question);
+        Message.success(t('common.copySuccess'));
+      } catch {
+        Message.error(t('common.copyFailed'));
+      }
+    },
+    [t]
+  );
 
   const contentNode = useMemo(() => {
     const frameStyle: React.CSSProperties = {
@@ -162,11 +177,12 @@ const ConversationTitleMinimap: React.FC<ConversationTitleMinimapProps> = ({
           >
             <div className='conversation-minimap-list flex flex-col gap-6px'>
               {filteredItems.map((item, idx) => (
-                <button
+                <div
                   key={`${item.index}-${item.messageId || item.msgId || 'unknown'}`}
-                  type='button'
                   data-minimap-item-index={idx}
                   aria-selected={activeResultIndex === idx}
+                  role='button'
+                  tabIndex={0}
                   className={classNames(
                     'conversation-minimap-item w-full text-left px-12px py-10px border-none rounded-10px hover:bg-fill-2 transition-colors cursor-pointer block',
                     isSearchMode && activeResultIndex === idx ? 'bg-fill-2' : 'bg-transparent'
@@ -177,6 +193,12 @@ const ConversationTitleMinimap: React.FC<ConversationTitleMinimapProps> = ({
                   }}
                   onClick={() => {
                     jumpToItem(item);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      jumpToItem(item);
+                    }
                   }}
                 >
                   <div
@@ -189,11 +211,26 @@ const ConversationTitleMinimap: React.FC<ConversationTitleMinimapProps> = ({
                   >
                     #{item.index}
                   </div>
-                  <div
-                    className='text-13px text-t-primary font-medium leading-18px'
-                    style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}
-                  >
-                    Q: {renderHighlightedText(item.questionRaw || item.question, normalizedKeyword)}
+                  <div className={styles.questionRow}>
+                    <div
+                      className='min-w-0 flex-1 text-13px text-t-primary font-medium leading-18px'
+                      style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}
+                    >
+                      Q: {renderHighlightedText(item.questionRaw || item.question, normalizedKeyword)}
+                    </div>
+                    <Tooltip content={t('common.copy')}>
+                      <button
+                        type='button'
+                        className={styles.copyButton}
+                        aria-label={t('common.copy')}
+                        onClick={(event) => {
+                          void handleCopyQuestion(event, item.questionRaw || item.question);
+                        }}
+                      >
+                        <Copy theme='outline' size='15' />
+                        <span>{t('common.copy')}</span>
+                      </button>
+                    </Tooltip>
                   </div>
                   {item.answer && (
                     <div
@@ -203,7 +240,7 @@ const ConversationTitleMinimap: React.FC<ConversationTitleMinimapProps> = ({
                       A: {renderHighlightedText(item.answerRaw || item.answer, normalizedKeyword)}
                     </div>
                   )}
-                </button>
+                </div>
               ))}
             </div>
           </div>
@@ -213,6 +250,7 @@ const ConversationTitleMinimap: React.FC<ConversationTitleMinimapProps> = ({
   }, [
     activeResultIndex,
     filteredItems,
+    handleCopyQuestion,
     isSearchMode,
     items.length,
     jumpToItem,
