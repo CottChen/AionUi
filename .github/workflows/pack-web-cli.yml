@@ -22,23 +22,23 @@ on:
       platform:
         description: 'Web CLI platform to package'
         type: string
-        default: 'all'
+        default: 'darwin-arm64'
       aioncore_run_id:
         description: 'Optional AionCore Manual Build workflow run id to bundle instead of the pinned release'
         type: string
-        default: ''
+        default: '34767580287'
       aioncore_repo:
         description: 'AionCore repository owner/name for aioncore_run_id artifacts'
         type: string
-        default: 'iOfficeAI/AionCore'
+        default: 'CottChen/AionCore'
       release_tag:
         description: 'Optional release tag to create from this build'
         type: string
-        default: ''
+        default: 'v2.1.53-dev-web-darwin-arm64-6d5abc3'
       release_title:
         description: 'Optional release title'
         type: string
-        default: ''
+        default: 'AionUi Web 2.1.53 macOS Apple Silicon'
       release_prerelease:
         description: 'Mark release as prerelease'
         type: boolean
@@ -63,23 +63,23 @@ on:
           - linux-arm64
           - win32-x64
           - all
-        default: 'all'
+        default: 'darwin-arm64'
       aioncore_run_id:
         description: 'Optional AionCore Manual Build workflow run id to bundle instead of the pinned release'
         type: string
-        default: ''
+        default: '34767580287'
       aioncore_repo:
         description: 'AionCore repository owner/name for aioncore_run_id artifacts'
         type: string
-        default: 'iOfficeAI/AionCore'
+        default: 'CottChen/AionCore'
       release_tag:
         description: 'Optional release tag to create from this build'
         type: string
-        default: ''
+        default: 'v2.1.53-dev-web-darwin-arm64-6d5abc3'
       release_title:
         description: 'Optional release title'
         type: string
-        default: ''
+        default: 'AionUi Web 2.1.53 macOS Apple Silicon'
       release_prerelease:
         description: 'Mark release as prerelease'
         type: boolean
