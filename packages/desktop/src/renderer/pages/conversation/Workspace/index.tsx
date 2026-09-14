@@ -312,7 +312,6 @@ const ChatWorkspace: React.FC<WorkspaceProps> = ({
             refreshWorkspace={treeHook.refreshWorkspace}
             handleSelectHostFiles={pasteHook.handleSelectHostFiles}
             handleUploadDeviceFiles={pasteHook.handleUploadDeviceFiles}
-            setShowHostFileSelector={searchHook.setShowHostFileSelector}
           />
         )}
 

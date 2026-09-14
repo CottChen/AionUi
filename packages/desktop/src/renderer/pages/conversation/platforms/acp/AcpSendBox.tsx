@@ -451,6 +451,8 @@ Please check your local CLI tool authentication status`,
   );
   const { openFileSelector, onSlashBuiltinCommand } = useOpenFileSelector({
     onFilesSelected: appendSelectedFiles,
+    conversationId: conversation_id,
+    workspacePath,
   });
 
   const { entries: attachEntries, hiddenFileInput: attachHiddenInput } = useAttachEntry({

@@ -419,6 +419,8 @@ const AionrsSendBox: React.FC<{
   );
   const { openFileSelector, onSlashBuiltinCommand } = useOpenFileSelector({
     onFilesSelected: appendSelectedFiles,
+    conversationId: conversation_id,
+    workspacePath: conversationContext?.workspace,
   });
 
   const { entries: attachEntries, hiddenFileInput: attachHiddenInput } = useAttachEntry({

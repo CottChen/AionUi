@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { ipcBridge } from '@/common';
+import { configService } from '@/common/config/configService';
 import { getBaseUrl } from '@/common/adapter/httpBridge';
 import { trackUpload, type UploadSource } from '@/renderer/hooks/file/useUploadState';
 
@@ -13,6 +15,8 @@ export const UPLOAD_ABORTED_ERROR = 'Upload aborted';
 export interface UploadFileOptions {
   /** Cancel the upload from the outside. Closing the XHR also frees the backend connection. */
   signal?: AbortSignal;
+  /** Upload into this workspace-relative directory when workspace persistence is forced. */
+  workspaceRelativePath?: string;
 }
 
 /**
@@ -43,6 +47,9 @@ export async function uploadFileViaHttp(
   }
   if (conversation_id) {
     formData.append('conversation_id', conversation_id);
+  }
+  if (options?.workspaceRelativePath !== undefined) {
+    formData.append('workspace_relative_path', options.workspaceRelativePath);
   }
 
   return new Promise<string>((resolve, reject) => {
@@ -310,7 +317,8 @@ class FileServiceClass {
   async processDroppedFiles(
     files: FileList,
     conversation_id?: string,
-    source: UploadSource = 'sendbox'
+    source: UploadSource = 'sendbox',
+    workspacePath?: string
   ): Promise<FileMetadata[]> {
     const processedFiles: FileMetadata[] = [];
 
@@ -320,6 +328,31 @@ class FileServiceClass {
       const electronFile = file as File & { path?: string };
 
       let file_path = electronFile.path || '';
+
+      // Native Finder drops already have a path, but still need to honor the
+      // workspace upload preference used by browser uploads.
+      if (file_path && conversation_id && workspacePath) {
+        await configService.whenReady();
+        if (configService.get('upload.saveToWorkspace')) {
+          try {
+            const result = await ipcBridge.fs.copyFilesToWorkspace.invoke({
+              file_paths: [file_path],
+              workspace: workspacePath,
+              target_relative_path: 'uploads',
+            });
+            const copiedPath = result.copied_files?.[0];
+            if (copiedPath) {
+              const name = copiedPath.split(/[\\/]/).pop() || file.name;
+              file_path = `${workspacePath.replace(/[\\/]+$/, '')}/uploads/${name}`;
+            } else {
+              file_path = '';
+            }
+          } catch (error) {
+            console.warn('Failed to copy dropped file into workspace:', error);
+            file_path = '';
+          }
+        }
+      }
 
       // If no valid path (WebUI or some dragged files may not have paths), upload via HTTP multipart
       if (!file_path) {

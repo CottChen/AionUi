@@ -370,6 +370,7 @@ const SendBox: React.FC<{
     supportedExts,
     onFilesAdded,
     conversation_id: conversationContext?.conversation_id,
+    workspacePath: conversationContext?.workspace,
   });
 
   const { isUploading } = useUploadState('sendbox');

@@ -128,6 +128,59 @@ const ConversationAgentMark: React.FC<{ conversation: IMessageSearchItem['conver
   return <MessageOne theme='outline' size='18' className='line-height-0 flex-shrink-0 text-t-secondary' />;
 };
 
+type ConversationSearchResultRowProps = {
+  item: IMessageSearchItem;
+  keyword: string;
+  title: string;
+  copyLabel: string;
+  onSelect: (item: IMessageSearchItem) => void;
+  onCopy: (event: React.MouseEvent<HTMLButtonElement>, item: IMessageSearchItem) => void;
+};
+
+const ConversationSearchResultRow = React.memo<ConversationSearchResultRowProps>(
+  ({ item, keyword, title, copyLabel, onSelect, onCopy }) => {
+    const snippet = buildSnippet(item.preview_text, keyword);
+    return (
+      <div className='conversation-search-modal__result-row'>
+        <button
+          type='button'
+          className={classNames(
+            'conversation-search-modal__result text-left cursor-pointer transition-all duration-150',
+            'focus:outline-none'
+          )}
+          onClick={() => onSelect(item)}
+        >
+          <div className='flex items-start justify-between gap-8px mb-6px'>
+            <div className='min-w-0 flex-1'>
+              <div className='conversation-search-modal__result-title-row'>
+                <ConversationAgentMark conversation={item.conversation} />
+                <div className='conversation-search-modal__result-title text-15px font-600 text-t-primary truncate'>
+                  {item.conversation.name || title}
+                </div>
+              </div>
+            </div>
+            <span className='shrink-0 text-11px text-t-secondary'>{formatTime(item.message_created_at)}</span>
+          </div>
+          <div className='conversation-search-modal__snippet text-13px leading-22px text-t-primary/92 break-words'>
+            {renderHighlightedText(snippet, keyword)}
+          </div>
+        </button>
+        <Tooltip content={copyLabel}>
+          <button
+            type='button'
+            className='conversation-search-modal__copy-btn'
+            aria-label={copyLabel}
+            onClick={(event) => onCopy(event, item)}
+          >
+            <Copy theme='outline' size='16' />
+            <span>{copyLabel}</span>
+          </button>
+        </Tooltip>
+      </div>
+    );
+  }
+);
+
 const ConversationSearchPopover: React.FC<ConversationSearchPopoverProps> = ({
   onSessionClick,
   onConversationSelect,
@@ -278,17 +331,6 @@ const ConversationSearchPopover: React.FC<ConversationSearchPopoverProps> = ({
     void runSearch(nextCursor, true);
   }, [debouncedKeyword, hasMore, loading, loadingMore, nextCursor, runSearch, visible]);
 
-  useEffect(() => {
-    const container = resultsScrollRef.current;
-    if (!container || !visible || !debouncedKeyword || loading || loadingMore || !hasMore || !nextCursor) return;
-
-    // If the first page does not fill the viewport, continue until the list
-    // becomes scrollable so the user is not forced to find an invisible edge.
-    if (container.scrollHeight <= container.clientHeight + 1) {
-      handleLoadMore();
-    }
-  }, [debouncedKeyword, handleLoadMore, hasMore, items.length, loading, loadingMore, nextCursor, visible]);
-
   const handleResultClick = useCallback(
     async (item: IMessageSearchItem) => {
       blockMobileInputFocus();
@@ -423,51 +465,16 @@ const ConversationSearchPopover: React.FC<ConversationSearchPopoverProps> = ({
       >
         <div className='conversation-search-modal__results flex flex-col'>
           {items.map((item) => {
-            const snippet = buildSnippet(item.preview_text, debouncedKeyword);
             return (
-              <div
+              <ConversationSearchResultRow
                 key={`${item.message_id}-${item.message_created_at}`}
-                className='conversation-search-modal__result-row'
-              >
-                <button
-                  type='button'
-                  className={classNames(
-                    'conversation-search-modal__result text-left cursor-pointer transition-all duration-150',
-                    'focus:outline-none'
-                  )}
-                  onClick={() => {
-                    void handleResultClick(item);
-                  }}
-                >
-                  <div className='flex items-start justify-between gap-8px mb-6px'>
-                    <div className='min-w-0 flex-1'>
-                      <div className='conversation-search-modal__result-title-row'>
-                        <ConversationAgentMark conversation={item.conversation} />
-                        <div className='conversation-search-modal__result-title text-15px font-600 text-t-primary truncate'>
-                          {item.conversation.name || t('conversation.historySearch.untitled')}
-                        </div>
-                      </div>
-                    </div>
-                    <span className='shrink-0 text-11px text-t-secondary'>{formatTime(item.message_created_at)}</span>
-                  </div>
-                  <div className='conversation-search-modal__snippet text-13px leading-22px text-t-primary/92 break-words'>
-                    {renderHighlightedText(snippet, debouncedKeyword)}
-                  </div>
-                </button>
-                <Tooltip content={t('common.copy')}>
-                  <button
-                    type='button'
-                    className='conversation-search-modal__copy-btn'
-                    aria-label={t('common.copy')}
-                    onClick={(event) => {
-                      void handleCopyResult(event, item);
-                    }}
-                  >
-                    <Copy theme='outline' size='16' />
-                    <span>{t('common.copy')}</span>
-                  </button>
-                </Tooltip>
-              </div>
+                item={item}
+                keyword={debouncedKeyword}
+                title={t('conversation.historySearch.untitled')}
+                copyLabel={t('common.copy')}
+                onSelect={handleResultClick}
+                onCopy={handleCopyResult}
+              />
             );
           })}
 

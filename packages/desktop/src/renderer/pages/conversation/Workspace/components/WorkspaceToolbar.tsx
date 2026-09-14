@@ -39,7 +39,6 @@ type WorkspaceToolbarProps = {
   // Upload
   handleSelectHostFiles: () => void;
   handleUploadDeviceFiles: () => void;
-  setShowHostFileSelector: (v: boolean) => void;
 };
 
 /** Toolbar area: workspace name, search toggle, refresh button, upload menu, settings. */
@@ -65,7 +64,6 @@ const WorkspaceToolbar: React.FC<WorkspaceToolbarProps> = ({
   refreshWorkspace,
   handleSelectHostFiles,
   handleUploadDeviceFiles,
-  setShowHostFileSelector,
 }) => {
   const workspaceUploadMenu = (
     <Menu
@@ -74,7 +72,7 @@ const WorkspaceToolbar: React.FC<WorkspaceToolbarProps> = ({
           if (isElectronDesktop()) {
             handleSelectHostFiles();
           } else {
-            setShowHostFileSelector(true);
+            handleUploadDeviceFiles();
           }
         }
         if (key === 'device') {
@@ -156,18 +154,16 @@ const WorkspaceToolbar: React.FC<WorkspaceToolbarProps> = ({
           </span>
         </div>
         <div className='workspace-toolbar-actions flex items-center gap-8px flex-shrink-0'>
-          {!isElectronDesktop() && (
-            <Dropdown droplist={workspaceUploadMenu} trigger='click' position='bl'>
-              <span>
-                <Plus
-                  className='workspace-toolbar-icon-btn lh-[1] flex cursor-pointer'
-                  theme='outline'
-                  size='16'
-                  fill={iconColors.secondary}
-                />
-              </span>
-            </Dropdown>
-          )}
+          <Dropdown droplist={workspaceUploadMenu} trigger='click' position='bl'>
+            <span>
+              <Plus
+                className='workspace-toolbar-icon-btn lh-[1] flex cursor-pointer'
+                theme='outline'
+                size='16'
+                fill={iconColors.secondary}
+              />
+            </span>
+          </Dropdown>
           <Tooltip content={t('conversation.workspace.refresh')}>
             <span>
               <Refresh

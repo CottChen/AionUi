@@ -154,7 +154,12 @@ const FileAttachButton: React.FC<FileAttachButtonProps> = ({
       if (!fileList || fileList.length === 0 || !onLocalFilesAdded) return;
       setUploading(true);
       try {
-        const processed = await FileService.processDroppedFiles(fileList, conversationContext?.conversation_id);
+        const processed = await FileService.processDroppedFiles(
+          fileList,
+          conversationContext?.conversation_id,
+          'sendbox',
+          conversationContext?.workspace
+        );
         if (processed.length > 0) onLocalFilesAdded(processed);
       } catch {
         Message.error(t('common.fileAttach.failed'));
@@ -163,7 +168,7 @@ const FileAttachButton: React.FC<FileAttachButtonProps> = ({
       }
       e.target.value = '';
     },
-    [conversationContext?.conversation_id, onLocalFilesAdded, t]
+    [conversationContext?.conversation_id, conversationContext?.workspace, onLocalFilesAdded, t]
   );
 
   const isDesktop = isElectronDesktop();

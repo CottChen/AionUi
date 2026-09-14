@@ -58,13 +58,22 @@ export function useWorkspacePaste(options: UseWorkspacePasteOptions) {
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
+  const getTargetFolder = useCallback(
+    () => getTargetFolderPath(selectedNodeRef.current, selected, files, workspace),
+    [files, selected, selectedNodeRef, workspace]
+  );
+
   const copyFilesIntoWorkspace = useCallback(
     async (selectedFiles: string[]) => {
       if (!selectedFiles.length) {
         return;
       }
 
-      const result = await ipcBridge.fs.copyFilesToWorkspace.invoke({ file_paths: selectedFiles, workspace });
+      const result = await ipcBridge.fs.copyFilesToWorkspace.invoke({
+        file_paths: selectedFiles,
+        workspace,
+        target_relative_path: getTargetFolder().relativePath ?? undefined,
+      });
       const copiedFiles = result.copied_files ?? [];
       const failedFiles = result.failed_files ?? [];
 
@@ -78,7 +87,7 @@ export function useWorkspacePaste(options: UseWorkspacePasteOptions) {
         messageApi.warning('Some files failed to copy');
       }
     },
-    [workspace, refreshWorkspace, messageApi, t]
+    [getTargetFolder, refreshWorkspace, messageApi, t]
   );
 
   const handleSelectHostFiles = useCallback(() => {
@@ -125,6 +134,7 @@ export function useWorkspacePaste(options: UseWorkspacePasteOptions) {
             try {
               await uploadFileViaHttp(file, conversation_id, tracker.onProgress, undefined, {
                 signal: controller.signal,
+                workspaceRelativePath: getTargetFolder().relativePath ?? '',
               });
               successCount++;
             } catch (error) {
@@ -150,7 +160,7 @@ export function useWorkspacePaste(options: UseWorkspacePasteOptions) {
     }
 
     fileInputRef.current.click();
-  }, [conversation_id, handleSelectHostFiles, messageApi, refreshWorkspace, t]);
+  }, [conversation_id, getTargetFolder, handleSelectHostFiles, messageApi, refreshWorkspace, t]);
 
   useEffect(() => {
     return () => {
@@ -171,7 +181,6 @@ export function useWorkspacePaste(options: UseWorkspacePasteOptions) {
 
       // 使用工具函数获取目标文件夹路径 / Use utility function to get target folder path
       const targetFolder = getTargetFolderPath(selectedNodeRef.current, selected, files, workspace);
-      const targetFolderPath = targetFolder.fullPath;
       const targetFolderKey = targetFolder.relativePath;
 
       // 设置粘贴目标文件夹以提供视觉反馈 / Set paste target folder for visual feedback
@@ -184,7 +193,11 @@ export function useWorkspacePaste(options: UseWorkspacePasteOptions) {
       if (skipConfirm) {
         try {
           const file_paths = filesMeta.map((f) => f.path);
-          const res = await ipcBridge.fs.copyFilesToWorkspace.invoke({ file_paths, workspace: targetFolderPath });
+          const res = await ipcBridge.fs.copyFilesToWorkspace.invoke({
+            file_paths,
+            workspace,
+            target_relative_path: targetFolder.relativePath ?? undefined,
+          });
           const copiedFiles = res.copied_files ?? [];
           const failedFiles = res.failed_files ?? [];
 
@@ -234,10 +247,13 @@ export function useWorkspacePaste(options: UseWorkspacePasteOptions) {
 
       // 获取目标文件夹路径 / Get target folder path
       const targetFolder = getTargetFolderPath(selectedNodeRef.current, selected, files, workspace);
-      const targetFolderPath = targetFolder.fullPath;
 
       const file_paths = pasteConfirm.filesToPaste.map((f) => f.path);
-      const res = await ipcBridge.fs.copyFilesToWorkspace.invoke({ file_paths, workspace: targetFolderPath });
+      const res = await ipcBridge.fs.copyFilesToWorkspace.invoke({
+        file_paths,
+        workspace,
+        target_relative_path: targetFolder.relativePath ?? undefined,
+      });
       const copiedFiles = res.copied_files ?? [];
       const failedFiles = res.failed_files ?? [];
 
