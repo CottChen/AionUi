@@ -191,6 +191,7 @@ vx.toml
 .taichuy/*
 kylindoc/
 .workspace/
+.local/
 lint-results.txt
 
 # Git worktrees

@@ -1,5 +1,7 @@
 import ConversationTitleMinimap from '@/renderer/pages/conversation/components/ConversationTitleMinimap';
-import { Input } from '@arco-design/web-react';
+import { copyText } from '@/renderer/utils/ui/clipboard';
+import { Copy } from '@icon-park/react';
+import { Input, Message, Tooltip } from '@arco-design/web-react';
 import classNames from 'classnames';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
@@ -34,6 +36,16 @@ const ChatTitleEditor: React.FC<ChatTitleEditorProps> = ({
   leading,
 }) => {
   const { t } = useTranslation();
+  const handleCopyConversationId = async (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    if (!conversation_id) return;
+    try {
+      await copyText(conversation_id);
+      Message.success(t('common.copySuccess'));
+    } catch {
+      Message.error(t('common.copyFailed'));
+    }
+  };
 
   return (
     <div
@@ -103,10 +115,26 @@ const ChatTitleEditor: React.FC<ChatTitleEditorProps> = ({
         )}
       </div>
       {!editingTitle && (
-        <div className='w-0 flex items-center overflow-hidden opacity-0 transition-all duration-180 group-hover:w-40px group-hover:opacity-100 group-focus-within:w-40px group-focus-within:opacity-100'>
-          <span className='h-16px w-1px shrink-0 rounded-full bg-[color:color-mix(in_srgb,var(--color-text-4)_44%,transparent)]' />
-          <div className='ml-4px mr-4px flex items-center justify-center'>
-            <ConversationTitleMinimap conversation_id={conversation_id} />
+        <div className='flex items-center gap-2px'>
+          {conversation_id && (
+            <Tooltip content={conversation_id}>
+              <button
+                type='button'
+                className='h-28px w-28px shrink-0 flex items-center justify-center rounded-6px border-none bg-transparent text-t-secondary hover:bg-fill-3 hover:text-t-primary'
+                aria-label={t('common.copy')}
+                onClick={(event) => {
+                  void handleCopyConversationId(event);
+                }}
+              >
+                <Copy theme='outline' size='16' />
+              </button>
+            </Tooltip>
+          )}
+          <div className='w-0 flex items-center overflow-hidden opacity-0 transition-all duration-180 group-hover:w-40px group-hover:opacity-100 group-focus-within:w-40px group-focus-within:opacity-100'>
+            <span className='h-16px w-1px shrink-0 rounded-full bg-[color:color-mix(in_srgb,var(--color-text-4)_44%,transparent)]' />
+            <div className='ml-4px mr-4px flex items-center justify-center'>
+              <ConversationTitleMinimap conversation_id={conversation_id} />
+            </div>
           </div>
         </div>
       )}

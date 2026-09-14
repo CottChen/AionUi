@@ -331,8 +331,11 @@ const ChatLayout: React.FC<{
             >
               {props.siderTitle}
             </WorkspacePanelHeader>
-            <ArcoLayout.Content style={{ height: `calc(100% - ${WORKSPACE_HEADER_HEIGHT}px)` }}>
-              {props.sider}
+            <ArcoLayout.Content
+              className='flex min-h-0 flex-col overflow-hidden'
+              style={{ height: `calc(100% - ${WORKSPACE_HEADER_HEIGHT}px)`, minHeight: 0 }}
+            >
+              <div className='flex min-h-0 flex-1 flex-col overflow-hidden'>{props.sider}</div>
             </ArcoLayout.Content>
           </div>
         )}

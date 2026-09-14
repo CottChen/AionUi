@@ -57,8 +57,11 @@ const MobileWorkspaceOverlay: React.FC<MobileWorkspaceOverlayProps> = ({
       >
         {siderTitle}
       </WorkspacePanelHeader>
-      <ArcoLayout.Content className='bg-1' style={{ height: `calc(100% - ${WORKSPACE_HEADER_HEIGHT}px)` }}>
-        {sider}
+      <ArcoLayout.Content
+        className='bg-1 flex min-h-0 flex-col overflow-hidden'
+        style={{ height: `calc(100% - ${WORKSPACE_HEADER_HEIGHT}px)`, minHeight: 0 }}
+      >
+        <div className='flex min-h-0 flex-1 flex-col overflow-hidden'>{sider}</div>
       </ArcoLayout.Content>
     </div>
 
