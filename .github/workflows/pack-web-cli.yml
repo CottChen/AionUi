@@ -355,9 +355,10 @@ jobs:
     name: Promote Web Artifact to Release
     runs-on: ubuntu-latest
     needs: [pack-web-cli, prepare-install-script]
-    # workflow_dispatch validates inputs against the default branch schema. Keep a
-    # branch-local fallback so older schemas still publish this branch's release.
-    if: ${{ (inputs.release_tag != '' || github.ref == 'refs/heads/feat/webui-multi-user') && needs.pack-web-cli.result == 'success' && needs.prepare-install-script.result == 'success' }}
+    # This workflow's branch-local dispatch is a release workflow. The default
+    # branch may not expose the newer release_tag input to workflow_dispatch, so
+    # promotion must be gated by the completed build jobs instead of that input.
+    if: ${{ needs.pack-web-cli.result == 'success' && needs.prepare-install-script.result == 'success' }}
     steps:
       - name: Download macOS arm64 Web artifact
         uses: actions/download-artifact@v7
