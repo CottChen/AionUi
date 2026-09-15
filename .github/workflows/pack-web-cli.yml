@@ -26,7 +26,7 @@ on:
       aioncore_run_id:
         description: 'Optional AionCore Manual Build workflow run id to bundle instead of the pinned release'
         type: string
-        default: '34767580287'
+        default: '34816350761'
       aioncore_repo:
         description: 'AionCore repository owner/name for aioncore_run_id artifacts'
         type: string
@@ -34,7 +34,7 @@ on:
       release_tag:
         description: 'Optional release tag to create from this build'
         type: string
-        default: 'v2.1.53-dev-web-darwin-arm64-6d5abc3'
+        default: 'v2.1.53-dev-web-darwin-arm64-aioncore34816350761'
       release_title:
         description: 'Optional release title'
         type: string
@@ -67,7 +67,7 @@ on:
       aioncore_run_id:
         description: 'Optional AionCore Manual Build workflow run id to bundle instead of the pinned release'
         type: string
-        default: '34767580287'
+        default: '34816350761'
       aioncore_repo:
         description: 'AionCore repository owner/name for aioncore_run_id artifacts'
         type: string
@@ -75,7 +75,7 @@ on:
       release_tag:
         description: 'Optional release tag to create from this build'
         type: string
-        default: 'v2.1.53-dev-web-darwin-arm64-6d5abc3'
+        default: 'v2.1.53-dev-web-darwin-arm64-aioncore34816350761'
       release_title:
         description: 'Optional release title'
         type: string
