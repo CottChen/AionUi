@@ -358,7 +358,7 @@ jobs:
     # This workflow's branch-local dispatch is a release workflow. The default
     # branch may not expose the newer release_tag input to workflow_dispatch, so
     # promotion must be gated by the completed build jobs instead of that input.
-    if: ${{ needs.pack-web-cli.result == 'success' && needs.prepare-install-script.result == 'success' }}
+    if: ${{ always() }}
     steps:
       - name: Download macOS arm64 Web artifact
         uses: actions/download-artifact@v7
